@@ -12,6 +12,7 @@
     "db:test:down": "docker compose -f docker-compose.test.yml down -v"
   },
   "dependencies": {
+    "@fastify/rate-limit": "^11.2.0",
     "@fastify/websocket": "^11.3.0",
     "drizzle-orm": "^0.45.2",
     "event-schema": "workspace:*",

@@ -33,6 +33,7 @@ const IssueWorkerBody = z.object({
 export async function registerAdminWorkersRoute(fastify: FastifyInstance) {
   fastify.post(
     "/admin/workers",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
     async (request, reply) => {
       if (!requireBootstrapSecret(request, reply)) return;
 
@@ -60,6 +61,7 @@ export async function registerAdminWorkersRoute(fastify: FastifyInstance) {
 
   fastify.get(
     "/admin/workers",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (request, reply) => {
       if (!requireBootstrapSecret(request, reply)) return;
 
@@ -80,6 +82,7 @@ export async function registerAdminWorkersRoute(fastify: FastifyInstance) {
 
   fastify.post(
     "/admin/workers/:id/revoke",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
     async (request, reply) => {
       if (!requireBootstrapSecret(request, reply)) return;
 
