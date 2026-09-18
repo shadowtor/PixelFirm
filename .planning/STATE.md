@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 02
 current_phase_name: Control Plane Skeleton
 status: executing
-stopped_at: Phase 2 context gathered
-last_updated: "2026-09-18T12:16:15.319Z"
+stopped_at: Completed 02-01-PLAN.md
+last_updated: "2026-09-18T12:35:56.018Z"
 last_activity: 2026-09-18
-last_activity_desc: Phase 01 complete, transitioned to Phase 2
-state_head: 66be44af9fef1bdb21a1314bc49bfa0d6b2c015a
+last_activity_desc: Phase 02 execution started
+state_head: e963b6a0880b32917b7b39cf5745370c16066318
 progress:
   total_phases: 8
   completed_phases: 1
   total_plans: 7
-  completed_plans: 3
+  completed_plans: 4
   percent: 13
 ---
 
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-18)
 
 **Core value:** The pixel office must accurately visualise a real Claude Code + GSD software project — agents genuinely performing the work and requesting CEO approval — using actual company events, never a prerecorded or faked animation.
-**Current focus:** Phase 01 — Event Schema & State Engine
+**Current focus:** Phase 02 — Control Plane Skeleton
 
 ## Current Position
 
-Phase: 02 (Control Plane Skeleton) — READY TO EXECUTE
-Plan: Not started
+Phase: 02 (Control Plane Skeleton) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-09-18 — Phase 01 complete, transitioned to Phase 2
+Last activity: 2026-09-18 — Phase 02 execution started
 
 Progress: [█░░░░░░░░░] 13%
 
@@ -61,6 +61,7 @@ Progress: [█░░░░░░░░░] 13%
 | Phase 01 P01 | 24min | 3 tasks | 17 files |
 | Phase 01 P02 | 25min | 2 tasks | 6 files |
 | Phase 01 P03 | 15 min | 1 tasks | 2 files |
+| Phase 02 P01 | 20min | 2 tasks | 18 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - [Phase 01]: [Phase 01-02]: viewer.event intentionally has no reducer handler — touches none of the five required projection kinds, no-ops via the existing unrecognized-type fallback
 - [Phase 01]: [Phase 01-03]: gsd_run check tdd-red-evidence's TAP parser targets node --test's summary lines, which Vitest's --reporter=tap doesn't emit — RED evidence for this plan was verified manually instead; flagged as a GSD tooling gap on Vitest-based repos
 - [Phase 01]: [Phase 01-03]: session.started's omitted-sourceAgentId test already passed pre-fix (incidental key-miss no-op) but was still added and the handler still rewritten to an explicit if (!agentId || !existing) guard, matching git.commit_created/deployment.started's contract shape
+- [Phase 02]: [Phase 02-01]: Test Postgres port moved from planned 5433 to 5434 — an unrelated wardogsoutpost project's container already had 5433 bound on this machine
+- [Phase 02]: [Phase 02-01]: zod added as a direct apps/api dependency (env.ts imports it directly, not just transitively via event-schema)
+- [Phase 02]: [Phase 02-01]: ESM static imports hoist above top-level statements — test files must set process.env then dynamically import() env-dependent modules (../server, ../db/client), not statically import them
 
 ### Pending Todos
 
@@ -100,6 +104,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-18T11:04:49.493Z
-Stopped at: Phase 2 context gathered
-Resume file: .planning/phases/02-control-plane-skeleton/02-CONTEXT.md
+Last session: 2026-09-18T12:35:55.978Z
+Stopped at: Completed 02-01-PLAN.md
+Resume file: None

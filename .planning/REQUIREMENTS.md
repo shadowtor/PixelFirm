@@ -10,7 +10,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Event Pipeline & State
 
 - [x] **EVENT-01**: Typed event schema exists for company/floor/project/task/agent/session/handoff/review/approval/git/deployment/viewer events, each carrying event ID, timestamp, company, floor, project, task, source agent, destination agent, payload, and visibility level
-- [ ] **EVENT-02**: Company Event Bus ingests events from Claude Code, Git, CI, and GSD into an append-only Postgres event log
+- [x] **EVENT-02**: Company Event Bus ingests events from Claude Code, Git, CI, and GSD into an append-only Postgres event log
 - [x] **EVENT-03**: Company State Engine builds materialized projections (agent/floor/team/project/task state) that the renderer, dashboard, and overlay read — never write to directly
 - [x] **EVENT-04**: State projections can be rebuilt/replayed from the event log without manual patching, so drift is detectable and correctable
 
@@ -119,7 +119,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EVENT-01 | Phase 1 | Complete |
 | EVENT-03 | Phase 1 | Complete |
 | EVENT-04 | Phase 1 | Complete |
-| EVENT-02 | Phase 2 | Pending |
+| EVENT-02 | Phase 2 | Complete |
 | SEC-01 | Phase 2 | Pending |
 | SEC-02 | Phase 2 | Pending |
 | SEC-03 | Phase 2 | Pending |
