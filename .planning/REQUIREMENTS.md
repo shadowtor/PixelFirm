@@ -66,7 +66,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Security
 
 - [ ] **SEC-01**: OAuth tokens and other credentials are stored/protected server-side only and encrypted at rest where applicable
-- [ ] **SEC-02**: WebSocket connections are authenticated; per-worker credentials are unique and revocable
+- [x] **SEC-02**: WebSocket connections are authenticated; per-worker credentials are unique and revocable
 - [ ] **SEC-03**: No endpoint allows arbitrary remote shell/command execution
 - [ ] **SEC-04**: Input from chat/viewer events is validated and rate-limited; CSRF protection is applied to control-plane endpoints
 
@@ -121,7 +121,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | EVENT-04 | Phase 1 | Complete |
 | EVENT-02 | Phase 2 | Complete |
 | SEC-01 | Phase 2 | Pending |
-| SEC-02 | Phase 2 | Pending |
+| SEC-02 | Phase 2 | Complete |
 | SEC-03 | Phase 2 | Pending |
 | SEC-04 | Phase 2 | Pending |
 | RUNTIME-03 | Phase 3 | Pending |
