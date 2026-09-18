@@ -391,17 +391,19 @@ Use this as the `default` arm if the reducer is written as a `switch` instead of
 | A4 | The extended `CompanyEvent` envelope (adding `companyId`/`floorId`/`projectId`/`taskId`/`sourceAgentId`/`destinationAgentId` as mostly-optional fields onto the ARCHITECTURE.md-sketched base interface) is my own design, not verified against any existing code or a more detailed prior spec | Architecture Patterns, Pattern 1 | Low risk — covered by CONTEXT.md's "Claude's Discretion" grant on exact schema structure; if the optionality choices are wrong for a later phase's needs, adjusting field optionality is a non-breaking Zod schema change |
 | A5 | The `too-new` verdicts on `zod`/`vitest`/`turbo` from the package-legitimacy checker are very likely false positives driven by recent patch releases rather than real slopsquatting risk | Package Legitimacy Audit | If actually wrong (one of these three names has in fact been compromised via a supply-chain attack on a legitimate maintainer account), skipping a careful checkpoint could let a malicious dependency in — the planner should still gate these behind `checkpoint:human-verify` regardless of this note |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Should `floor` and `session` seed events use different names than `floor.created`/`session.started`?**
    - What we know: no Brief.md precedent exists for either category's event vocabulary.
    - What's unclear: whether a later phase (e.g. the GSD adapter in Phase 3, which maps GSD workflow state onto company events) has an implicit expectation for what a "session" event should be called.
    - Recommendation: proceed with `session.started`/`floor.created` for Phase 1 (reversible per D-01); flag for confirmation if Phase 3 planning surfaces a naming conflict.
+   - **RESOLVED:** naming is Claude's Discretion per 01-CONTEXT.md ("Which specific event type is chosen as the 'representative' seed for each of the 12 categories — pick whichever is simplest to stub credibly... consistent with the category-level examples already listed in Brief.md"). No further resolution needed this phase — `session.started`/`floor.created` stands, reversible per D-01, revisit only if Phase 3 surfaces a conflict.
 
 2. **Is pnpm major version 9, 10, 11, or 12 the right pin for this bootstrap?**
    - What we know: STACK.md recommended `^9` earlier today; the registry's current `latest` is `12.4.2`.
    - What's unclear: whether any pnpm major between 9 and 12 introduced a breaking change to `pnpm-workspace.yaml` syntax or the `workspace:*` protocol relevant to this bootstrap.
    - Recommendation: use whatever pnpm major is already available via `corepack` on the machine actually running the install (none was found installed locally this session — see Environment Availability below); if none is pinned, default to the latest stable major and note it in the plan rather than blindly forcing `^9`.
+   - **RESOLVED:** operationally settled in 01-01-PLAN.md Task 2 — `corepack enable pnpm` (falling back to `npm install -g pnpm`) resolves whatever pnpm major is actually available, and the resulting `pnpm --version` is pinned into the root `package.json`'s `packageManager` field rather than forcing `^9` blindly. No further research needed; the bootstrap task is the resolution mechanism.
 
 ## Environment Availability
 
