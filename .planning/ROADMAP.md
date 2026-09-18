@@ -31,7 +31,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. Every event type (company/floor/project/task/agent/session/handoff/review/approval/git/deployment/viewer) validates against a single typed schema carrying event ID, timestamp, company/floor/project/task, source/destination agent, payload, and visibility level — malformed events are rejected.
   2. Feeding a sequence of stubbed events into the state engine produces correct materialized projections (agent/floor/team/project/task state) that are read-only to downstream consumers.
   3. Replaying the same event sequence from the start reproduces identical projections, proving state can be rebuilt without manual patching.
-**Plans**: TBD
+**Plans:** 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Bootstrap monorepo workspace + tracer: one event type validated, reduced, and proven replay-deterministic
+- [ ] 01-02-PLAN.md — Expand to all 12 seeded event categories with full projection coverage and replay-determinism at scale
 
 ### Phase 2: Control Plane Skeleton
 **Goal**: The control plane exists as real, deployable infrastructure — a durable event log behind an authenticated gateway that rejects abuse by default.

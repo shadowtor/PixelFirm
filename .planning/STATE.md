@@ -71,6 +71,7 @@ None yet.
 
 ### Blockers/Concerns
 
+- Phase 2 planning: MUST include dedup-at-ingestion as a named requirement — Phase 1's `packages/company-core` reducer is intentionally a pure function over ordered, exactly-once input (D-03), with event-ID dedup explicitly deferred to Phase 2's Postgres ingestion layer. Do not silently drop this; the gap would surface as production state drift (duplicate event application), not a build-time error.
 - Phase 2 planning: confirm Coolify's managed Postgres version matches the 18.x assumed by research.
 - Phase 4 planning: re-verify Claude Max-subscription billing terms for SDK/headless usage haven't changed before scaling worker usage.
 - Phase 5 planning: full asset-licence audit of the Pixel Agents fork beyond the credited CC0 character pack is still outstanding.
