@@ -1,0 +1,11 @@
+node_modules
+**/node_modules
+.git
+.planning
+.gsd
+**/*.test.ts
+apps/api/drizzle/meta
+.env
+.env.*
+**/.env
+**/.env.*
