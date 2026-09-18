@@ -3,10 +3,11 @@ import fastifyWebsocket from "@fastify/websocket";
 import { env } from "./env.js";
 import { registerEventsRoute } from "./routes/events.js";
 import { registerWsRoute } from "./routes/ws.js";
+import { registerAdminWorkersRoute } from "./routes/admin-workers.js";
 
 export function buildServer() {
   const fastify = Fastify({
-    logger: { redact: ["req.headers.authorization"] },
+    logger: { redact: ["req.headers.authorization", "req.headers['x-bootstrap-secret']"] },
   });
 
   fastify.get("/health", async () => ({ status: "ok" }));
@@ -14,6 +15,7 @@ export function buildServer() {
   fastify.register(registerEventsRoute);
   fastify.register(fastifyWebsocket);
   fastify.register(registerWsRoute);
+  fastify.register(registerAdminWorkersRoute);
 
   return fastify;
 }
