@@ -456,17 +456,19 @@ export function verifyCredential(secret: string, storedHashHex: string): boolean
 | A2 | Postgres 16 is in fact the shared instance's live version | User Constraints (D-01) | This was verified via Coolify MCP during the discuss-phase session (per CONTEXT.md canonical_refs), not re-verified by this research agent (no Coolify MCP tool available in this session) — if infra changed since discuss-phase, the plan's Drizzle/Postgres-version-specific SQL (e.g., trigger syntax) should still work identically on 14–18 per Drizzle's own compatibility notes, so risk is low even if slightly stale |
 | A3 | `pg` is the correct/only sensible driver pairing for `drizzle-orm/node-postgres` | Standard Stack | Low — this is Drizzle's own documented entrypoint name (`node-postgres`), strongly implying `pg` as the paired driver, though I did not pull a docs snippet explicitly naming `pg` by package name today |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Should `apps/api` host the WS gateway and admin routes as one Fastify instance, or should the WS gateway be a logically separate plugin registered on the same instance?**
+1. **Should `apps/api` host the WS gateway and admin routes as one Fastify instance, or should the WS gateway be a logically separate plugin registered on the same instance?** — RESOLVED: separate `fastify.register()` plugins per route group, one process.
    - What we know: CONTEXT.md's Integration Points section locks "co-located in one process" — not a separate service.
    - What's unclear: Whether to structure it as one flat `server.ts` registering all routes, or use Fastify's plugin/`register()` encapsulation to keep `/ws` and `/admin/*` logically separated within the same process.
    - Recommendation: Use `fastify.register()` for each route group (events, ws, admin-workers) as separate plugins within one process — matches the Recommended Project Structure above and costs nothing extra, since Fastify's plugin system is designed for exactly this without needing multiple processes.
+   - Adopted: 02-01/02-02/02-03 each register their route group via `fastify.register()` as planned.
 
-2. **Exact `events` table strategy: single table vs. per-category tables (left to Claude's Discretion by CONTEXT.md).**
+2. **Exact `events` table strategy: single table vs. per-category tables (left to Claude's Discretion by CONTEXT.md).** — RESOLVED: single table.
    - What we know: CONTEXT.md explicitly defers this to planning/implementation discretion; Phase 1's discriminated-union payload shape is unaffected either way.
    - What's unclear: Whether future query patterns (Phase 3+ adapters reading back specific event categories) will want category-specific indexes badly enough to justify per-category tables now.
    - Recommendation: Single `events` table with a `jsonb` payload column and a btree index on `(type, occurred_at)` — simplest for a 12-type-and-growing discriminated union; splitting into per-category tables now would require re-splitting again every time a new event category is added later (D-01 from Phase 1 already anticipates growth toward ~40 types).
+   - Adopted: 02-01 implements a single `events` table per this recommendation.
 
 ## Environment Availability
 
