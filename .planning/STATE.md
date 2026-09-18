@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Event Schema & State Engine
-status: executing
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-09-18T05:31:21.197Z"
+status: verifying
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-09-18T05:40:49.606Z"
 last_activity: 2026-09-18
 last_activity_desc: Phase 01 execution started
-state_head: c549c87ba9ef1a62a11b15ab9d33583414dd9834
+state_head: 3b98bee56f85f6eae08641ac6a457ff24f725921
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-18)
 
 Phase: 01 (Event Schema & State Engine) — EXECUTING
 Plan: 2 of 2
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-18 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -59,6 +59,7 @@ Progress: [░░░░░░░░░░] 0%
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 01 P01 | 24min | 3 tasks | 17 files |
+| Phase 01 P02 | 25min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,8 @@ Recent decisions affecting current work:
 - Roadmap: Visibility levels + overlay route (Phase 7) ship as one phase per PITFALLS.md — the overlay route is unsafe to expose until server-side filtering exists.
 - [Phase 01]: corepack unavailable on Node v25.9.0; fell back to npm install -g pnpm, resolved pnpm@12.4.2 pinned as packageManager
 - [Phase 01]: Added companies slot to ProjectionState beyond the plan's five required kinds (agents/floors/teams/projects/tasks) so company.started has somewhere to materialize state
+- [Phase 01]: [Phase 01-02]: No 'team' seed category exists among the 12 event types — agent.online carries teamId and its handler creates the team record as a side effect of the agent joining it
+- [Phase 01]: [Phase 01-02]: viewer.event intentionally has no reducer handler — touches none of the five required projection kinds, no-ops via the existing unrecognized-type fallback
 
 ### Pending Todos
 
@@ -94,6 +97,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-18T05:31:21.172Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-09-18T05:40:49.577Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None
