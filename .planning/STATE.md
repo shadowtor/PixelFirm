@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 current_phase: 01
 current_phase_name: Event Schema & State Engine
-status: verifying
-stopped_at: Completed 01-02-PLAN.md
-last_updated: "2026-09-18T05:40:49.606Z"
+status: executing
+stopped_at: Completed 01-03-PLAN.md
+last_updated: "2026-09-18T08:14:32.473Z"
 last_activity: 2026-09-18
 last_activity_desc: Phase 01 execution started
-state_head: 3b98bee56f85f6eae08641ac6a457ff24f725921
+state_head: 113e7aefbc590b2965b2d1a521975504df0ab0c0
 progress:
   total_phases: 8
   completed_phases: 0
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 3
+  completed_plans: 3
   percent: 0
 ---
 
@@ -28,8 +28,8 @@ See: .planning/PROJECT.md (updated 2026-09-18)
 ## Current Position
 
 Phase: 01 (Event Schema & State Engine) — EXECUTING
-Plan: 2 of 2
-Status: Phase complete — ready for verification
+Plan: 2 of 3
+Status: Ready to execute
 Last activity: 2026-09-18 — Phase 01 execution started
 
 Progress: [░░░░░░░░░░] 0%
@@ -60,6 +60,7 @@ Progress: [░░░░░░░░░░] 0%
 |------|----------|-------|-------|
 | Phase 01 P01 | 24min | 3 tasks | 17 files |
 | Phase 01 P02 | 25min | 2 tasks | 6 files |
+| Phase 01 P03 | 15 min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -74,6 +75,8 @@ Recent decisions affecting current work:
 - [Phase 01]: Added companies slot to ProjectionState beyond the plan's five required kinds (agents/floors/teams/projects/tasks) so company.started has somewhere to materialize state
 - [Phase 01]: [Phase 01-02]: No 'team' seed category exists among the 12 event types — agent.online carries teamId and its handler creates the team record as a side effect of the agent joining it
 - [Phase 01]: [Phase 01-02]: viewer.event intentionally has no reducer handler — touches none of the five required projection kinds, no-ops via the existing unrecognized-type fallback
+- [Phase 01]: [Phase 01-03]: gsd_run check tdd-red-evidence's TAP parser targets node --test's summary lines, which Vitest's --reporter=tap doesn't emit — RED evidence for this plan was verified manually instead; flagged as a GSD tooling gap on Vitest-based repos
+- [Phase 01]: [Phase 01-03]: session.started's omitted-sourceAgentId test already passed pre-fix (incidental key-miss no-op) but was still added and the handler still rewritten to an explicit if (!agentId || !existing) guard, matching git.commit_created/deployment.started's contract shape
 
 ### Pending Todos
 
@@ -97,6 +100,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-18T05:40:49.577Z
-Stopped at: Completed 01-02-PLAN.md
+Last session: 2026-09-18T08:14:32.445Z
+Stopped at: Completed 01-03-PLAN.md
 Resume file: None
