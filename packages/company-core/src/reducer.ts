@@ -18,6 +18,115 @@ const handlers: {
       [event.companyId]: { id: event.companyId, name: event.payload.name },
     },
   }),
+
+  "floor.created": (state, event) => ({
+    ...state,
+    floors: {
+      ...state.floors,
+      [event.floorId!]: { id: event.floorId!, name: event.payload.name },
+    },
+  }),
+
+  "project.created": (state, event) => ({
+    ...state,
+    projects: {
+      ...state.projects,
+      [event.projectId!]: { id: event.projectId!, name: event.payload.name },
+    },
+  }),
+
+  "task.created": (state, event) => ({
+    ...state,
+    tasks: {
+      ...state.tasks,
+      [event.taskId!]: { id: event.taskId!, status: "created", title: event.payload.title },
+    },
+  }),
+
+  // Agent comes online and joins a team — touches both `agents` and `teams`
+  // from a single event (no dedicated "team" category exists among the 12
+  // seeded types; team membership rides along with agent.online instead).
+  "agent.online": (state, event) => ({
+    ...state,
+    agents: {
+      ...state.agents,
+      [event.sourceAgentId!]: { id: event.sourceAgentId!, status: "idle", name: event.payload.name },
+    },
+    teams: {
+      ...state.teams,
+      [event.payload.teamId]: state.teams[event.payload.teamId] ?? { id: event.payload.teamId },
+    },
+  }),
+
+  "session.started": (state, event) => {
+    const existing = state.agents[event.sourceAgentId!];
+    if (!existing) return state;
+    return {
+      ...state,
+      agents: {
+        ...state.agents,
+        [event.sourceAgentId!]: { ...existing, status: "working" },
+      },
+    };
+  },
+
+  "agent.handoff_requested": (state, event) => {
+    const { taskId, toAgentId } = event.payload;
+    const existingTask = state.tasks[taskId];
+    const existingToAgent = state.agents[toAgentId];
+    return {
+      ...state,
+      tasks: existingTask
+        ? { ...state.tasks, [taskId]: { ...existingTask, status: "handoff_requested" } }
+        : state.tasks,
+      agents: {
+        ...state.agents,
+        [toAgentId]: { ...(existingToAgent ?? { id: toAgentId, status: "idle" }), status: "assigned" },
+      },
+    };
+  },
+
+  "review.started": (state, event) => {
+    const existing = state.tasks[event.payload.taskId];
+    if (!existing) return state;
+    return {
+      ...state,
+      tasks: { ...state.tasks, [event.payload.taskId]: { ...existing, status: "review" } },
+    };
+  },
+
+  "ceo.approval_requested": (state, event) => {
+    const existing = state.tasks[event.payload.taskId];
+    if (!existing) return state;
+    return {
+      ...state,
+      tasks: { ...state.tasks, [event.payload.taskId]: { ...existing, status: "awaiting_approval" } },
+    };
+  },
+
+  "git.commit_created": (state, event) => {
+    const taskId = event.taskId;
+    const existing = taskId ? state.tasks[taskId] : undefined;
+    if (!taskId || !existing) return state;
+    return {
+      ...state,
+      tasks: { ...state.tasks, [taskId]: { ...existing, status: "committed" } },
+    };
+  },
+
+  "deployment.started": (state, event) => {
+    const projectId = event.projectId;
+    const existing = projectId ? state.projects[projectId] : undefined;
+    if (!projectId || !existing) return state;
+    return {
+      ...state,
+      projects: { ...state.projects, [projectId]: { ...existing, status: "deploying" } },
+    };
+  },
+
+  // viewer.event touches none of the five required projection kinds (no
+  // dedicated viewer-facing slot exists in ProjectionState yet) — it no-ops
+  // via the default fallback below, same as any unrecognized type.
 };
 
 // Looks up a handler for the event's type and applies it. An unrecognized type

@@ -1,10 +1,12 @@
 export interface AgentState {
   id: string;
   status: string;
+  name?: string;
 }
 
 export interface FloorState {
   id: string;
+  name: string;
 }
 
 export interface TeamState {
@@ -13,11 +15,14 @@ export interface TeamState {
 
 export interface ProjectState {
   id: string;
+  name: string;
+  status?: string;
 }
 
 export interface TaskState {
   id: string;
   status: string;
+  title?: string;
 }
 
 export interface CompanyState {
