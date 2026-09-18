@@ -1,0 +1,27 @@
+{
+  "name": "api",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts",
+    "db:test:up": "docker compose -f docker-compose.test.yml up -d --wait",
+    "db:test:down": "docker compose -f docker-compose.test.yml down -v"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.2",
+    "event-schema": "workspace:*",
+    "fastify": "^5.12.5",
+    "pg": "^8.23.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/pg": "^8",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4",
+    "typescript": "^5.9.3"
+  }
+}
