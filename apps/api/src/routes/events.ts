@@ -11,7 +11,7 @@ export async function registerEventsRoute(fastify: FastifyInstance) {
     }
     const event = parsed.data;
 
-    await db
+    const inserted = await db
       .insert(events)
       .values({
         id: event.id,
@@ -27,7 +27,18 @@ export async function registerEventsRoute(fastify: FastifyInstance) {
         visibility: event.visibility,
         payload: event.payload,
       })
-      .onConflictDoNothing({ target: events.id }); // D-04 dedup
+      .onConflictDoNothing({ target: events.id }) // D-04 dedup
+      .returning({ id: events.id });
+
+    if (inserted.length === 0) {
+      // Conflict branch fired: this event.id already existed. Never log
+      // event.payload here (T-02-03 — payload may carry secrets/PII from
+      // future producers).
+      fastify.log.warn(
+        { eventId: event.id, eventType: event.type },
+        "duplicate event id ignored (onConflictDoNothing)",
+      );
+    }
 
     return reply.code(202).send({ accepted: true });
   });

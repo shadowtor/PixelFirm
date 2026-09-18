@@ -26,7 +26,13 @@ beforeAll(async () => {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   const sql = readFileSync(migrationPath, "utf8");
-  await client.query(sql);
+  try {
+    await client.query(sql);
+  } catch (err) {
+    // Tolerate re-running against a DB already migrated by `drizzle-kit
+    // migrate` (Task 2's verify chain runs that before this test file).
+    if (!(err instanceof Error) || !/already exists/.test(err.message)) throw err;
+  }
   await client.end();
 
   ({ buildServer } = await import("../server.js"));
