@@ -1,0 +1,13 @@
+{
+  "name": "company-core",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "event-schema": "workspace:*"
+  }
+}

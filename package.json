@@ -1,0 +1,10 @@
+{
+  "name": "pixelfirm",
+  "private": true,
+  "packageManager": "pnpm@12.4.2",
+  "devDependencies": {
+    "turbo": "^2.10.13",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

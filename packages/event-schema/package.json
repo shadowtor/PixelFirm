@@ -1,0 +1,13 @@
+{
+  "name": "event-schema",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "main": "src/index.ts",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  }
+}
