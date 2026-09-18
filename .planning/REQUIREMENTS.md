@@ -116,13 +116,45 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (populated by roadmap creation) | | Pending |
+| EVENT-01 | Phase 1 | Pending |
+| EVENT-03 | Phase 1 | Pending |
+| EVENT-04 | Phase 1 | Pending |
+| EVENT-02 | Phase 2 | Pending |
+| SEC-01 | Phase 2 | Pending |
+| SEC-02 | Phase 2 | Pending |
+| SEC-03 | Phase 2 | Pending |
+| SEC-04 | Phase 2 | Pending |
+| RUNTIME-03 | Phase 3 | Pending |
+| RUNTIME-04 | Phase 3 | Pending |
+| WORKTREE-01 | Phase 3 | Pending |
+| WORKTREE-02 | Phase 3 | Pending |
+| GSD-01 | Phase 3 | Pending |
+| RUNTIME-01 | Phase 4 | Pending |
+| RUNTIME-02 | Phase 4 | Pending |
+| OFFICE-01 | Phase 5 | Pending |
+| OFFICE-02 | Phase 5 | Pending |
+| OFFICE-03 | Phase 5 | Pending |
+| HANDOFF-01 | Phase 5 | Pending |
+| HANDOFF-02 | Phase 5 | Pending |
+| CEO-01 | Phase 6 | Pending |
+| CEO-02 | Phase 6 | Pending |
+| CEO-03 | Phase 6 | Pending |
+| CEO-04 | Phase 6 | Pending |
+| CEO-05 | Phase 6 | Pending |
+| SAFE-01 | Phase 7 | Pending |
+| SAFE-02 | Phase 7 | Pending |
+| SAFE-03 | Phase 7 | Pending |
+| SAFE-04 | Phase 7 | Pending |
+| TWITCH-01 | Phase 8 | Pending |
+| TWITCH-02 | Phase 8 | Pending |
+| TWITCH-03 | Phase 8 | Pending |
+| TWITCH-04 | Phase 8 | Pending |
 
 **Coverage:**
-- v1 requirements: 32 total
-- Mapped to phases: 0
-- Unmapped: 32 ⚠️
+- v1 requirements: 33 total (corrected from an earlier miscount of 32; recount of the list above yields 33 IDs)
+- Mapped to phases: 33
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-09-18*
-*Last updated: 2026-09-18 after initial definition*
+*Last updated: 2026-09-18 after roadmap creation (8 phases, full traceability)*
