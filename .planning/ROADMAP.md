@@ -13,7 +13,7 @@ PixelFirm builds strictly bottom-up: the event schema and state engine come firs
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Event Schema & State Engine** - Typed event schema and Company State Engine proven against stubbed events, with replay
+- [x] **Phase 1: Event Schema & State Engine** - Typed event schema and Company State Engine proven against stubbed events, with replay (completed 2026-09-18)
 - [ ] **Phase 2: Control Plane Skeleton** - Durable Postgres event log behind an authenticated WS gateway with a security baseline
 - [ ] **Phase 3: Worker, Git Adapter & GSD Adapter** - Worker observes a real repository's real git/GSD state and emits real events
 - [ ] **Phase 4: AgentRuntime & ClaudeCodeRuntime** - Generic runtime abstraction with Claude Code as the first real implementation
@@ -35,7 +35,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Feeding a sequence of stubbed events into the state engine produces correct materialized projections (agent/floor/team/project/task state) that are read-only to downstream consumers.
   3. Replaying the same event sequence from the start reproduces identical projections, proving state can be rebuilt without manual patching.
 
-**Plans:** 3/3 plans executed
+**Plans:** 3/3 plans complete
 
 Plans:
 
@@ -155,7 +155,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Event Schema & State Engine | 3/3 | In Progress|  |
+| 1. Event Schema & State Engine | 3/3 | Complete    | 2026-09-18 |
 | 2. Control Plane Skeleton | 0/TBD | Not started | - |
 | 3. Worker, Git Adapter & GSD Adapter | 0/TBD | Not started | - |
 | 4. AgentRuntime & ClaudeCodeRuntime | 0/TBD | Not started | - |
