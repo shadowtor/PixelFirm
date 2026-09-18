@@ -15,6 +15,13 @@
       "when": 1789734602537,
       "tag": "0001_append_only_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789735124369,
+      "tag": "0002_workers_table",
+      "breakpoints": true
     }
   ]
 }

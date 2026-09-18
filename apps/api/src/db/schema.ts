@@ -18,3 +18,13 @@ export const events = pgTable("events", {
   payload: jsonb("payload").notNull(),
   receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Per-worker credentials (D-03). Only a hash of the secret is ever
+// persisted — never the secret itself, never reversibly encoded.
+export const workers = pgTable("workers", {
+  id: text("id").primaryKey(),
+  secretHash: text("secret_hash").notNull(), // hex-encoded HMAC-SHA256 digest
+  label: text("label"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});
