@@ -12,6 +12,7 @@
     "db:test:down": "docker compose -f docker-compose.test.yml down -v"
   },
   "dependencies": {
+    "@fastify/websocket": "^11.3.0",
     "drizzle-orm": "^0.45.2",
     "event-schema": "workspace:*",
     "fastify": "^5.12.5",
@@ -20,8 +21,10 @@
   },
   "devDependencies": {
     "@types/pg": "^8",
+    "@types/ws": "^8.18.1",
     "drizzle-kit": "^0.31.10",
     "tsx": "^4",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "ws": "^8.21.3"
   }
 }

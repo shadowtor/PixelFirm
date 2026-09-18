@@ -1,6 +1,8 @@
 import Fastify from "fastify";
+import fastifyWebsocket from "@fastify/websocket";
 import { env } from "./env.js";
 import { registerEventsRoute } from "./routes/events.js";
+import { registerWsRoute } from "./routes/ws.js";
 
 export function buildServer() {
   const fastify = Fastify({
@@ -10,6 +12,8 @@ export function buildServer() {
   fastify.get("/health", async () => ({ status: "ok" }));
 
   fastify.register(registerEventsRoute);
+  fastify.register(fastifyWebsocket);
+  fastify.register(registerWsRoute);
 
   return fastify;
 }
