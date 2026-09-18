@@ -35,12 +35,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. Feeding a sequence of stubbed events into the state engine produces correct materialized projections (agent/floor/team/project/task state) that are read-only to downstream consumers.
   3. Replaying the same event sequence from the start reproduces identical projections, proving state can be rebuilt without manual patching.
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md — Bootstrap monorepo workspace + tracer: one event type validated, reduced, and proven replay-deterministic
+- [x] 01-01-PLAN.md — Bootstrap monorepo workspace + tracer: one event type validated, reduced, and proven replay-deterministic
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -152,7 +152,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Event Schema & State Engine | 0/TBD | Not started | - |
+| 1. Event Schema & State Engine | 1/2 | In Progress|  |
 | 2. Control Plane Skeleton | 0/TBD | Not started | - |
 | 3. Worker, Git Adapter & GSD Adapter | 0/TBD | Not started | - |
 | 4. AgentRuntime & ClaudeCodeRuntime | 0/TBD | Not started | - |

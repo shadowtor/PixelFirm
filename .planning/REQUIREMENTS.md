@@ -9,10 +9,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Event Pipeline & State
 
-- [ ] **EVENT-01**: Typed event schema exists for company/floor/project/task/agent/session/handoff/review/approval/git/deployment/viewer events, each carrying event ID, timestamp, company, floor, project, task, source agent, destination agent, payload, and visibility level
+- [x] **EVENT-01**: Typed event schema exists for company/floor/project/task/agent/session/handoff/review/approval/git/deployment/viewer events, each carrying event ID, timestamp, company, floor, project, task, source agent, destination agent, payload, and visibility level
 - [ ] **EVENT-02**: Company Event Bus ingests events from Claude Code, Git, CI, and GSD into an append-only Postgres event log
-- [ ] **EVENT-03**: Company State Engine builds materialized projections (agent/floor/team/project/task state) that the renderer, dashboard, and overlay read — never write to directly
-- [ ] **EVENT-04**: State projections can be rebuilt/replayed from the event log without manual patching, so drift is detectable and correctable
+- [x] **EVENT-03**: Company State Engine builds materialized projections (agent/floor/team/project/task state) that the renderer, dashboard, and overlay read — never write to directly
+- [x] **EVENT-04**: State projections can be rebuilt/replayed from the event log without manual patching, so drift is detectable and correctable
 
 ### Agent Runtime
 
@@ -116,9 +116,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| EVENT-01 | Phase 1 | Pending |
-| EVENT-03 | Phase 1 | Pending |
-| EVENT-04 | Phase 1 | Pending |
+| EVENT-01 | Phase 1 | Complete |
+| EVENT-03 | Phase 1 | Complete |
+| EVENT-04 | Phase 1 | Complete |
 | EVENT-02 | Phase 2 | Pending |
 | SEC-01 | Phase 2 | Pending |
 | SEC-02 | Phase 2 | Pending |
@@ -151,6 +151,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TWITCH-04 | Phase 8 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 33 total (corrected from an earlier miscount of 32; recount of the list above yields 33 IDs)
 - Mapped to phases: 33
 - Unmapped: 0
