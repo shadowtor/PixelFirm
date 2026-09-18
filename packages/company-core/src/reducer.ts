@@ -19,53 +19,70 @@ const handlers: {
     },
   }),
 
-  "floor.created": (state, event) => ({
-    ...state,
-    floors: {
-      ...state.floors,
-      [event.floorId!]: { id: event.floorId!, name: event.payload.name },
-    },
-  }),
+  "floor.created": (state, event) => {
+    const floorId = event.floorId;
+    if (!floorId) return state;
+    return {
+      ...state,
+      floors: {
+        ...state.floors,
+        [floorId]: { id: floorId, name: event.payload.name },
+      },
+    };
+  },
 
-  "project.created": (state, event) => ({
-    ...state,
-    projects: {
-      ...state.projects,
-      [event.projectId!]: { id: event.projectId!, name: event.payload.name },
-    },
-  }),
+  "project.created": (state, event) => {
+    const projectId = event.projectId;
+    if (!projectId) return state;
+    return {
+      ...state,
+      projects: {
+        ...state.projects,
+        [projectId]: { id: projectId, name: event.payload.name },
+      },
+    };
+  },
 
-  "task.created": (state, event) => ({
-    ...state,
-    tasks: {
-      ...state.tasks,
-      [event.taskId!]: { id: event.taskId!, status: "created", title: event.payload.title },
-    },
-  }),
+  "task.created": (state, event) => {
+    const taskId = event.taskId;
+    if (!taskId) return state;
+    return {
+      ...state,
+      tasks: {
+        ...state.tasks,
+        [taskId]: { id: taskId, status: "created", title: event.payload.title },
+      },
+    };
+  },
 
   // Agent comes online and joins a team — touches both `agents` and `teams`
   // from a single event (no dedicated "team" category exists among the 12
   // seeded types; team membership rides along with agent.online instead).
-  "agent.online": (state, event) => ({
-    ...state,
-    agents: {
-      ...state.agents,
-      [event.sourceAgentId!]: { id: event.sourceAgentId!, status: "idle", name: event.payload.name },
-    },
-    teams: {
-      ...state.teams,
-      [event.payload.teamId]: state.teams[event.payload.teamId] ?? { id: event.payload.teamId },
-    },
-  }),
-
-  "session.started": (state, event) => {
-    const existing = state.agents[event.sourceAgentId!];
-    if (!existing) return state;
+  "agent.online": (state, event) => {
+    const agentId = event.sourceAgentId;
+    if (!agentId) return state;
     return {
       ...state,
       agents: {
         ...state.agents,
-        [event.sourceAgentId!]: { ...existing, status: "working" },
+        [agentId]: { id: agentId, status: "idle", name: event.payload.name },
+      },
+      teams: {
+        ...state.teams,
+        [event.payload.teamId]: state.teams[event.payload.teamId] ?? { id: event.payload.teamId },
+      },
+    };
+  },
+
+  "session.started": (state, event) => {
+    const agentId = event.sourceAgentId;
+    const existing = agentId ? state.agents[agentId] : undefined;
+    if (!agentId || !existing) return state;
+    return {
+      ...state,
+      agents: {
+        ...state.agents,
+        [agentId]: { ...existing, status: "working" },
       },
     };
   },
