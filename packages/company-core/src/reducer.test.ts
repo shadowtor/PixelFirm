@@ -73,3 +73,71 @@ describe("replay determinism — full catalog scale (EVENT-04)", () => {
     expect(second).toEqual(first);
   });
 });
+
+describe("EVENT-03 gap closure — omitted correlation id no-ops instead of corrupting state", () => {
+  it("floor.created with floorId omitted no-ops", () => {
+    const event = {
+      id: "event-omit-01",
+      version: 1,
+      occurredAt: "2026-09-18T00:00:00.000Z",
+      companyId: "company-1",
+      visibility: "INTERNAL",
+      type: "floor.created",
+      payload: { name: "Ghost Floor" },
+    } as CompanyEvent;
+    expect(reduce(emptyState(), event)).toEqual(emptyState());
+  });
+
+  it("project.created with projectId omitted no-ops", () => {
+    const event = {
+      id: "event-omit-02",
+      version: 1,
+      occurredAt: "2026-09-18T00:00:00.000Z",
+      companyId: "company-1",
+      visibility: "INTERNAL",
+      type: "project.created",
+      payload: { name: "Ghost Project" },
+    } as CompanyEvent;
+    expect(reduce(emptyState(), event)).toEqual(emptyState());
+  });
+
+  it("task.created with taskId omitted no-ops", () => {
+    const event = {
+      id: "event-omit-03",
+      version: 1,
+      occurredAt: "2026-09-18T00:00:00.000Z",
+      companyId: "company-1",
+      visibility: "INTERNAL",
+      type: "task.created",
+      payload: { title: "Ghost Task" },
+    } as CompanyEvent;
+    expect(reduce(emptyState(), event)).toEqual(emptyState());
+  });
+
+  it("agent.online with sourceAgentId omitted no-ops entirely, including the teams side effect", () => {
+    const event = {
+      id: "event-omit-04",
+      version: 1,
+      occurredAt: "2026-09-18T00:00:00.000Z",
+      companyId: "company-1",
+      visibility: "INTERNAL",
+      type: "agent.online",
+      payload: { name: "Ghost Agent", teamId: "team-ghost" },
+    } as CompanyEvent;
+    expect(reduce(emptyState(), event)).toEqual(emptyState());
+  });
+
+  it("session.started with sourceAgentId omitted no-ops", () => {
+    const event = {
+      id: "event-omit-05",
+      version: 1,
+      occurredAt: "2026-09-18T00:00:00.000Z",
+      companyId: "company-1",
+      taskId: "task-1",
+      visibility: "INTERNAL",
+      type: "session.started",
+      payload: { worktreeId: "wt-1" },
+    } as CompanyEvent;
+    expect(reduce(emptyState(), event)).toEqual(emptyState());
+  });
+});
