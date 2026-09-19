@@ -61,14 +61,14 @@ Plans:
   3. Stored OAuth tokens and other credentials are protected server-side and encrypted at rest.
   4. No control-plane endpoint allows arbitrary remote shell/command execution, and endpoints validate input, rate-limit requests, and apply CSRF protection.
 
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans executed
 
 Plans:
 
 - [x] 02-01-PLAN.md — Tracer: apps/api scaffold + durable, deduped POST /events end-to-end (EVENT-02, D-04)
 - [x] 02-02-PLAN.md — Authenticated WS gateway + credential hash/verify primitives (SEC-02, D-03)
 - [x] 02-03-PLAN.md — Admin credential routes + rate limiting + CSRF header posture (SEC-01, SEC-03, SEC-04)
-- [ ] 02-04-PLAN.md — Coolify staging deployment + Playwright e2e verification (D-01, D-02)
+- [x] 02-04-PLAN.md — Coolify staging deployment + Playwright e2e verification (D-01, D-02)
 
 **Wave 1**
 
@@ -80,7 +80,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 02-03-PLAN.md — Admin credential routes + rate limiting + CSRF posture
+- [x] 02-03-PLAN.md — Admin credential routes + rate limiting + CSRF posture
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -179,7 +179,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Event Schema & State Engine | 3/3 | Complete    | 2026-09-18 |
-| 2. Control Plane Skeleton | 3/4 | In Progress|  |
+| 2. Control Plane Skeleton | 4/4 | In Progress|  |
 | 3. Worker, Git Adapter & GSD Adapter | 0/TBD | Not started | - |
 | 4. AgentRuntime & ClaudeCodeRuntime | 0/TBD | Not started | - |
 | 5. Pixel Office Renderer | 0/TBD | Not started | - |
