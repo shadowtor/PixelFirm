@@ -14,7 +14,7 @@ PixelFirm builds strictly bottom-up: the event schema and state engine come firs
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Event Schema & State Engine** - Typed event schema and Company State Engine proven against stubbed events, with replay (completed 2026-09-18)
-- [ ] **Phase 2: Control Plane Skeleton** - Durable Postgres event log behind an authenticated WS gateway with a security baseline
+- [x] **Phase 2: Control Plane Skeleton** - Durable Postgres event log behind an authenticated WS gateway with a security baseline (completed 2026-09-19)
 - [ ] **Phase 3: Worker, Git Adapter & GSD Adapter** - Worker observes a real repository's real git/GSD state and emits real events
 - [ ] **Phase 4: AgentRuntime & ClaudeCodeRuntime** - Generic runtime abstraction with Claude Code as the first real implementation
 - [ ] **Phase 5: Pixel Office Renderer** - Forked Pixel Agents office renders real state, never a fabricated animation
@@ -61,7 +61,7 @@ Plans:
   3. Stored OAuth tokens and other credentials are protected server-side and encrypted at rest.
   4. No control-plane endpoint allows arbitrary remote shell/command execution, and endpoints validate input, rate-limit requests, and apply CSRF protection.
 
-**Plans:** 4/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 
@@ -84,7 +84,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 02-04-PLAN.md — Coolify staging deployment + Playwright e2e verification
+- [x] 02-04-PLAN.md — Coolify staging deployment + Playwright e2e verification
 
 ### Phase 3: Worker, Git Adapter & GSD Adapter
 
@@ -179,7 +179,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Event Schema & State Engine | 3/3 | Complete    | 2026-09-18 |
-| 2. Control Plane Skeleton | 4/4 | In Progress|  |
+| 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 0/TBD | Not started | - |
 | 4. AgentRuntime & ClaudeCodeRuntime | 0/TBD | Not started | - |
 | 5. Pixel Office Renderer | 0/TBD | Not started | - |
