@@ -2,11 +2,15 @@ import type { FastifyInstance } from "fastify";
 import { CompanyEventSchema } from "event-schema";
 import { db } from "../db/client.js";
 import { events } from "../db/schema.js";
+import { authenticateWorker } from "../auth/worker-auth.js";
 
 export async function registerEventsRoute(fastify: FastifyInstance) {
   fastify.post(
     "/events",
-    { config: { rateLimit: { max: 300, timeWindow: "1 minute" } } },
+    {
+      preValidation: authenticateWorker,
+      config: { rateLimit: { max: 300, timeWindow: "1 minute" } },
+    },
     async (request, reply) => {
       const parsed = CompanyEventSchema.safeParse(request.body);
       if (!parsed.success) {

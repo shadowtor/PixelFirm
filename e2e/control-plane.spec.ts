@@ -29,7 +29,12 @@ function attemptWs(url: string, headers?: Record<string, string>): Promise<
 }
 
 test.describe("Phase 2 control plane — staging", () => {
-  test("event ingestion is durable and deduped", async ({ request, baseURL }) => {
+  test("event ingestion requires a worker credential and is durable/deduped", async ({
+    request,
+    baseURL,
+  }) => {
+    if (!baseURL) throw new Error("baseURL is required");
+
     const event = {
       id: randomUUID(),
       type: "company.started",
@@ -40,10 +45,21 @@ test.describe("Phase 2 control plane — staging", () => {
       payload: { name: "E2E Staging Co" },
     };
 
-    const first = await request.post(`${baseURL}/events`, { data: event });
+    const noAuth = await request.post(`${baseURL}/events`, { data: event });
+    expect(noAuth.status()).toBe(401);
+
+    const issueRes = await request.post(`${baseURL}/admin/workers`, {
+      headers: { "X-Bootstrap-Secret": BOOTSTRAP_SECRET! },
+      data: { label: "e2e-events-worker" },
+    });
+    expect(issueRes.status()).toBe(201);
+    const { token } = (await issueRes.json()) as { token: string };
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const first = await request.post(`${baseURL}/events`, { data: event, headers });
     expect(first.status()).toBe(202);
 
-    const second = await request.post(`${baseURL}/events`, { data: event });
+    const second = await request.post(`${baseURL}/events`, { data: event, headers });
     expect(second.status()).toBe(202);
   });
 

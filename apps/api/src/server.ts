@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import Fastify from "fastify";
 import fastifyWebsocket from "@fastify/websocket";
 import fastifyRateLimit from "@fastify/rate-limit";
@@ -17,6 +18,10 @@ import { registerAdminWorkersRoute } from "./routes/admin-workers.js";
 export function buildServer() {
   const fastify = Fastify({
     logger: { redact: ["req.headers.authorization", "req.headers['x-bootstrap-secret']"] },
+    // Deployed behind Coolify's Traefik reverse proxy: without this, every
+    // request's `request.ip` resolves to Traefik's own IP, so per-route rate
+    // limits collapse into one shared bucket across all real clients.
+    trustProxy: true,
   });
 
   // Pattern 4: registered globally disabled — every route opts in via its
@@ -33,7 +38,10 @@ export function buildServer() {
   return fastify;
 }
 
-// Keeps buildServer() importable/inject-able from tests without binding a real port.
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Keeps buildServer() importable/inject-able from tests without binding a
+// real port. `file://${process.argv[1]}` breaks on Windows (backslashes,
+// drive letters aren't valid file:// syntax) — pathToFileURL normalizes both
+// sides so the comparison works cross-platform.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   buildServer().listen({ port: env.PORT, host: "0.0.0.0" });
 }
