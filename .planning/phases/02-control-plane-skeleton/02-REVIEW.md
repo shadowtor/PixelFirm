@@ -38,6 +38,7 @@ findings:
   info: 3
   total: 9
 status: issues_found
+fix_report: 02-REVIEW-FIX.md
 ---
 
 # Phase 2: Code Review Report
