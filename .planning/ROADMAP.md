@@ -98,7 +98,27 @@ Plans:
   3. For each active task the system records the real repository, branch, worktree path, and owning agent/session, and never automatically merges a worktree's branch.
   4. The GSD adapter observes SyncSmith's real GSD workflow state (new project/research/requirements/planning/execution/verification/review/approval/deployment) and maps it onto company events and role assignments, preferring observed state over guessed state.
 
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+
+- [ ] 03-01-PLAN.md — Tracer: worker.heartbeat flows through POST /events, control plane derives live online/stale/offline status (RUNTIME-04)
+- [ ] 03-02-PLAN.md — git-adapter: worktree/commit observation + process-liveness + read-only guarantee (WORKTREE-01, WORKTREE-02)
+- [ ] 03-03-PLAN.md — gsd-adapter: STATE.md/phase-file observation + role mapping (GSD-01)
+- [ ] 03-04-PLAN.md — apps/worker: full poll-diff loop wiring both adapters + live SyncSmith demo (RUNTIME-03, RUNTIME-04, WORKTREE-01, GSD-01)
+
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — Tracer: worker.heartbeat flows through POST /events, control plane derives live online/stale/offline status
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 03-02-PLAN.md — git-adapter: worktree/commit observation + process-liveness + read-only guarantee
+- [ ] 03-03-PLAN.md — gsd-adapter: STATE.md/phase-file observation + role mapping
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 03-04-PLAN.md — apps/worker: full poll-diff loop wiring both adapters + live SyncSmith demo
 
 ### Phase 4: AgentRuntime & ClaudeCodeRuntime
 
