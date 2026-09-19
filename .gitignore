@@ -2,3 +2,5 @@ node_modules/
 dist/
 *.log
 .turbo/
+test-results/
+playwright-report/
