@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
 import { WebSocket } from "ws";
+import { buildEnvelope, postEvent } from "./event-emitter.js";
 
 // Matches apps/api/src/ws/connection-status.ts's HEARTBEAT_INTERVAL_MS (10s) —
 // the two must stay numerically consistent (D-03).
@@ -32,35 +32,8 @@ export function connectWorker(controlPlaneUrl: string, token: string): WebSocket
   return new WebSocket(deriveWsUrl(controlPlaneUrl), { headers: { Authorization: `Bearer ${token}` } });
 }
 
-// Task 1 only: a minimal local envelope builder duplicated here because
-// event-emitter.ts doesn't exist yet. Task 2 refactors this to call
-// event-emitter.ts's shared buildEnvelope/postEvent instead.
-function buildHeartbeatEnvelope(companyId: string) {
-  return {
-    id: randomUUID(),
-    version: 1,
-    occurredAt: new Date().toISOString(),
-    companyId,
-    visibility: "INTERNAL" as const,
-    type: "worker.heartbeat" as const,
-    payload: {},
-  };
-}
-
-async function sendHeartbeat(controlPlaneUrl: string, token: string, companyId: string): Promise<void> {
-  try {
-    const response = await fetch(`${controlPlaneUrl}/events`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify(buildHeartbeatEnvelope(companyId)),
-    });
-    if (!response.ok) {
-      console.error(`worker heartbeat: control plane responded ${response.status}`);
-    }
-  } catch (err) {
-    // A single failed emit must never crash the poll/heartbeat loop.
-    console.error("worker heartbeat: failed to reach control plane", err);
-  }
+function sendHeartbeat(controlPlaneUrl: string, token: string, companyId: string): void {
+  void postEvent(controlPlaneUrl, token, buildEnvelope(companyId, "worker.heartbeat", {}));
 }
 
 /**
@@ -70,10 +43,8 @@ async function sendHeartbeat(controlPlaneUrl: string, token: string, companyId: 
  * fails CompanyEventSchema.safeParse server-side (Rule 3 fix: blocking issue).
  */
 export function startHeartbeat(controlPlaneUrl: string, token: string, companyId: string): { stop(): void } {
-  void sendHeartbeat(controlPlaneUrl, token, companyId);
-  const handle = setInterval(() => {
-    void sendHeartbeat(controlPlaneUrl, token, companyId);
-  }, HEARTBEAT_INTERVAL_MS);
+  sendHeartbeat(controlPlaneUrl, token, companyId);
+  const handle = setInterval(() => sendHeartbeat(controlPlaneUrl, token, companyId), HEARTBEAT_INTERVAL_MS);
   return { stop: () => clearInterval(handle) };
 }
 
