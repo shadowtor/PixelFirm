@@ -103,6 +103,15 @@ export function createClaudeCodeRuntime(options: {
         permissionMode: "default",
         resume: resumeSessionId,
         abortController: controller,
+        // CR-01: the SDK's own env option REPLACES (not merges with)
+        // process.env when set, and inherits the full process.env when
+        // omitted (sdk.d.ts QueryOptions.env). A stray ANTHROPIC_API_KEY in
+        // this process's own environment must never leak into the
+        // subprocess and silently override CLI subscription auth (this
+        // package's documented never-forward guarantee) — so env is always
+        // explicitly set here, spreading process.env for everything else
+        // (PATH, HOME, etc.) but actively stripping the key.
+        env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "ANTHROPIC_API_KEY")),
         // D-08 signal #1: fires for AskUserQuestion and any Bash command
         // matching classifySignal's CEO-gated allowlist. Always returns
         // "deny" for a classified signal — never auto-approve (ARCHITECTURE.md
