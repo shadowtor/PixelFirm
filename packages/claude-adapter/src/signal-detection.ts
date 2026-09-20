@@ -18,7 +18,11 @@ export interface ClassifiedSignal {
 }
 
 const CEO_GATED_BASH_PATTERNS: { name: string; pattern: RegExp }[] = [
-  { name: "force-push", pattern: /\bforce\b.*push|push.*--force|-f\b/i },
+  // WR-01: the third alternative used to be a bare `-f\b`, matching any
+  // command containing that flag regardless of context (curl -fsSL, rm -f,
+  // docker build -f) — scope it to a push-shaped command by requiring
+  // `push` to appear before the flag, same as the `--force` alternative.
+  { name: "force-push", pattern: /\bforce\b.*push|push.*(--force|-f\b)/i },
   { name: "destructive filesystem op", pattern: /\brm\s+-rf\b/i },
   { name: "destructive DB op", pattern: /\bDROP\s+(TABLE|DATABASE)\b/i },
   { name: "publish/deploy", pattern: /\bnpm\s+publish\b|\bdeploy\b/i },
