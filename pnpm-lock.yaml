@@ -261,12 +261,25 @@ importers:
       event-schema:
         specifier: workspace:*
         version: link:../event-schema
+      git-adapter:
+        specifier: workspace:*
+        version: link:../git-adapter
       gsd-adapter:
         specifier: workspace:*
         version: link:../gsd-adapter
       orchestration-adapter:
         specifier: workspace:*
         version: link:../orchestration-adapter
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      execa:
+        specifier: ^10.0.1
+        version: 10.0.1
+      ws:
+        specifier: ^8.21.3
+        version: 8.21.3
 
   packages/company-core:
     dependencies:

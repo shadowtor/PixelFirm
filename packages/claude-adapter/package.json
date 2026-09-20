@@ -6,12 +6,19 @@
   "main": "src/index.ts",
   "scripts": {
     "test": "vitest run",
+    "test:integration": "vitest run claude-code-runtime.integration",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.278",
     "event-schema": "workspace:*",
+    "git-adapter": "workspace:*",
     "gsd-adapter": "workspace:*",
     "orchestration-adapter": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.1",
+    "execa": "^10.0.1",
+    "ws": "^8.21.3"
   }
 }
