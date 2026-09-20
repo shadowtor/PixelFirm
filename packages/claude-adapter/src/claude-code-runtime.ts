@@ -1,6 +1,7 @@
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentRuntime, AgentTaskStatus, StartTaskInput } from "orchestration-adapter";
 import { buildEnvelope, postEvent } from "./event-emitter.js";
+import { createWatchdog, DEFAULT_WATCHDOG_TIMEOUT_MS } from "./watchdog.js";
 
 interface TaskRecord {
   sessionId?: string;
@@ -67,9 +68,25 @@ export function createClaudeCodeRuntime(options: {
     });
     record.handle = stream;
 
+    // D-04: one watchdog per invocation. Resets on every yielded message of
+    // any type (not just result) and fires the bounded-silence "blocked"
+    // transition only if the timer expires with zero resets since the last
+    // one — mirrors the same graceful-then-hard-kill mechanism cancelTask
+    // uses, just with a different terminal status (blocked, not cancelled).
+    const watchdog = createWatchdog(DEFAULT_WATCHDOG_TIMEOUT_MS, () => {
+      void (async () => {
+        const exitedCleanly = await attemptGracefulStop(record);
+        if (!exitedCleanly) controller.abort();
+        record.status = "blocked";
+        await emitStatus(taskId, "blocked");
+      })();
+    });
+
     const runPromise = (async () => {
+      watchdog.reset();
       try {
         for await (const message of stream) {
+          watchdog.reset();
           if (message.type === "system" && message.subtype === "init") {
             record.sessionId = message.session_id;
             // A captured session_id and no result yet means the turn is
@@ -89,6 +106,11 @@ export function createClaudeCodeRuntime(options: {
         // Never crash the caller on a non-terminal stream error — log and
         // continue, matching apps/worker/src/poll-loop.ts's pattern.
         console.error(`ClaudeCodeRuntime.runQuery: stream error for task ${taskId}`, err);
+      } finally {
+        // A completed task's watchdog must never fire after the fact —
+        // clear on every exit path (result received, graceful/hard cancel,
+        // or an uncaught stream error).
+        watchdog.clear();
       }
     })();
     record.runPromise = runPromise;
@@ -154,8 +176,18 @@ export function createClaudeCodeRuntime(options: {
       await runQuery(taskId, "Continue the task from where you left off", record.sessionId);
     },
 
-    async cancelTask(_taskId: string): Promise<void> {
-      throw new Error("not implemented — see Plan 04-02 Task 2");
+    async cancelTask(taskId: string): Promise<void> {
+      const record = tasks.get(taskId);
+      if (!record || !record.controller) {
+        throw new Error("ClaudeCodeRuntime.cancelTask: task is not running");
+      }
+      // D-03: graceful stop first; if the query() call has not exited
+      // within the bounded grace period, hard-abort to guarantee
+      // termination. Status becomes "cancelled" either way.
+      const exitedCleanly = await attemptGracefulStop(record);
+      if (!exitedCleanly) record.controller.abort();
+      record.status = "cancelled";
+      await emitStatus(taskId, "cancelled");
     },
 
     async sendMessage(taskId: string, message: string): Promise<void> {
