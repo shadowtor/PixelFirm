@@ -222,6 +222,37 @@ importers:
         specifier: ^8.21.3
         version: 8.21.3
 
+  apps/worker:
+    dependencies:
+      event-schema:
+        specifier: workspace:*
+        version: link:../../packages/event-schema
+      git-adapter:
+        specifier: workspace:*
+        version: link:../../packages/git-adapter
+      gsd-adapter:
+        specifier: workspace:*
+        version: link:../../packages/gsd-adapter
+      ws:
+        specifier: ^8.21.3
+        version: 8.21.3
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.18.1
+        version: 8.18.1
+      execa:
+        specifier: ^10.0.1
+        version: 10.0.1
+      tsx:
+        specifier: ^4
+        version: 4.23.13
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/company-core:
     dependencies:
       event-schema:
