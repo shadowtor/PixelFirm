@@ -1,6 +1,7 @@
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
 import type { AgentRuntime, AgentTaskStatus, StartTaskInput } from "orchestration-adapter";
 import { buildEnvelope, postEvent } from "./event-emitter.js";
+import { classifySignal } from "./signal-detection.js";
 import { createWatchdog, DEFAULT_WATCHDOG_TIMEOUT_MS } from "./watchdog.js";
 
 interface TaskRecord {
@@ -45,6 +46,23 @@ export function createClaudeCodeRuntime(options: {
     );
   }
 
+  // D-08: real, non-stub requestReview — fired by canUseTool (AskUserQuestion
+  // / CEO-gated Bash) and the Notification hook, both wired below in
+  // runQuery. Always sets waiting_for_review and posts ceo.approval_requested
+  // (reusing Phase 1's existing discriminated-union member) — no Phase 6 CEO
+  // dashboard exists yet to grant approval, so this is detection-only.
+  async function requestReview(taskId: string, reason: string): Promise<void> {
+    const record = tasks.get(taskId);
+    if (record) record.status = "waiting_for_review";
+    await emitStatus(taskId, "waiting_for_review");
+    await postEvent(
+      options.controlPlaneUrl,
+      options.token,
+      buildEnvelope(options.companyId, "ceo.approval_requested", { taskId, reason }, taskId),
+    );
+  }
+
+
   // Shared for-await message loop — startTask (prompt = input.prompt, no
   // resume), resumeTask, and sendMessage all call this instead of each
   // duplicating the stream-handling logic. Each invocation creates its own
@@ -64,6 +82,41 @@ export function createClaudeCodeRuntime(options: {
         permissionMode: "default",
         resume: resumeSessionId,
         abortController: controller,
+        // D-08 signal #1: fires for AskUserQuestion and any Bash command
+        // matching classifySignal's CEO-gated allowlist. Always returns
+        // "deny" for a classified signal — never auto-approve (ARCHITECTURE.md
+        // Anti-Pattern 2) — the actual human-approval mechanism is Phase 6's
+        // job; Phase 4 only guarantees the signal fires and is surfaced.
+        canUseTool: async (toolName, input) => {
+          const signal = classifySignal(toolName, input);
+          if (!signal) return { behavior: "allow", updatedInput: input };
+          await requestReview(taskId, signal.reason);
+          return {
+            behavior: "deny",
+            message: `Escalated to CEO for review (taskId=${taskId}) — no Phase 6 dashboard exists yet to grant approval; see the ceo.approval_requested event.`,
+          };
+        },
+        // D-08 signal #2: independent secondary signal — fires ~6s after an
+        // unanswered canUseTool wait, per 04-RESEARCH.md Pattern 4 (2). Rarely
+        // fires in practice since this implementation's canUseTool is
+        // synchronous, but it remains correct defensive wiring, directly
+        // unit-tested by invoking the hook function independent of live
+        // canUseTool timing.
+        hooks: {
+          Notification: [
+            {
+              hooks: [
+                async (hookInput) => {
+                  await requestReview(
+                    taskId,
+                    `permission_prompt: ${(hookInput as { message?: string }).message ?? "unanswered ~6s"}`,
+                  );
+                  return {};
+                },
+              ],
+            },
+          ],
+        },
       },
     });
     record.handle = stream;
@@ -200,11 +253,9 @@ export function createClaudeCodeRuntime(options: {
       await runQuery(taskId, message, record.sessionId);
     },
 
-    async requestReview(_taskId: string, _reason: string): Promise<void> {
-      throw new Error("not implemented — see Plan 04-03");
-    },
+    requestReview,
     async requestHandoff(_taskId: string, _toAgentId: string): Promise<void> {
-      throw new Error("not implemented — see Plan 04-03");
+      throw new Error("not implemented — see Plan 04-03 Task 2");
     },
   };
 }
