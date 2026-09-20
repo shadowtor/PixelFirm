@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
 vi.mock("./event-emitter.js", () => ({
@@ -14,6 +14,12 @@ vi.mock("./event-emitter.js", () => ({
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { postEvent } from "./event-emitter.js";
 import { createClaudeCodeRuntime } from "./claude-code-runtime.js";
+import { DEFAULT_WATCHDOG_TIMEOUT_MS } from "./watchdog.js";
+
+// Mirrors claude-code-runtime.ts's own GRACEFUL_TIMEOUT_MS constant (not
+// exported — an internal implementation detail); tests drive fake timers
+// past this window to exercise the hard-kill fallback path.
+const GRACEFUL_TIMEOUT_MS = 5000;
 
 // Yields a fixed array of fake SDKMessage-shaped objects — mirrors
 // apps/worker/src/poll-loop.test.ts's mocking convention, adapted for the
@@ -217,5 +223,50 @@ describe("ClaudeCodeRuntime.pauseTask / resumeTask / sendMessage", () => {
     await runtime.startTask(startInput);
     await expect(runtime.resumeTask("task-1")).rejects.toThrow();
     await expect(runtime.sendMessage("task-1", "hi")).rejects.toThrow();
+  });
+});
+
+describe("ClaudeCodeRuntime.cancelTask / watchdog integration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("Test 4: cancelTask hard-kills a hung task within the grace period, resulting in status cancelled", async () => {
+    const abortSpy = vi.spyOn(AbortController.prototype, "abort");
+    (query as unknown as Mock).mockReturnValue(hangingQuery(initMessage("session-hang")));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    void runtime.startTask(startInput);
+    await vi.advanceTimersByTimeAsync(0); // let the init message be processed
+
+    const cancelPromise = runtime.cancelTask("task-1");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+    await cancelPromise;
+
+    expect(await runtime.getStatus("task-1")).toBe("cancelled");
+    expect(abortSpy).toHaveBeenCalled();
+  });
+
+  it("Test 5: a genuinely silent query() stream triggers the watchdog, transitioning status to blocked (not cancelled)", async () => {
+    (query as unknown as Mock).mockReturnValue(silentQuery());
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    void runtime.startTask(startInput);
+    await vi.advanceTimersByTimeAsync(0); // let runQuery reach the for-await loop and reset the watchdog
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_WATCHDOG_TIMEOUT_MS); // fire the watchdog
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS); // let the onTimeout graceful-then-hard-kill settle
+
+    expect(await runtime.getStatus("task-1")).toBe("blocked");
+    const statusChangedCalls = (postEvent as unknown as Mock).mock.calls.filter(
+      (call) => call[2].type === "task.status_changed",
+    );
+    const lastCall = statusChangedCalls[statusChangedCalls.length - 1];
+    expect(lastCall[2].payload.status).toBe("blocked");
   });
 });
