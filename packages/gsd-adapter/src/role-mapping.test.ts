@@ -1,3 +1,4 @@
+import { CompanyEventSchema } from "event-schema";
 import { describe, expect, it } from "vitest";
 import type { PhaseFilesResult } from "./phase-files.js";
 import { mapToGsdCategory } from "./role-mapping.js";
@@ -84,5 +85,35 @@ describe("role-mapping.ts", () => {
   it("a deliberately nonsensical combination (executing status, zero PLANs, no phase dir at all) resolves unknown / unknown", () => {
     const result = mapToGsdCategory({ status: "executing", phaseFiles: null, roadmapPhaseCompleted: false });
     expect(result).toEqual({ category: "unknown", role: "unknown" });
+  });
+
+  it("every mapToGsdCategory output — including the unknown/unknown fallback — validates against the real CompanyEventSchema (event-schema's GsdPhaseObservedPayload), never failing safeParse downstream", () => {
+    const rows: Array<Parameters<typeof mapToGsdCategory>[0]> = [
+      { status: "unknown", phaseFiles: null, roadmapPhaseCompleted: false },
+      { status: "planning", phaseFiles: phaseFiles({ hasContext: true }), roadmapPhaseCompleted: false },
+      { status: "executing", phaseFiles: phaseFiles({ planCount: 2, summaryCount: 1 }), roadmapPhaseCompleted: false },
+      {
+        status: "verifying",
+        phaseFiles: phaseFiles({ hasVerification: true, verificationStatus: "passed" }),
+        roadmapPhaseCompleted: false,
+      },
+      { status: "completed", phaseFiles: phaseFiles(), roadmapPhaseCompleted: true },
+      { status: "paused", phaseFiles: null, roadmapPhaseCompleted: false },
+    ];
+
+    for (const row of rows) {
+      const { category, role } = mapToGsdCategory(row);
+      const event = {
+        id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+        version: 1,
+        occurredAt: "2026-09-19T00:00:00.000Z",
+        companyId: "company-1",
+        visibility: "INTERNAL" as const,
+        type: "gsd.phase_observed" as const,
+        payload: { status: row.status, category, role, active: false },
+      };
+      const parsed = CompanyEventSchema.safeParse(event);
+      expect(parsed.success, `status=${row.status} -> category=${category}/role=${role}: ${JSON.stringify(!parsed.success && parsed.error.flatten())}`).toBe(true);
+    }
   });
 });

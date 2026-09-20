@@ -65,6 +65,20 @@ describe("Phase 3 payloads — worker.heartbeat, git.worktree_observed, gsd.phas
     expect(CompanyEventSchema.safeParse(event).success).toBe(true);
   });
 
+  it("accepts a gsd.phase_observed event with category 'unknown' (gsd-adapter's kept-prohibition fallback, T-03-07)", () => {
+    const event = {
+      ...baseEnvelope(),
+      type: "gsd.phase_observed",
+      payload: {
+        status: "unknown",
+        category: "unknown",
+        role: "unknown",
+        active: false,
+      },
+    };
+    expect(CompanyEventSchema.safeParse(event).success).toBe(true);
+  });
+
   it("rejects a gsd.phase_observed event missing a required payload field", () => {
     const event = {
       ...baseEnvelope(),

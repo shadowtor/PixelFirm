@@ -39,6 +39,12 @@ const GsdPhaseObservedPayload = z.object({
     "review",
     "approval",
     "deployment",
+    // Phase 3 addition (GSD-01, T-03-07 mitigation): the gsd-adapter's own
+    // kept prohibition requires resolving "unknown" for any status/file-
+    // presence combination the category table doesn't recognize — omitting
+    // it from this enum would make CompanyEventSchema.safeParse reject the
+    // exact fallback event this mitigation depends on reaching the pipeline.
+    "unknown",
   ]),
   role: z.enum(["PM", "Research Agent", "Architect", "Engineering", "QA", "Reviewer", "CEO", "DevOps", "unknown"]),
   active: z.boolean(),
