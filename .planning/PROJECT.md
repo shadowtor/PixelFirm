@@ -12,15 +12,15 @@ The pixel office must accurately visualise a real Claude Code + GSD software pro
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Worker connects from wherever Claude Code is authenticated and can point at any git repository/worktree the user chooses via `--repo`/`WORKER_REPO_PATH`, not hardcoded to one project — Phase 3 (proven live against the separate SyncSmith repo; read-only git + GSD state observation, no mutation). Process/build/test execution (running Claude Code sessions, GSD commands) remains Active below — Phase 3 built observation only.
+- ✓ GSD adapter mapping observed GSD workflow state onto company events, observed rather than guessed where possible — Phase 3 (explicit fallback to `unknown`/`unknown` when signals don't clearly support a category; never fabricates a pipeline stage/role)
 
 ### Active
 
 - [ ] Company/event domain model: Company → Buildings → Floors → Teams → Agents → Projects, with typed event schema flowing Claude Code / Git / CI / GSD → Company Event Bus → Company State Engine → Pixel Office → Stream Overlay/Dashboard
 - [ ] Pixel Agents fork integrated as the office renderer/movement/character base (attribution and licence notices preserved)
 - [ ] ClaudeCodeRuntime implementing an AgentRuntime abstraction (startTask/pauseTask/resumeTask/cancelTask/getStatus/sendMessage/requestReview/requestHandoff) so other orchestrators (Maestro, Codex, etc.) can be added later without changing the company model
-- [ ] GSD adapter mapping observed GSD workflow state (new project → PM, research → Research Agent, requirements → PM, planning → Architect, execution → Engineering, verification → QA, review → Reviewer, approval → CEO, deployment → DevOps) onto company events, observed rather than guessed where possible
-- [ ] Worker component that runs wherever Claude Code is authenticated (starting on the user's workstation) and can point at any git repository/worktree the user chooses — not hardcoded to one project — handling Claude Code processes, GSD commands, git worktrees, builds/tests
+- [ ] Worker handles Claude Code process management, GSD command execution, and builds/tests (beyond Phase 3's read-only git/GSD observation)
 - [ ] Control plane (web app, API, Postgres, WebSocket/event gateway, stream overlay, auth, activity history) deployable via Docker to the user's existing Coolify server, with worker connecting to it without the control plane needing direct filesystem access to worker repos
 - [ ] Persistent agent/employee model (id, name, role, title, team, floor, sprite, personality, status, current project/task/session/worktree, availability, stats, history) with pixel animation reflecting standardised agent states (offline/idle/planning/researching/coding/reading/testing/reviewing/discussing/deploying/blocked/waiting_for_agent/waiting_for_ceo/failed/completed)
 - [ ] CEO office and approval workflow: agents needing human input physically walk to the CEO office and wait; CEO dashboard shows decision title, context, agent recommendation, relevant links/diffs, and Approve/Reject/Discuss/Request Changes/Request More Research actions. The system must never auto-approve a CEO-gated operation just because an agent requested it.
@@ -82,6 +82,7 @@ The pixel office must accurately visualise a real Claude Code + GSD software pro
 | Control plane targets the user's existing Coolify server from early phases | Infra already exists; no need to defer deployment design | — Pending |
 | AgentRuntime abstraction (ClaudeCodeRuntime first) instead of hardcoding Claude Code into the company model | Brief requires future support for Maestro/Codex/OpenCode without rearchitecting | — Pending |
 | No automated/unsafe merging or autonomous deployment in MVP | Brief treats this as a privileged dev-control system; CEO gate is a hard safety boundary | — Pending |
+| Worker observes pointed-at repos read-only via poll-diff (git-adapter/gsd-adapter), structurally guaranteed to never issue a mutating git command | Worker can safely be pointed at any of the user's real repos without risk of corrupting them — matches the "no unsafe automated merging" constraint and the control-plane's no-filesystem-access design | ✓ Phase 3 |
 
 ## Evolution
 
@@ -101,4 +102,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-18 after initialization*
+*Last updated: 2026-09-20 after Phase 3*

@@ -1,44 +1,44 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 03
-current_phase_name: Worker, Git Adapter & GSD Adapter
-status: verifying
-stopped_at: Completed 03-04-PLAN.md
-last_updated: "2026-09-20T02:36:04.086Z"
+current_phase: 4
+current_phase_name: AgentRuntime & ClaudeCodeRuntime
+status: planning
+stopped_at: Phase 03 complete, ready to plan Phase 4
+last_updated: "2026-09-20T05:48:51.575Z"
 last_activity: 2026-09-20
-last_activity_desc: Phase 03 execution started
-state_head: 52dffbc82d0283ac2984ac43ff37504e4f331d7f
+last_activity_desc: Phase 03 complete, transitioned to Phase 4
+state_head: 13b8b76b9e09976fc76448216d968c3da23e57a4
 progress:
   total_phases: 8
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 11
   completed_plans: 11
-  percent: 25
+  percent: 38
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-18)
+See: .planning/PROJECT.md (updated 2026-09-20)
 
 **Core value:** The pixel office must accurately visualise a real Claude Code + GSD software project — agents genuinely performing the work and requesting CEO approval — using actual company events, never a prerecorded or faked animation.
-**Current focus:** Phase 03 — Worker, Git Adapter & GSD Adapter
+**Current focus:** Phase 4 — AgentRuntime & ClaudeCodeRuntime
 
 ## Current Position
 
-Phase: 03 (Worker, Git Adapter & GSD Adapter) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
-Last activity: 2026-09-20 — Phase 03 execution started
+Phase: 4 — AgentRuntime & ClaudeCodeRuntime
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-20 — Phase 03 complete, transitioned to Phase 4
 
-Progress: [███░░░░░░░] 25%
+Progress: [████░░░░░░] 38%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 7
+- Total plans completed: 11
 - Average duration: - min
 - Total execution time: 0 hours
 
@@ -48,6 +48,7 @@ Progress: [███░░░░░░░] 25%
 |-------|-------|-------|----------|
 | 01 | 3 | - | - |
 | 02 | 4 | - | - |
+| 03 | 4 | - | - |
 
 **Recent Trend:**
 
@@ -111,9 +112,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 2 planning: MUST include dedup-at-ingestion as a named requirement — Phase 1's `packages/company-core` reducer is intentionally a pure function over ordered, exactly-once input (D-03), with event-ID dedup explicitly deferred to Phase 2's Postgres ingestion layer. Do not silently drop this; the gap would surface as production state drift (duplicate event application), not a build-time error.
-- Phase 2 planning: confirm Coolify's managed Postgres version matches the 18.x assumed by research.
 - Phase 4 planning: re-verify Claude Max-subscription billing terms for SDK/headless usage haven't changed before scaling worker usage.
+- Phase 4 planning: apps/api's test suite has an intermittent parallel-test-file migration race (`pg_type_typname_nsp_index` duplicate-key error) when multiple test files apply the same enum-creating migration concurrently against the local test Postgres — observed twice in Phase 3, non-reproducible on rerun, does not affect production migrations (drizzle-kit migrate runs once, sequentially). Worth a proper fix (serialize test-DB migration application) before it masks a real regression.
 - Phase 5 planning: full asset-licence audit of the Pixel Agents fork beyond the credited CC0 character pack is still outstanding.
 - Phase 8 planning: verify current Twitch EventSub reconnect/signature details against live docs; budget subscription total_cost before choosing event types.
 
@@ -127,6 +127,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-20T02:36:04.023Z
-Stopped at: Completed 03-04-PLAN.md
+Last session: 2026-09-20T05:50:48.000Z
+Stopped at: Phase 03 complete, ready to plan Phase 4
 Resume file: None
