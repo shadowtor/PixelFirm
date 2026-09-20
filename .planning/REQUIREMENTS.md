@@ -24,7 +24,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Worktree Model
 
 - [ ] **WORKTREE-01**: Each active development task records its repository, branch, worktree path, and owning agent/session
-- [ ] **WORKTREE-02**: The system never automatically merges a worktree's branch
+- [x] **WORKTREE-02**: The system never automatically merges a worktree's branch
 
 ### Pixel Office
 
@@ -127,7 +127,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RUNTIME-03 | Phase 3 | Pending |
 | RUNTIME-04 | Phase 3 | Pending |
 | WORKTREE-01 | Phase 3 | Pending |
-| WORKTREE-02 | Phase 3 | Pending |
+| WORKTREE-02 | Phase 3 | Complete |
 | GSD-01 | Phase 3 | Pending |
 | RUNTIME-01 | Phase 4 | Pending |
 | RUNTIME-02 | Phase 4 | Pending |

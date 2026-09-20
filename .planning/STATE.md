@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Worker, Git Adapter & GSD Adapter
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-09-20T01:49:18.897Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-09-20T02:02:34.463Z"
 last_activity: 2026-09-20
 last_activity_desc: Phase 03 execution started
-state_head: 5f616fd51cd72fc1156c0c76f6231c39890f26d6
+state_head: fbe7216eac0e4aa35ca0962861f95b5eadd8370e
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 11
-  completed_plans: 8
+  completed_plans: 9
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-18)
 ## Current Position
 
 Phase: 03 (Worker, Git Adapter & GSD Adapter) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-09-20 — Phase 03 execution started
 
@@ -66,6 +66,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P02 | 15min | 2 tasks | 9 files |
 | Phase 02 P03 | ~20min | 2 tasks | 6 files |
 | Phase 03 P01 | 20min | 2 tasks | 12 files |
+| Phase 03 P02 | ~11min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -93,6 +94,9 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03-01]: worker.heartbeat payload is empty (z.object({})) — identity comes solely from authenticated request.workerId, never a client-supplied field (T-03-01)
 - [Phase 03]: [Phase 03-01]: Connection status (online/stale/offline) derived live from heartbeat receipt time + socket-open state, no new persisted DB column
 - [Phase 03]: [Phase 03-01]: worker.heartbeat has no company-core reducer handler by design — connection status lives server-side only, never in ProjectionState
+- [Phase 03]: [Phase 03-02]: gsd_run check tdd-red-evidence's TAP parser targets node --test summaries, which Vitest doesn't emit — RED evidence verified manually both times (recurring GSD tooling gap on this Vitest-based repo)
+- [Phase 03]: [Phase 03-02]: no-mutating-git.test.ts's detection was manually proven by temporarily injecting a git merge call into the RED stub, confirming the test failed, then reverting before the RED commit
+- [Phase 03]: [Phase 03-02]: listWorktrees/isGitWorktree additionally verified against the real PixelFirm and SyncSmith repos, not just the temp fixture — both resolved exactly 1 worktree record each
 
 ### Pending Todos
 
@@ -116,6 +120,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-20T01:49:18.827Z
-Stopped at: Completed 03-01-PLAN.md
+Last session: 2026-09-20T02:02:34.384Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
