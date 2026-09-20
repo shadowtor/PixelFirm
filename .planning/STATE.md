@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 04
 current_phase_name: AgentRuntime & ClaudeCodeRuntime
 status: executing
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-09-20T11:06:26.376Z"
+stopped_at: Completed 04-03-PLAN.md
+last_updated: "2026-09-20T11:24:10.390Z"
 last_activity: 2026-09-20
 last_activity_desc: Phase 04 execution started
-state_head: d10458e141218ce8756472ddb550a164c188128c
+state_head: da6df2b03d9dbef8a9ed81a6496a2e07cb1bf6c8
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
   percent: 38
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-20)
 ## Current Position
 
 Phase: 04 (AgentRuntime & ClaudeCodeRuntime) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-09-20 — Phase 04 execution started
 
@@ -72,6 +72,7 @@ Progress: [████░░░░░░] 38%
 | Phase 03 P04 | 35min | 3 tasks | 12 files |
 | Phase 04 P01 | ~50min | 3 tasks | 14 files |
 | Phase 04 P02 | 45min | 2 tasks | 4 files |
+| Phase 04 P03 | 35min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -113,6 +114,10 @@ Recent decisions affecting current work:
 - [Phase 04]: [Phase 04-02]: Query.interrupt() exists (sdk.d.ts) but is documented streaming-input-only — runQuery uses a string prompt, so interrupt() is best-effort; the real termination guarantee is attemptGracefulStop's grace-period race + AbortController.abort() hard-kill
 - [Phase 04]: [Phase 04-02]: pauseTask and cancelTask share one attemptGracefulStop(record) helper (interrupt-then-race-against-GRACEFUL_TIMEOUT_MS), differing only in terminal status (paused vs cancelled); the watchdog's onTimeout reuses it too for the blocked transition
 - [Phase 04]: [Phase 04-02]: runQuery sets in-memory status 'running' on init-message capture (Rule 2, previously-unused AgentTaskStatus member) so pauseTask/sendMessage's mid-stream preconditions are observable via getStatus() — no event emitted for this transition
+- [Phase 04]: [Phase 04]: [Phase 04-03]: canUseTool always returns behavior deny for a classified signal, never allow -- requestReview fires and is surfaced but Phase 6's CEO dashboard grants the actual approval
+- [Phase 04]: [Phase 04]: [Phase 04-03]: classifySignal's Bash CEO-gated pattern list is an explicitly documented first-pass heuristic allowlist, not exhaustive -- the watchdog remains the last line of defense against anything it misses
+- [Phase 04]: [Phase 04]: [Phase 04-03]: requestHandoff is observation-only -- posts agent.handoff_requested but never alters the task's own AgentTaskStatus, since no second agent exists yet in Phase 4 to receive control
+- [Phase 04]: [Phase 04]: [Phase 04-03]: role-change poll uses the plan-specified 5000ms interval (not poll-loop.ts's own 2500ms DEFAULT_INTERVAL_MS) -- ClaudeCodeRuntime now implements the complete eight-method AgentRuntime with zero remaining stubs
 
 ### Pending Todos
 
@@ -135,6 +140,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-20T11:06:26.214Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-09-20T11:24:10.229Z
+Stopped at: Completed 04-03-PLAN.md
 Resume file: None

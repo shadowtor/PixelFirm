@@ -130,13 +130,13 @@ Plans:
   1. An AgentRuntime interface (startTask/pauseTask/resumeTask/cancelTask/getStatus/sendMessage/requestReview/requestHandoff) exists and is callable independent of any specific coding-agent implementation.
   2. ClaudeCodeRuntime starts, pauses, resumes, and cancels a real Claude Code task using Claude MAX subscription auth, with no ANTHROPIC_API_KEY required.
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 
 - [x] 04-01-PLAN.md — Tracer: verify Claude MAX billing posture + package legitimacy, scaffold orchestration-adapter + claude-adapter, wire startTask/getStatus to a real task.status_changed event (RUNTIME-01, RUNTIME-02)
 - [x] 04-02-PLAN.md — pauseTask/resumeTask/sendMessage via session capture + cancelTask graceful-then-hard-kill + watchdog (D-03, D-04)
-- [ ] 04-03-PLAN.md — requestReview/requestHandoff signal detection, reusing gsd-adapter (D-08)
+- [x] 04-03-PLAN.md — requestReview/requestHandoff signal detection, reusing gsd-adapter (D-08)
 - [ ] 04-04-PLAN.md — Real SyncSmith demo: disposable worktree, live GSD task, evidence, cleanup (D-05, D-06, D-07)
 
 **Wave 1**
@@ -145,7 +145,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 04-02-PLAN.md — pauseTask/resumeTask/sendMessage/cancelTask + watchdog
+- [x] 04-02-PLAN.md — pauseTask/resumeTask/sendMessage/cancelTask + watchdog
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -224,7 +224,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 1. Event Schema & State Engine | 3/3 | Complete    | 2026-09-18 |
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
-| 4. AgentRuntime & ClaudeCodeRuntime | 2/4 | In Progress|  |
+| 4. AgentRuntime & ClaudeCodeRuntime | 3/4 | In Progress|  |
 | 5. Pixel Office Renderer | 0/TBD | Not started | - |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
