@@ -18,12 +18,12 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **RUNTIME-01**: An AgentRuntime interface (startTask/pauseTask/resumeTask/cancelTask/getStatus/sendMessage/requestReview/requestHandoff) exists independent of any specific coding-agent implementation
 - [ ] **RUNTIME-02**: ClaudeCodeRuntime implements AgentRuntime using the Claude Agent SDK, authenticated via Claude MAX subscription, with no ANTHROPIC_API_KEY required
-- [ ] **RUNTIME-03**: A worker component runs wherever Claude Code is authenticated, connects outbound-only to the control plane, and can be pointed at any git repository the user chooses — not hardcoded to one project
-- [ ] **RUNTIME-04**: Worker online/offline/stale connection status is visible in company state
+- [x] **RUNTIME-03**: A worker component runs wherever Claude Code is authenticated, connects outbound-only to the control plane, and can be pointed at any git repository the user chooses — not hardcoded to one project
+- [x] **RUNTIME-04**: Worker online/offline/stale connection status is visible in company state
 
 ### Worktree Model
 
-- [ ] **WORKTREE-01**: Each active development task records its repository, branch, worktree path, and owning agent/session
+- [x] **WORKTREE-01**: Each active development task records its repository, branch, worktree path, and owning agent/session
 - [x] **WORKTREE-02**: The system never automatically merges a worktree's branch
 
 ### Pixel Office
@@ -47,7 +47,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### GSD Adapter
 
-- [ ] **GSD-01**: A GSD adapter observes real GSD workflow state (new project, research, requirements, planning, execution, verification, review, approval, deployment) from a pointed-at repository and maps it onto company events and role assignments (PM, Research Agent, Architect, Engineering, QA, Reviewer, CEO, DevOps), preferring observed state over guessed state
+- [x] **GSD-01**: A GSD adapter observes real GSD workflow state (new project, research, requirements, planning, execution, verification, review, approval, deployment) from a pointed-at repository and maps it onto company events and role assignments (PM, Research Agent, Architect, Engineering, QA, Reviewer, CEO, DevOps), preferring observed state over guessed state
 
 ### Stream Safety & Overlay
 
@@ -124,11 +124,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SEC-02 | Phase 2 | Complete |
 | SEC-03 | Phase 2 | Complete |
 | SEC-04 | Phase 2 | Complete |
-| RUNTIME-03 | Phase 3 | Pending |
-| RUNTIME-04 | Phase 3 | Pending |
-| WORKTREE-01 | Phase 3 | Pending |
+| RUNTIME-03 | Phase 3 | Complete |
+| RUNTIME-04 | Phase 3 | Complete |
+| WORKTREE-01 | Phase 3 | Complete |
 | WORKTREE-02 | Phase 3 | Complete |
-| GSD-01 | Phase 3 | Pending |
+| GSD-01 | Phase 3 | Complete |
 | RUNTIME-01 | Phase 4 | Pending |
 | RUNTIME-02 | Phase 4 | Pending |
 | OFFICE-01 | Phase 5 | Pending |

@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Worker, Git Adapter & GSD Adapter
-status: executing
-stopped_at: Completed 03-03-PLAN.md
-last_updated: "2026-09-20T02:17:06.587Z"
+status: verifying
+stopped_at: Completed 03-04-PLAN.md
+last_updated: "2026-09-20T02:36:04.086Z"
 last_activity: 2026-09-20
 last_activity_desc: Phase 03 execution started
-state_head: 23858d7e6ef7e6044276a2098ffb496acdac5c78
+state_head: 52dffbc82d0283ac2984ac43ff37504e4f331d7f
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 11
-  completed_plans: 10
+  completed_plans: 11
   percent: 25
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-18)
 
 Phase: 03 (Worker, Git Adapter & GSD Adapter) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-20 — Phase 03 execution started
 
 Progress: [███░░░░░░░] 25%
@@ -68,6 +68,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 03 P01 | 20min | 2 tasks | 12 files |
 | Phase 03 P02 | ~11min | 2 tasks | 9 files |
 | Phase 03 P03 | 13min | 2 tasks | 11 files |
+| Phase 03 P04 | 35min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -100,6 +101,9 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03-02]: listWorktrees/isGitWorktree additionally verified against the real PixelFirm and SyncSmith repos, not just the temp fixture — both resolved exactly 1 worktree record each
 - [Phase 03]: [Phase 03-03]: mapToGsdCategory's new_project branch covers status unknown AND status planning with no phase-file signal (SyncSmith's real shape) — but not discussing/executing/etc, which fall to unknown/unknown as a contradictory combination
 - [Phase 03]: [Phase 03-03]: added missing unknown member to event-schema's GsdPhaseObservedPayload.category enum (03-01 gap) — CompanyEventSchema.safeParse would have rejected the anti-fabrication fallback event GSD-01's mitigation depends on
+- [Phase 03]: [Phase 03-04]: startHeartbeat(controlPlaneUrl, token, companyId) added a required companyId param not in the plan's literal signature — worker.heartbeat envelope's companyId is mandatory on BaseEnvelope
+- [Phase 03]: [Phase 03-04]: poll-loop.ts and ws-client.ts's stop() check a stopped flag before every postEvent call, not just clearInterval() — an already in-flight tick's slow isAnyClaudeProcessAlive subprocess call could otherwise still emit after stop() returns
+- [Phase 03]: [Phase 03-04]: poll-loop.ts's isFirstTick guard prevents the first-ever poll tick from reporting active:true from baseline discovery alone, avoiding a false active flip on the second (genuinely unchanged) tick
 
 ### Pending Todos
 
@@ -123,6 +127,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-20T02:17:06.522Z
-Stopped at: Completed 03-03-PLAN.md
+Last session: 2026-09-20T02:36:04.023Z
+Stopped at: Completed 03-04-PLAN.md
 Resume file: None
