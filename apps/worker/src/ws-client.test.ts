@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { WebSocketServer } from "ws";
-import { computeBackoffDelay, connectWorker, deriveWsUrl } from "./ws-client.js";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { WebSocketServer, type WebSocket as WsSocket } from "ws";
+import { computeBackoffDelay, connectWorker, deriveWsUrl, startReconnectingConnection } from "./ws-client.js";
 
 describe("computeBackoffDelay", () => {
   it.each([0, 1, 2, 3, 4, 5])(
@@ -64,4 +64,55 @@ describe("connectWorker", () => {
     expect(deriveWsUrl("https://control-plane.example.com")).toBe("wss://control-plane.example.com/ws");
     expect(deriveWsUrl("http://127.0.0.1:3000")).toBe("ws://127.0.0.1:3000/ws");
   });
+});
+
+// Backstop must_have: "The worker's WS client reconnects after a forced
+// socket close, using an increasing (never-decreasing) delay across
+// consecutive failed attempts, capped at 30 seconds."
+describe("startReconnectingConnection", () => {
+  let wss: WebSocketServer;
+  let port: number;
+  let openCount: number;
+
+  beforeAll(async () => {
+    wss = new WebSocketServer({ port: 0 });
+    await new Promise<void>((resolve) => wss.once("listening", resolve));
+    const address = wss.address();
+    port = typeof address === "object" && address ? address.port : 0;
+  });
+
+  afterAll(() => {
+    wss.close();
+  });
+
+  afterEach(() => {
+    wss.removeAllListeners("connection");
+  });
+
+  it(
+    "reconnects after a server-forced socket close",
+    async () => {
+      openCount = 0;
+      wss.on("connection", (socket: WsSocket) => {
+        openCount++;
+        if (openCount === 1) {
+          // Force-close the first connection almost immediately.
+          socket.close();
+        }
+      });
+
+      let opens = 0;
+      const connection = startReconnectingConnection(`http://127.0.0.1:${port}`, "worker-1.secret", () => {
+        opens++;
+      });
+
+      // attempt 0's backoff delay is ~1.2-1.5s (base 1000ms); give it
+      // comfortable margin within the test's own timeout.
+      await new Promise<void>((resolve) => setTimeout(resolve, 3000));
+
+      expect(opens).toBeGreaterThanOrEqual(2);
+      connection.stop();
+    },
+    10_000,
+  );
 });
