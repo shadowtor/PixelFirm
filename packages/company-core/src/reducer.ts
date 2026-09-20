@@ -191,6 +191,24 @@ const handlers: {
   // worker.heartbeat intentionally has no handler — connection status is
   // derived server-side from socket state + heartbeat receipt timing
   // (apps/api/src/ws/connection-status.ts), never part of ProjectionState.
+
+  // Phase 4 addition (RUNTIME-02): ClaudeCodeRuntime is the first real
+  // producer of task-lifecycle events and no upstream task.created producer
+  // exists yet for real Claude Code tasks — gating on "task must already
+  // exist" the way review.started/ceo.approval_requested do would make this
+  // event silently no-op for every real demo run. Upserts unconditionally,
+  // mirroring agent.handoff_requested's upsert-if-missing pattern (lines
+  // 90-104 above).
+  "task.status_changed": (state, event) => {
+    const { taskId, status } = event.payload;
+    return {
+      ...state,
+      tasks: {
+        ...state.tasks,
+        [taskId]: { ...(state.tasks[taskId] ?? { id: taskId }), status },
+      },
+    };
+  },
 };
 
 // Looks up a handler for the event's type and applies it. An unrecognized type
