@@ -1,16 +1,25 @@
-import { afterAll, beforeAll, beforeEach, describe, expect } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createServer, type Server } from "node:http";
 import { WebSocketServer } from "ws";
 import { execa } from "execa";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { listWorktrees, isGitWorktree } from "git-adapter";
+import { CompanyEventSchema } from "event-schema";
+import { createClaudeCodeRuntime } from "./claude-code-runtime.js";
+import type { AgentTaskStatus } from "orchestration-adapter";
 
 // D-05: the real, currently-unplanned SyncSmith repository this demo runs
 // against — never a fixture repo, since this is the one test in the phase
 // meant to prove the full real path (RUNTIME-02).
 const SYNCSMITH_REPO_PATH = "F:/Sidegigs/syncsmith";
+
+const TERMINAL_STATUSES: AgentTaskStatus[] = ["completed", "failed", "blocked", "waiting_for_review", "cancelled"];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 // git worktree list --porcelain always reports forward-slash paths; mkdtemp
 // on Windows returns backslash paths. Normalize before comparing so the
@@ -101,8 +110,100 @@ describe.skipIf(process.env.CLAUDE_CODE_INTEGRATION_TEST !== "1")(
       await expect(isGitWorktree(disposableEntry!.path)).resolves.toBe(true);
     });
 
-    // Task 2 adds the it() block here: drives the real ClaudeCodeRuntime
-    // task to a terminal status, validates every posted event, writes
-    // evidence, then removes the disposable worktree/branch created above.
+    it(
+      "drives a real ClaudeCodeRuntime task to a terminal status against the real SyncSmith repository",
+      async () => {
+        const runtime = createClaudeCodeRuntime({
+          companyId: "demo-syncsmith",
+          controlPlaneUrl: `http://127.0.0.1:${port}`,
+          token: "demo-token",
+        });
+
+        const taskId = "demo-task-1";
+        // D-06: a real, currently-unplanned GSD workflow step from
+        // SyncSmith's actual roadmap (Phase 1 still shows "Plans: TBD", no
+        // CONTEXT.md yet — the smallest, fastest, lowest-risk genuine GSD
+        // workflow step) — never a trivial "create a file and commit it"
+        // string.
+        const prompt = "/gsd-discuss-phase 1";
+
+        let terminalStatus: AgentTaskStatus | undefined;
+
+        try {
+          try {
+            await runtime.startTask({
+              taskId,
+              repoPath: SYNCSMITH_REPO_PATH,
+              worktreePath,
+              prompt,
+            });
+
+            const deadline = Date.now() + 600_000;
+            let status = await runtime.getStatus(taskId);
+            while (!TERMINAL_STATUSES.includes(status) && Date.now() < deadline) {
+              await sleep(2000);
+              status = await runtime.getStatus(taskId);
+            }
+            terminalStatus = status;
+
+            expect(TERMINAL_STATUSES).toContain(terminalStatus);
+
+            for (const event of receivedEvents) {
+              const result = CompanyEventSchema.safeParse(event);
+              expect(result.success).toBe(true);
+            }
+
+            const statusChangedForTask = receivedEvents.filter(
+              (e) =>
+                (e as { type?: string }).type === "task.status_changed" &&
+                (e as { payload?: { taskId?: string } }).payload?.taskId === taskId,
+            ) as { payload: { status: string } }[];
+            expect(statusChangedForTask.length).toBeGreaterThan(0);
+            expect(statusChangedForTask[statusChangedForTask.length - 1]!.payload.status).toBe(terminalStatus);
+          } finally {
+            // D-07: evidence is written unconditionally, before any
+            // cleanup — even if the assertions above threw — so a failing
+            // or ambiguous run still leaves a permanent record.
+            const evidencePath = join(
+              import.meta.dirname,
+              "..",
+              "..",
+              "..",
+              ".planning",
+              "phases",
+              "04-agentruntime-claudecoderuntime",
+              "04-04-demo-evidence.md",
+            );
+            const evidence = [
+              "# 04-04 Demo Evidence",
+              "",
+              `Generated: ${new Date().toISOString()}`,
+              "",
+              'SyncSmith phase targeted: Phase 1 — Foundation & Self-Hosted Deployment (lowest-numbered phase still showing "Plans: TBD" at execution time; no CONTEXT.md existed yet).',
+              `GSD slash-command used as startTask's prompt: \`${prompt}\``,
+              `Disposable worktree path: \`${worktreePath}\``,
+              `Disposable branch: \`${branchName}\``,
+              `Terminal status: \`${terminalStatus ?? "UNKNOWN — run/assertions failed before a terminal status was reached"}\``,
+              "",
+              "## Received Events",
+              "",
+              "```json",
+              JSON.stringify(receivedEvents, null, 2),
+              "```",
+              "",
+            ].join("\n");
+            await writeFile(evidencePath, evidence, "utf8");
+          }
+        } finally {
+          // Only after the evidence file is written, remove the disposable
+          // worktree and branch. Plain `-d` (never `-D`/`--force`) — if
+          // removal fails because the worktree has uncommitted changes,
+          // that error surfaces rather than being forced away.
+          await execa("git", ["worktree", "remove", worktreePath], { cwd: SYNCSMITH_REPO_PATH });
+          await execa("git", ["branch", "-d", branchName], { cwd: SYNCSMITH_REPO_PATH });
+        }
+      },
+      600_000,
+    );
   },
 );

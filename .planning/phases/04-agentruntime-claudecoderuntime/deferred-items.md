@@ -21,3 +21,20 @@ fixed, not caused by the executing plan's changes).
   container was not running/reachable during this session's full-suite
   check. Not caused by this plan (no apps/api files touched). Pre-existing,
   already tracked in STATE.md Blockers/Concerns.
+
+## 04-04
+
+- `pnpm --filter claude-adapter typecheck` fails with 3 `TS2835` errors
+  inside `packages/event-schema/src/index.ts` ("Relative import paths need
+  explicit file extensions...") once this plan's integration test imports
+  `event-schema` for the first time from `claude-adapter`. Confirmed
+  pre-existing and not caused by this plan: `pnpm --filter worker typecheck`
+  (an existing, unmodified consumer of `event-schema`) fails with the
+  identical 3 errors against the same file. `event-schema/src/index.ts`'s
+  own relative imports (`./payloads/index`, `./envelope`) are missing `.js`
+  extensions required by this monorepo's `moduleResolution: "nodenext"`.
+  Vitest (esbuild-based, not tsc) does not enforce this, so
+  `test:integration`'s actual run was unaffected — the real
+  `CLAUDE_CODE_INTEGRATION_TEST=1 pnpm --filter claude-adapter run
+  test:integration` verify command passed. Worth fixing
+  `event-schema/src/index.ts`'s own import extensions in a future plan.
