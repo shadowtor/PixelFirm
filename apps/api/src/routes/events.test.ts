@@ -76,14 +76,17 @@ describe("POST /events", () => {
 
   it("durably persists a valid synthetic event and dedupes a repeated event.id", async () => {
     const fastify = buildServer();
+    // WR-03: a worker credential may only submit worker-originated event
+    // types — use one of those (rather than company.started) so this
+    // persistence/dedup test doesn't collide with that restriction.
     const event = {
       id: randomUUID(),
-      type: "company.started",
+      type: "worker.heartbeat",
       version: 1,
       occurredAt: new Date().toISOString(),
       companyId: "company-1",
       visibility: "INTERNAL",
-      payload: { name: "Acme Co" },
+      payload: {},
     };
     const headers = { authorization: `Bearer ${token}` };
 
@@ -98,6 +101,31 @@ describe("POST /events", () => {
 
     const rowsAfterSecond = await db.select().from(events).where(eq(events.id, event.id));
     expect(rowsAfterSecond).toHaveLength(1);
+
+    await fastify.close();
+  });
+
+  // WR-03 regression: a worker credential must not be able to author event
+  // types it doesn't originate (e.g. company.started, which mutates shared
+  // projection state via reducer.ts).
+  it("rejects an event type not on the worker's allow-list, even though it's schema-valid", async () => {
+    const fastify = buildServer();
+    const event = {
+      id: randomUUID(),
+      type: "company.started",
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      companyId: "company-1",
+      visibility: "INTERNAL",
+      payload: { name: "Acme Co" },
+    };
+    const headers = { authorization: `Bearer ${token}` };
+
+    const res = await fastify.inject({ method: "POST", url: "/events", payload: event, headers });
+    expect(res.statusCode).toBe(403);
+
+    const rows = await db.select().from(events).where(eq(events.id, event.id));
+    expect(rows).toHaveLength(0);
 
     await fastify.close();
   });
