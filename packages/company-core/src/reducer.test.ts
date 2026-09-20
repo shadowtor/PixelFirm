@@ -281,3 +281,38 @@ describe("replay determinism — Phase 3 event types (EVENT-04)", () => {
     expect(second).toEqual(first);
   });
 });
+
+// Phase 4 (RUNTIME-02): task.status_changed — ClaudeCodeRuntime is the first
+// real producer of task-lifecycle events; no upstream task.created producer
+// exists yet for real Claude Code tasks, so this handler upserts rather than
+// gating on "task must already exist" (mirrors agent.handoff_requested's
+// upsert-if-missing pattern, lines 90-104).
+function taskStatusChangedEvent(status = "completed"): CompanyEvent {
+  return {
+    id: "event-task-status-01",
+    version: 1,
+    occurredAt: "2026-09-20T00:00:00.000Z",
+    companyId: "company-1",
+    taskId: "task-1",
+    visibility: "INTERNAL",
+    type: "task.status_changed",
+    payload: { taskId: "task-1", status },
+  } as CompanyEvent;
+}
+
+describe("task.status_changed", () => {
+  it("upserts tasks[taskId].status on a fresh empty state (no prior task.created)", () => {
+    const result = fold([taskStatusChangedEvent("completed")]);
+    expect(result.tasks["task-1"].status).toBe("completed");
+  });
+
+  it("preserves existing task fields while updating status on an existing task", () => {
+    const withTask = reduce(emptyState(), taskCreatedEvent());
+    const result = reduce(withTask, taskStatusChangedEvent("failed"));
+    expect(result.tasks["task-1"]).toEqual({
+      id: "task-1",
+      status: "failed",
+      title: "Build git adapter",
+    });
+  });
+});

@@ -26,6 +26,24 @@ const GitWorktreeObservedPayload = z.object({
   headSha: z.string(),
   sessionId: z.string(),
 });
+// Phase 4 addition (RUNTIME-02): ClaudeCodeRuntime's own task-lifecycle status
+// event — distinct from task.created's title-only payload. status covers the
+// full AgentTaskStatus union (orchestration-adapter/src/types.ts) so any future
+// AgentRuntime implementation can emit the same event shape.
+const TaskStatusChangedPayload = z.object({
+  taskId: z.string(),
+  status: z.enum([
+    "starting",
+    "running",
+    "paused",
+    "blocked",
+    "waiting_for_review",
+    "waiting_for_handoff",
+    "completed",
+    "failed",
+    "cancelled",
+  ]),
+});
 const GsdPhaseObservedPayload = z.object({
   phase: z.string().optional(),
   status: z.enum(["planning", "executing", "verifying", "paused", "discussing", "completed", "unknown"]),
@@ -74,6 +92,9 @@ export const CompanyEventSchema = z.discriminatedUnion("type", [
   z.object({ ...BaseEnvelope.shape, type: z.literal("worker.heartbeat"), payload: WorkerHeartbeatPayload }),
   z.object({ ...BaseEnvelope.shape, type: z.literal("git.worktree_observed"), payload: GitWorktreeObservedPayload }),
   z.object({ ...BaseEnvelope.shape, type: z.literal("gsd.phase_observed"), payload: GsdPhaseObservedPayload }),
+  // Phase 4 addition — union grows from 15 to 16, appended after the prior
+  // 15, never reordered (see comment above).
+  z.object({ ...BaseEnvelope.shape, type: z.literal("task.status_changed"), payload: TaskStatusChangedPayload }),
 ]);
 
 export type CompanyEvent = z.infer<typeof CompanyEventSchema>;
