@@ -226,6 +226,63 @@ describe("ClaudeCodeRuntime.pauseTask / resumeTask / sendMessage", () => {
   });
 });
 
+describe("ClaudeCodeRuntime.requestReview via canUseTool / Notification hook", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("Test 4: canUseTool invoked with AskUserQuestion triggers requestReview, sets waiting_for_review, posts ceo.approval_requested, and denies", async () => {
+    const q = pausableQuery(initMessage("session-abc"));
+    (query as unknown as Mock).mockReturnValue(q);
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    const startPromise = runtime.startTask(startInput);
+    await flushMicrotasks(); // let the init message be processed
+
+    const callArgs = (query as unknown as Mock).mock.calls[0][0];
+    const decision = await callArgs.options.canUseTool("AskUserQuestion", { questions: [] }, {});
+
+    expect(decision.behavior).toBe("deny");
+    expect(await runtime.getStatus("task-1")).toBe("waiting_for_review");
+
+    const approvalCalls = (postEvent as unknown as Mock).mock.calls.filter(
+      (call) => call[2].type === "ceo.approval_requested",
+    );
+    expect(approvalCalls).toHaveLength(1);
+    expect(approvalCalls[0][2].payload.taskId).toBe("task-1");
+    expect(approvalCalls[0][2].payload.reason.length).toBeGreaterThan(0);
+
+    q.interrupt(); // release the gate so the task can end cleanly
+    await startPromise;
+  });
+
+  it("Test 5: the wired Notification hook calls requestReview with a reason containing permission_prompt", async () => {
+    const q = pausableQuery(initMessage("session-xyz"));
+    (query as unknown as Mock).mockReturnValue(q);
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    const startPromise = runtime.startTask(startInput);
+    await flushMicrotasks();
+
+    const callArgs = (query as unknown as Mock).mock.calls[0][0];
+    const notificationHook = callArgs.options.hooks.Notification[0].hooks[0];
+    await notificationHook(
+      { hook_event_name: "Notification", message: "waiting for approval", notification_type: "permission_prompt" },
+      "tool-use-1",
+      { signal: new AbortController().signal },
+    );
+
+    const approvalCalls = (postEvent as unknown as Mock).mock.calls.filter(
+      (call) => call[2].type === "ceo.approval_requested",
+    );
+    expect(approvalCalls).toHaveLength(1);
+    expect(approvalCalls[0][2].payload.reason).toContain("permission_prompt");
+
+    q.interrupt();
+    await startPromise;
+  });
+});
+
 describe("ClaudeCodeRuntime.cancelTask / watchdog integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
