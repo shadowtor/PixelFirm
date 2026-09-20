@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Worker, Git Adapter & GSD Adapter
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-09-20T02:02:34.463Z"
+stopped_at: Completed 03-03-PLAN.md
+last_updated: "2026-09-20T02:17:06.587Z"
 last_activity: 2026-09-20
 last_activity_desc: Phase 03 execution started
-state_head: fbe7216eac0e4aa35ca0962861f95b5eadd8370e
+state_head: 23858d7e6ef7e6044276a2098ffb496acdac5c78
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 11
-  completed_plans: 9
+  completed_plans: 10
   percent: 25
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-18)
 ## Current Position
 
 Phase: 03 (Worker, Git Adapter & GSD Adapter) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Status: Ready to execute
 Last activity: 2026-09-20 — Phase 03 execution started
 
@@ -67,6 +67,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P03 | ~20min | 2 tasks | 6 files |
 | Phase 03 P01 | 20min | 2 tasks | 12 files |
 | Phase 03 P02 | ~11min | 2 tasks | 9 files |
+| Phase 03 P03 | 13min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,8 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03-02]: gsd_run check tdd-red-evidence's TAP parser targets node --test summaries, which Vitest doesn't emit — RED evidence verified manually both times (recurring GSD tooling gap on this Vitest-based repo)
 - [Phase 03]: [Phase 03-02]: no-mutating-git.test.ts's detection was manually proven by temporarily injecting a git merge call into the RED stub, confirming the test failed, then reverting before the RED commit
 - [Phase 03]: [Phase 03-02]: listWorktrees/isGitWorktree additionally verified against the real PixelFirm and SyncSmith repos, not just the temp fixture — both resolved exactly 1 worktree record each
+- [Phase 03]: [Phase 03-03]: mapToGsdCategory's new_project branch covers status unknown AND status planning with no phase-file signal (SyncSmith's real shape) — but not discussing/executing/etc, which fall to unknown/unknown as a contradictory combination
+- [Phase 03]: [Phase 03-03]: added missing unknown member to event-schema's GsdPhaseObservedPayload.category enum (03-01 gap) — CompanyEventSchema.safeParse would have rejected the anti-fabrication fallback event GSD-01's mitigation depends on
 
 ### Pending Todos
 
@@ -120,6 +123,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-20T02:02:34.384Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-09-20T02:17:06.522Z
+Stopped at: Completed 03-03-PLAN.md
 Resume file: None

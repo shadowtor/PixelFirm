@@ -98,13 +98,13 @@ Plans:
   3. For each active task the system records the real repository, branch, worktree path, and owning agent/session, and never automatically merges a worktree's branch.
   4. The GSD adapter observes SyncSmith's real GSD workflow state (new project/research/requirements/planning/execution/verification/review/approval/deployment) and maps it onto company events and role assignments, preferring observed state over guessed state.
 
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 
 Plans:
 
 - [x] 03-01-PLAN.md — Tracer: worker.heartbeat flows through POST /events, control plane derives live online/stale/offline status (RUNTIME-04)
 - [x] 03-02-PLAN.md — git-adapter: worktree/commit observation + process-liveness + read-only guarantee (WORKTREE-01, WORKTREE-02)
-- [ ] 03-03-PLAN.md — gsd-adapter: STATE.md/phase-file observation + role mapping (GSD-01)
+- [x] 03-03-PLAN.md — gsd-adapter: STATE.md/phase-file observation + role mapping (GSD-01)
 - [ ] 03-04-PLAN.md — apps/worker: full poll-diff loop wiring both adapters + live SyncSmith demo (RUNTIME-03, RUNTIME-04, WORKTREE-01, GSD-01)
 
 **Wave 1**
@@ -113,7 +113,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 03-02-PLAN.md — git-adapter: worktree/commit observation + process-liveness + read-only guarantee
+- [x] 03-02-PLAN.md — git-adapter: worktree/commit observation + process-liveness + read-only guarantee
 - [ ] 03-03-PLAN.md — gsd-adapter: STATE.md/phase-file observation + role mapping
 
 **Wave 3** *(blocked on Wave 2 completion)*
@@ -200,7 +200,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 |-------|----------------|--------|-----------|
 | 1. Event Schema & State Engine | 3/3 | Complete    | 2026-09-18 |
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
-| 3. Worker, Git Adapter & GSD Adapter | 2/4 | In Progress|  |
+| 3. Worker, Git Adapter & GSD Adapter | 3/4 | In Progress|  |
 | 4. AgentRuntime & ClaudeCodeRuntime | 0/TBD | Not started | - |
 | 5. Pixel Office Renderer | 0/TBD | Not started | - |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
