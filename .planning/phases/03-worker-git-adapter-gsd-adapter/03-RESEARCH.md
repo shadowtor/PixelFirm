@@ -416,27 +416,31 @@ const GsdPhaseObservedPayload = z.object({
 
 **If this table is empty:** N/A — see entries above; none of these block planning, all are flagged for a cheap confirmation pass during implementation.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Event transport for git/gsd events: WS message vs. reusing `POST /events`?**
    - What we know: CONTEXT.md leaves this as Claude's Discretion; D-03 says the heartbeat specifically must go "via the existing event-append path."
    - What's unclear: whether "existing event-append path" should also carry git/gsd events, or whether they travel as WS messages the server converts internally.
    - Recommendation: reuse `POST /events` for every event type (git, gsd, heartbeat) — it's already validated, deduped, and rate-limited (Pattern 5, Don't Hand-Roll) — and keep the WS connection purely as the "worker is present" channel whose open/close state feeds connection-status derivation.
+   - **RESOLVED:** Recommendation adopted as-is. 03-01 and 03-04 route every event type (heartbeat, git.worktree_observed, gsd.phase_observed) through `POST /events`; the WS connection in 03-01 is used purely for socket-open/close presence tracking (markSocketOpen/markSocketClosed).
 
 2. **Does credential revocation need to force-close an already-open worker socket?**
    - What we know: Phase 2's test suite only proves revocation blocks new connection attempts (Pitfall 5).
    - What's unclear: whether this phase's scope includes closing live sessions on revocation.
    - Recommendation: defer — no UI drives revocation until Phase 6's CEO dashboard exists; note it as a known, accepted gap in this phase's SECURITY.md rather than silently leaving it undocumented.
+   - **RESOLVED:** Recommendation adopted. 03-01's threat register carries this as T-03-04 (Spoofing, medium severity, disposition: accept) — documented as an inherited Phase 2 gap, not fixed this phase.
 
 3. **How does the GSD adapter represent "approval" and "deployment" for a repo with no CEO-gate concept of its own?**
    - What we know: GSD's own STATE.md status vocabulary has no token for either category (Pattern 4).
    - What's unclear: whether "deployment" should just be "phase transitioned to completed in ROADMAP.md" and "approval" should be treated as N/A until PixelFirm's own Phase 6 CEO gate exists.
    - Recommendation: treat ROADMAP.md's phase-checkbox flip as the closest available proxy for "deployment," and treat "approval" as out of scope for GSD-01's SyncSmith demo until Phase 6 — flag this explicitly in the phase's plan rather than inventing a synthetic signal.
+   - **RESOLVED:** Recommendation adopted. 03-03 Task 2's role-mapping table maps a ROADMAP checkbox-flip signal to category "deployment"/role "DevOps", and explicitly never returns "approval" this phase (reserved in the payload enum for Phase 6), with an unknown/unknown fallback for unmatched combinations.
 
 4. **SyncSmith currently has zero executed phases — what will the phase's demo actually show?**
    - What we know: verified this session — SyncSmith's STATE.md `status: planning`, `completed_phases: 0`, and `.planning/phases/` doesn't exist yet.
    - What's unclear: whether this phase's verification should accept demoing only the "new project"/"planning" GSD state, or whether SyncSmith needs to be advanced (e.g. by actually running `/gsd-plan-phase`/`/gsd-execute-phase` in that sibling repo) first to produce richer state to observe.
    - Recommendation: flag to the user before planning verification — the phase's own success criteria only require *observing* state changes, so even a transition from "no `.planning/phases/` dir" to "phase 1 CONTEXT.md appears" is a valid, real, demonstrable state change; a full multi-phase demo isn't required by RUNTIME-03/GSD-01's literal wording, but the plan should say explicitly which SyncSmith state transition it intends to prove against.
+   - **RESOLVED:** Recommendation adopted. 03-04 Task 3's human-check demo triggers a real, minimal `.planning/` change in SyncSmith (e.g. beginning `/gsd-plan-phase` far enough to create a phase directory) and accepts the "no phases dir" -> "phase 1 directory appears" transition as sufficient — explicitly not requiring a full multi-phase SyncSmith run, per this question's recommendation.
 
 ## Environment Availability
 
