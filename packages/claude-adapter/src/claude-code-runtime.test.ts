@@ -24,6 +24,65 @@ async function* fakeQuery(messages: unknown[]) {
   }
 }
 
+// A Query-shaped async generator that yields an init message then blocks
+// mid-stream on an internal gate — simulating a task pauseTask/cancelTask can
+// act on before any result arrives. Its mocked .interrupt() releases the
+// gate, letting the for-await loop end cleanly (the graceful path) — mirrors
+// the real SDK's documented SIGINT-equivalent "ends the current turn cleanly"
+// behavior (04-RESEARCH.md Pattern 3), while `handle.interrupt` itself stays
+// a plain vi.fn() so tests can assert it was called.
+function pausableQuery(initMsg: unknown) {
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  async function* gen() {
+    yield initMsg;
+    await gate;
+  }
+  const iter = gen() as AsyncGenerator<unknown, void> & { interrupt: Mock };
+  iter.interrupt = vi.fn(async () => {
+    release();
+    return undefined;
+  });
+  return iter;
+}
+
+// A Query-shaped async generator that yields an init message then hangs
+// forever, ignoring .interrupt() entirely — simulates a task that does not
+// respond to the graceful stop mechanism, forcing the hard-abort fallback.
+function hangingQuery(initMsg: unknown) {
+  async function* gen() {
+    yield initMsg;
+    await new Promise(() => {
+      /* never resolves — simulates an ungraceful hang */
+    });
+  }
+  const iter = gen() as AsyncGenerator<unknown, void> & { interrupt: Mock };
+  iter.interrupt = vi.fn(async () => undefined);
+  return iter;
+}
+
+// A Query-shaped async generator that yields nothing at all — simulates a
+// genuinely silent stream (no init, no result, no progress) for the
+// watchdog's bounded-silence timeout to detect.
+function silentQuery() {
+  async function* gen() {
+    await new Promise(() => {
+      /* never resolves — no message ever yielded */
+    });
+  }
+  const iter = gen() as AsyncGenerator<unknown, void> & { interrupt: Mock };
+  iter.interrupt = vi.fn(async () => undefined);
+  return iter;
+}
+
+// Flushes pending microtasks (message-loop progression) without depending on
+// fake timers — safe in tests that use real timers.
+function flushMicrotasks(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 function initMessage(sessionId: string) {
   return { type: "system", subtype: "init", session_id: sessionId };
 }
@@ -90,5 +149,73 @@ describe("ClaudeCodeRuntime.startTask / getStatus", () => {
     const runtime = createClaudeCodeRuntime(runtimeOptions());
 
     await expect(runtime.getStatus("never-started")).rejects.toThrow();
+  });
+});
+
+describe("ClaudeCodeRuntime.pauseTask / resumeTask / sendMessage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("Test 1: pauseTask on a mid-stream task ends the turn gracefully and sets status to paused", async () => {
+    (query as unknown as Mock).mockReturnValue(pausableQuery(initMessage("session-abc")));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    const startPromise = runtime.startTask(startInput);
+    await flushMicrotasks(); // let the init message be processed before pausing
+
+    await runtime.pauseTask("task-1");
+
+    expect(await runtime.getStatus("task-1")).toBe("paused");
+    await startPromise;
+  });
+
+  it("Test 2: resumeTask after pause calls query() again with resume set to the captured session_id; success completes the task", async () => {
+    (query as unknown as Mock).mockReturnValue(pausableQuery(initMessage("session-abc")));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    const startPromise = runtime.startTask(startInput);
+    await flushMicrotasks();
+    await runtime.pauseTask("task-1");
+    await startPromise;
+
+    (query as unknown as Mock).mockReturnValue(fakeQuery([resultMessage("success")]));
+    await runtime.resumeTask("task-1");
+
+    expect(query).toHaveBeenCalledTimes(2);
+    const secondCallArgs = (query as unknown as Mock).mock.calls[1][0];
+    expect(secondCallArgs.options.resume).toBe("session-abc");
+    expect(secondCallArgs.prompt).toBe("Continue the task from where you left off");
+    expect(await runtime.getStatus("task-1")).toBe("completed");
+  });
+
+  it("Test 3: sendMessage on a running task sends the caller's exact message as the new prompt, resuming the session", async () => {
+    (query as unknown as Mock).mockReturnValue(pausableQuery(initMessage("session-xyz")));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    runtime.startTask(startInput);
+    await flushMicrotasks();
+    expect(await runtime.getStatus("task-1")).toBe("running");
+
+    (query as unknown as Mock).mockReturnValue(fakeQuery([resultMessage("success")]));
+    await runtime.sendMessage("task-1", "do X next");
+
+    expect(query).toHaveBeenCalledTimes(2);
+    const secondCallArgs = (query as unknown as Mock).mock.calls[1][0];
+    expect(secondCallArgs.options.resume).toBe("session-xyz");
+    expect(secondCallArgs.prompt).toBe("do X next");
+    expect(await runtime.getStatus("task-1")).toBe("completed");
+  });
+
+  it("Test 4: resumeTask/sendMessage reject when no session has been captured, rather than starting a fresh unrelated session", async () => {
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    await expect(runtime.resumeTask("never-started")).rejects.toThrow();
+    await expect(runtime.sendMessage("never-started", "hi")).rejects.toThrow();
+
+    (query as unknown as Mock).mockReturnValue(fakeQuery([])); // started but never reaches an init message
+    await runtime.startTask(startInput);
+    await expect(runtime.resumeTask("task-1")).rejects.toThrow();
+    await expect(runtime.sendMessage("task-1", "hi")).rejects.toThrow();
   });
 });
