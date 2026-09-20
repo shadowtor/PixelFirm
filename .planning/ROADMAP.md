@@ -153,7 +153,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 04-04-PLAN.md — Real SyncSmith demo + cleanup
+- [x] 04-04-PLAN.md — Real SyncSmith demo + cleanup
 
 ### Phase 5: Pixel Office Renderer
 
