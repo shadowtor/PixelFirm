@@ -15,11 +15,12 @@ export async function startWorker(): Promise<{ stop(): void }> {
 
   const connection = startReconnectingConnection(env.controlPlaneUrl, env.token);
   const heartbeat = startHeartbeat(env.controlPlaneUrl, env.token, env.companyId);
-  // phaseId left undefined for now — gsd-adapter's own logic already
-  // handles an undefined/missing phase as the "new project" case, and no
-  // ROADMAP-checkbox-reading integration is wired here (Plan 03's flagged
-  // GSD-01 assumption already documents "deployment"/"approval" as
-  // proxy/unreachable).
+  // phaseId left undefined here — CR-02: gsd-adapter's observeGsdState now
+  // derives it itself from STATE.md's `current_phase` on every tick when no
+  // override is supplied, so this does NOT short-circuit category/role
+  // observation. ROADMAP-checkbox-reading integration is still not wired
+  // here (Plan 03's flagged GSD-01 assumption already documents
+  // "deployment"/"approval" as proxy/unreachable).
   const pollLoop = startPollLoop({
     repoPath: env.repoPath,
     planningDir: join(env.repoPath, ".planning"),

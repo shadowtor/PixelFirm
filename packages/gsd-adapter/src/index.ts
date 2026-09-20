@@ -24,11 +24,19 @@ export interface GsdObservation {
 // `active`.
 export async function observeGsdState(
   planningDir: string,
-  phaseId: string | undefined,
+  phaseIdOverride: string | undefined,
   roadmapPhaseCompleted: boolean,
 ): Promise<GsdObservation> {
   const stateResult = await readStateMd(planningDir);
   const status = stateResult?.status ?? "unknown";
+  // CR-02: readStateMd already parses `current_phase` from STATE.md — fall
+  // back to it (zero-padded to the `NN` directory-prefix format
+  // scanPhaseDir expects) whenever the caller doesn't supply an explicit
+  // override, so production callers that pass `undefined` still get a real
+  // phaseId instead of permanently short-circuiting to `new_project`/`unknown`.
+  const phaseId =
+    phaseIdOverride ??
+    (stateResult?.currentPhase !== undefined ? String(stateResult.currentPhase).padStart(2, "0") : undefined);
   const phaseFiles = phaseId ? await scanPhaseDir(planningDir, phaseId) : null;
   const { category, role } = mapToGsdCategory({ status, phaseFiles, roadmapPhaseCompleted });
 
