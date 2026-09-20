@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 03
 current_phase_name: Worker, Git Adapter & GSD Adapter
 status: executing
-stopped_at: Phase 3 context gathered
-last_updated: "2026-09-20T01:30:59.828Z"
-last_activity: 2026-09-19
-last_activity_desc: Phase 02 complete, transitioned to Phase 3
-state_head: ca71029e77484aeb65fd61ab11900de809edabed
+stopped_at: Completed 03-01-PLAN.md
+last_updated: "2026-09-20T01:49:18.897Z"
+last_activity: 2026-09-20
+last_activity_desc: Phase 03 execution started
+state_head: 5f616fd51cd72fc1156c0c76f6231c39890f26d6
 progress:
   total_phases: 8
   completed_phases: 2
   total_plans: 11
-  completed_plans: 7
+  completed_plans: 8
   percent: 25
 ---
 
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-18)
 
 **Core value:** The pixel office must accurately visualise a real Claude Code + GSD software project — agents genuinely performing the work and requesting CEO approval — using actual company events, never a prerecorded or faked animation.
-**Current focus:** Phase 02 — Control Plane Skeleton
+**Current focus:** Phase 03 — Worker, Git Adapter & GSD Adapter
 
 ## Current Position
 
-Phase: 03 (Worker, Git Adapter & GSD Adapter) — READY TO EXECUTE
-Plan: Not started
+Phase: 03 (Worker, Git Adapter & GSD Adapter) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-09-19 — Phase 02 complete, transitioned to Phase 3
+Last activity: 2026-09-20 — Phase 03 execution started
 
 Progress: [███░░░░░░░] 25%
 
@@ -65,6 +65,7 @@ Progress: [███░░░░░░░] 25%
 | Phase 02 P01 | 20min | 2 tasks | 18 files |
 | Phase 02 P02 | 15min | 2 tasks | 9 files |
 | Phase 02 P03 | ~20min | 2 tasks | 6 files |
+| Phase 03 P01 | 20min | 2 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -89,6 +90,9 @@ Recent decisions affecting current work:
 - [Phase 02]: [Phase 02-03]: Split Task 1/Task 2 boundary so rate-limit config additions land only in Task 2's commit, matching the plan's own task split
 - [Phase 02]: [Phase 02-03]: Extended Fastify logger's redact list to include x-bootstrap-secret alongside authorization (Rule 2 — SEC-01 never-logged requirement)
 - [Phase 02]: [Phase 02-03]: Reworded CSRF-posture comment in server.ts to avoid the literal '@fastify/cors' substring, which was tripping the plan's own CORS audit grep
+- [Phase 03]: [Phase 03-01]: worker.heartbeat payload is empty (z.object({})) — identity comes solely from authenticated request.workerId, never a client-supplied field (T-03-01)
+- [Phase 03]: [Phase 03-01]: Connection status (online/stale/offline) derived live from heartbeat receipt time + socket-open state, no new persisted DB column
+- [Phase 03]: [Phase 03-01]: worker.heartbeat has no company-core reducer handler by design — connection status lives server-side only, never in ProjectionState
 
 ### Pending Todos
 
@@ -112,6 +116,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-19T08:39:12.620Z
-Stopped at: Phase 3 context gathered
-Resume file: .planning/phases/03-worker-git-adapter-gsd-adapter/03-CONTEXT.md
+Last session: 2026-09-20T01:49:18.827Z
+Stopped at: Completed 03-01-PLAN.md
+Resume file: None
