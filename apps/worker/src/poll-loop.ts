@@ -78,6 +78,14 @@ export function startPollLoop(options: StartPollLoopOptions): { stop(): void } {
             // (this plan's kept values prohibition, T-03-12).
             sessionId: record.path,
           };
+          // WR-02: buildEnvelope has no taskId parameter, so this event is
+          // emitted without one. reducer.ts's "git.worktree_observed"
+          // handler requires a taskId matching an existing task record to
+          // do anything — this is a deliberately deferred, currently
+          // unreachable path in production until a session-to-task
+          // correlation mechanism exists (not part of this phase). Only
+          // hand-built fixtures in reducer.test.ts exercise that handler
+          // today.
           await postEvent(controlPlaneUrl, token, buildEnvelope(companyId, "git.worktree_observed", payload));
         }
       }

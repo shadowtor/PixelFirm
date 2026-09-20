@@ -145,6 +145,12 @@ const handlers: {
   // dedicated viewer-facing slot exists in ProjectionState yet) — it no-ops
   // via the default fallback below, same as any unrecognized type.
 
+  // WR-02: the worker (apps/worker/src/poll-loop.ts) never sets taskId on
+  // the events it emits — no session-to-task correlation mechanism exists
+  // yet. This handler is therefore deliberately deferred/currently
+  // unreachable in production; only reducer.test.ts's hand-built fixtures
+  // exercise it today. Wire a real taskId through once that correlation
+  // exists.
   "git.worktree_observed": (state, event) => {
     const taskId = event.taskId;
     const existing = taskId ? state.tasks[taskId] : undefined;
