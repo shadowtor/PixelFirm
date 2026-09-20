@@ -21,7 +21,7 @@
     {
       "number": "4",
       "name": "AgentRuntime & ClaudeCodeRuntime",
-      "status": "pending"
+      "status": "in_progress"
     },
     {
       "number": "5",
@@ -49,5 +49,5 @@
     "label": "Advance to the next step",
     "reason": "Phase 04 of 8 · 38% · executing"
   },
-  "updated_at": "2026-09-20T10:50:10.903Z"
+  "updated_at": "2026-09-20T11:06:05.828Z"
 }

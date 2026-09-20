@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 04
 current_phase_name: AgentRuntime & ClaudeCodeRuntime
 status: executing
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-09-20T10:50:28.978Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-09-20T11:06:26.376Z"
 last_activity: 2026-09-20
 last_activity_desc: Phase 04 execution started
-state_head: d528bc246ccf84e1d3f3583fe0b0b3ee64a42a4d
+state_head: d10458e141218ce8756472ddb550a164c188128c
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
   percent: 38
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-20)
 ## Current Position
 
 Phase: 04 (AgentRuntime & ClaudeCodeRuntime) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-09-20 — Phase 04 execution started
 
@@ -71,6 +71,7 @@ Progress: [████░░░░░░] 38%
 | Phase 03 P03 | 13min | 2 tasks | 11 files |
 | Phase 03 P04 | 35min | 3 tasks | 12 files |
 | Phase 04 P01 | ~50min | 3 tasks | 14 files |
+| Phase 04 P02 | 45min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -109,6 +110,9 @@ Recent decisions affecting current work:
 - [Phase 04]: [Phase 04]: [Phase 04-01]: Claude MAX subscription billing posture verified live — subscription pool billed, not API-credit pool; claude auth status reported subscriptionType 'pro' not 'max' (flagged, non-blocking)
 - [Phase 04]: [Phase 04]: [Phase 04-01]: @anthropic-ai/claude-agent-sdk@0.3.278 confirmed legitimate (anthropics org, 8.16M weekly downloads) before install
 - [Phase 04]: [Phase 04]: [Phase 04-01]: pauseTask/resumeTask/cancelTask/sendMessage/requestReview/requestHandoff implemented as throwing stubs so createClaudeCodeRuntime satisfies the full AgentRuntime type immediately — real implementations deferred to Plan 04-02/04-03
+- [Phase 04]: [Phase 04-02]: Query.interrupt() exists (sdk.d.ts) but is documented streaming-input-only — runQuery uses a string prompt, so interrupt() is best-effort; the real termination guarantee is attemptGracefulStop's grace-period race + AbortController.abort() hard-kill
+- [Phase 04]: [Phase 04-02]: pauseTask and cancelTask share one attemptGracefulStop(record) helper (interrupt-then-race-against-GRACEFUL_TIMEOUT_MS), differing only in terminal status (paused vs cancelled); the watchdog's onTimeout reuses it too for the blocked transition
+- [Phase 04]: [Phase 04-02]: runQuery sets in-memory status 'running' on init-message capture (Rule 2, previously-unused AgentTaskStatus member) so pauseTask/sendMessage's mid-stream preconditions are observable via getStatus() — no event emitted for this transition
 
 ### Pending Todos
 
@@ -131,6 +135,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-20T10:50:28.864Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-09-20T11:06:26.214Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
