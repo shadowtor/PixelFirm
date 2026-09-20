@@ -14,7 +14,19 @@ interface TaskRecord {
   runPromise?: Promise<void>;
   handle?: Query;
   lastRole?: string;
+  // CR-03: true only while a runQuery invocation for this task is actually
+  // in flight (set right before the stream starts, cleared in its finally
+  // block). Distinct from `controller`/`handle`, which are set once and
+  // never reset — this is the one field that reflects "is there something
+  // to stop right now."
+  inFlight?: boolean;
 }
+
+// CR-02: once a task reaches one of these, its controller/handle are stale
+// leftovers from the last (already-settled) invocation — pauseTask/
+// cancelTask must refuse to act on them rather than silently flipping an
+// already-terminal task's status.
+const TERMINAL_STATUSES: AgentTaskStatus[] = ["completed", "failed", "cancelled"];
 
 // D-03's grace period for cancelTask/pauseTask's "did the process exit after
 // we asked nicely" wait — distinct from and much shorter than the watchdog's
@@ -93,8 +105,21 @@ export function createClaudeCodeRuntime(options: {
     const record = tasks.get(taskId);
     if (!record) throw new Error(`ClaudeCodeRuntime.runQuery: unknown taskId ${taskId}`);
 
+    // CR-03: a prior invocation for this taskId is still in flight (e.g.
+    // resumeTask/sendMessage called while the task is still "running", or a
+    // genuine double-call) — starting a second concurrent query() here would
+    // silently orphan the first invocation's controller/watchdog/poll-
+    // interval, leaving pauseTask/cancelTask unable to control it. Properly
+    // stop the existing invocation first, via the same graceful-then-hard-
+    // abort path pauseTask/cancelTask use, before taking over the record.
+    if (record.inFlight) {
+      const exitedCleanly = await attemptGracefulStop(record);
+      if (!exitedCleanly) record.controller?.abort();
+    }
+
     const controller = new AbortController();
     record.controller = controller;
+    record.inFlight = true;
 
     const stream = query({
       prompt,
@@ -225,6 +250,9 @@ export function createClaudeCodeRuntime(options: {
         // no tick should fire once the task has reached a terminal status.
         watchdog.clear();
         if (rolePoll) clearInterval(rolePoll);
+        // CR-03: this invocation is no longer in flight — safe for a
+        // subsequent runQuery call (resumeTask/sendMessage) to take over.
+        record.inFlight = false;
       }
     })();
     record.runPromise = runPromise;
@@ -270,7 +298,12 @@ export function createClaudeCodeRuntime(options: {
 
     async pauseTask(taskId: string): Promise<void> {
       const record = tasks.get(taskId);
-      if (!record || !record.controller) {
+      // CR-02: record.controller is set once and never reset, so its mere
+      // presence does not mean the task is still running — also refuse a
+      // stray/duplicate call once the task has already reached a terminal
+      // status, so it can never be silently flipped away from completed/
+      // failed/cancelled.
+      if (!record || !record.controller || TERMINAL_STATUSES.includes(record.status)) {
         throw new Error("ClaudeCodeRuntime.pauseTask: task is not running");
       }
       const exitedCleanly = await attemptGracefulStop(record);
@@ -292,7 +325,10 @@ export function createClaudeCodeRuntime(options: {
 
     async cancelTask(taskId: string): Promise<void> {
       const record = tasks.get(taskId);
-      if (!record || !record.controller) {
+      // CR-02: see pauseTask — a stale controller from an already-settled
+      // invocation must not let a duplicate/late cancelTask flip an
+      // already-terminal task's status.
+      if (!record || !record.controller || TERMINAL_STATUSES.includes(record.status)) {
         throw new Error("ClaudeCodeRuntime.cancelTask: task is not running");
       }
       // D-03: graceful stop first; if the query() call has not exited
