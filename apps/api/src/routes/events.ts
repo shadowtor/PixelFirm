@@ -3,6 +3,7 @@ import { CompanyEventSchema } from "event-schema";
 import { db } from "../db/client.js";
 import { events } from "../db/schema.js";
 import { authenticateWorker } from "../auth/worker-auth.js";
+import { recordHeartbeat } from "../ws/connection-status.js";
 
 export async function registerEventsRoute(fastify: FastifyInstance) {
   fastify.post(
@@ -45,6 +46,12 @@ export async function registerEventsRoute(fastify: FastifyInstance) {
           { eventId: event.id, eventType: event.type },
           "duplicate event id ignored (onConflictDoNothing)",
         );
+      } else if (event.type === "worker.heartbeat") {
+        // T-03-01 Tampering mitigation: key by the AUTHENTICATED
+        // request.workerId, never event.payload — a worker must not be able
+        // to report a heartbeat for a different workerId than the one its
+        // credential authenticated as.
+        recordHeartbeat(request.workerId as string);
       }
 
       return reply.code(202).send({ accepted: true });

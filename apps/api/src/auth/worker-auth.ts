@@ -15,6 +15,14 @@ const UNAUTHORIZED = { error: "unauthorized" } as const;
 // worker row is found at all (no real hash exists to compare against).
 const DUMMY_HASH = "0".repeat(64);
 
+// Phase 3: downstream handlers (ws.ts, events.ts) need the authenticated
+// worker's identity without re-parsing the Authorization header themselves.
+declare module "fastify" {
+  interface FastifyRequest {
+    workerId?: string;
+  }
+}
+
 export async function authenticateWorker(request: FastifyRequest, reply: FastifyReply) {
   const authHeader = request.headers.authorization;
   const match = authHeader?.match(/^Bearer (.+)$/);
@@ -45,5 +53,6 @@ export async function authenticateWorker(request: FastifyRequest, reply: Fastify
     return;
   }
 
+  request.workerId = workerId;
   // Auth passed — return without replying so Fastify proceeds to the handler.
 }

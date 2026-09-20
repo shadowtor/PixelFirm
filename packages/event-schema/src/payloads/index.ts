@@ -14,6 +14,36 @@ const GitCommitCreatedPayload = z.object({ sha: z.string(), message: z.string() 
 const DeploymentStartedPayload = z.object({ environment: z.string() });
 const ViewerEventPayload = z.object({ viewerName: z.string() });
 
+// Phase 3 additions (RUNTIME-04, WORKTREE-01, GSD-01): worker.heartbeat carries
+// no identity in its payload on purpose — the authenticated connection
+// (request.workerId, set by worker-auth.ts) is the sole source of identity,
+// never a client-supplied field (T-03-01 Tampering mitigation).
+const WorkerHeartbeatPayload = z.object({});
+const GitWorktreeObservedPayload = z.object({
+  repoPath: z.string(),
+  branch: z.string(),
+  worktreePath: z.string(),
+  headSha: z.string(),
+  sessionId: z.string(),
+});
+const GsdPhaseObservedPayload = z.object({
+  phase: z.string().optional(),
+  status: z.enum(["planning", "executing", "verifying", "paused", "discussing", "completed", "unknown"]),
+  category: z.enum([
+    "new_project",
+    "research",
+    "requirements",
+    "planning",
+    "execution",
+    "verification",
+    "review",
+    "approval",
+    "deployment",
+  ]),
+  role: z.enum(["PM", "Research Agent", "Architect", "Engineering", "QA", "Reviewer", "CEO", "DevOps", "unknown"]),
+  active: z.boolean(),
+});
+
 // D-01: 12 seeded discriminated-union members, one per required category
 // (company/floor/project/task/agent/session/handoff/review/approval/git/deployment/viewer).
 // Composed via spread, never chained `.extend()` (Pitfall 2: quadratic typecheck
@@ -33,6 +63,11 @@ export const CompanyEventSchema = z.discriminatedUnion("type", [
   z.object({ ...BaseEnvelope.shape, type: z.literal("git.commit_created"), payload: GitCommitCreatedPayload }),
   z.object({ ...BaseEnvelope.shape, type: z.literal("deployment.started"), payload: DeploymentStartedPayload }),
   z.object({ ...BaseEnvelope.shape, type: z.literal("viewer.event"), payload: ViewerEventPayload }),
+  // Phase 3 additions — union grows from 12 to 15, appended after the
+  // original 12, never reordered (see comment above).
+  z.object({ ...BaseEnvelope.shape, type: z.literal("worker.heartbeat"), payload: WorkerHeartbeatPayload }),
+  z.object({ ...BaseEnvelope.shape, type: z.literal("git.worktree_observed"), payload: GitWorktreeObservedPayload }),
+  z.object({ ...BaseEnvelope.shape, type: z.literal("gsd.phase_observed"), payload: GsdPhaseObservedPayload }),
 ]);
 
 export type CompanyEvent = z.infer<typeof CompanyEventSchema>;

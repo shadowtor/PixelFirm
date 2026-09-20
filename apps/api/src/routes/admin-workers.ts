@@ -6,6 +6,7 @@ import { db } from "../db/client.js";
 import { workers } from "../db/schema.js";
 import { issueCredential } from "../auth/credentials.js";
 import { env } from "../env.js";
+import { getConnectionStatus } from "../ws/connection-status.js";
 
 // RESEARCH.md Pitfall 5: a naive `===` here reintroduces the same timing
 // side-channel `verifyCredential` was built to avoid — length-normalized
@@ -76,7 +77,10 @@ export async function registerAdminWorkersRoute(fastify: FastifyInstance) {
         })
         .from(workers);
 
-      return reply.code(200).send(rows);
+      // RUNTIME-04: live-derived status, never a stored column (Pattern 5).
+      const rowsWithStatus = rows.map((row) => ({ ...row, status: getConnectionStatus(row.id) }));
+
+      return reply.code(200).send(rowsWithStatus);
     },
   );
 
