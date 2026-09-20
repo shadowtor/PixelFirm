@@ -39,6 +39,12 @@ export async function postEvent(controlPlaneUrl: string, token: string, event: u
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(event),
+      // WR-02: a hung control plane (accepts the TCP connection but never
+      // responds) must degrade to a logged failure, not a permanent hang —
+      // this fetch has no relationship to ClaudeCodeRuntime's own
+      // AbortController, so without its own bound, cancelTask's abort can
+      // never unstick it.
+      signal: AbortSignal.timeout(10_000),
     });
     if (!response.ok) {
       console.error(`postEvent: control plane responded ${response.status}`);
