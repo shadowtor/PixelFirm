@@ -10,8 +10,10 @@ vi.mock("./event-emitter.js", () => ({
   })),
   postEvent: vi.fn(async () => {}),
 }));
+vi.mock("gsd-adapter", () => ({ observeGsdState: vi.fn() }));
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
+import { observeGsdState } from "gsd-adapter";
 import { postEvent } from "./event-emitter.js";
 import { createClaudeCodeRuntime } from "./claude-code-runtime.js";
 import { DEFAULT_WATCHDOG_TIMEOUT_MS } from "./watchdog.js";
@@ -20,6 +22,10 @@ import { DEFAULT_WATCHDOG_TIMEOUT_MS } from "./watchdog.js";
 // exported — an internal implementation detail); tests drive fake timers
 // past this window to exercise the hard-kill fallback path.
 const GRACEFUL_TIMEOUT_MS = 5000;
+
+// Mirrors claude-code-runtime.ts's own ROLE_POLL_INTERVAL_MS constant (not
+// exported — an internal implementation detail).
+const ROLE_POLL_INTERVAL_MS = 5000;
 
 // Yields a fixed array of fake SDKMessage-shaped objects — mirrors
 // apps/worker/src/poll-loop.test.ts's mocking convention, adapted for the
@@ -325,5 +331,119 @@ describe("ClaudeCodeRuntime.cancelTask / watchdog integration", () => {
     );
     const lastCall = statusChangedCalls[statusChangedCalls.length - 1];
     expect(lastCall[2].payload.status).toBe("blocked");
+  });
+});
+
+describe("ClaudeCodeRuntime.requestHandoff / gsd role-change poll", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("Test 1: a role change from PM to Engineering across two poll ticks calls requestHandoff with the new role", async () => {
+    (query as unknown as Mock).mockReturnValue(hangingQuery(initMessage("session-abc")));
+    (observeGsdState as unknown as Mock)
+      .mockResolvedValueOnce({ phase: "04", status: "executing", category: "planning", role: "PM" })
+      .mockResolvedValueOnce({ phase: "04", status: "executing", category: "execution", role: "Engineering" });
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    void runtime.startTask(startInput);
+    await vi.advanceTimersByTimeAsync(0); // let the init message be processed
+
+    await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS); // tick 1: baseline (isFirstTick), no handoff
+    await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS); // tick 2: role changed PM -> Engineering
+
+    const handoffCalls = (postEvent as unknown as Mock).mock.calls.filter(
+      (call) => call[2].type === "agent.handoff_requested",
+    );
+    expect(handoffCalls).toHaveLength(1);
+    expect(handoffCalls[0][2].payload).toEqual({ taskId: "task-1", toAgentId: "Engineering" });
+
+    // clean up the still-hanging task (hangingQuery ignores interrupt(), so
+    // cancelTask needs the grace period advanced before it settles).
+    const cancelPromise = runtime.cancelTask("task-1");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+    await cancelPromise;
+  });
+
+  it("Test 2: two consecutive poll ticks with the same role never call requestHandoff", async () => {
+    (query as unknown as Mock).mockReturnValue(hangingQuery(initMessage("session-abc")));
+    (observeGsdState as unknown as Mock).mockResolvedValue({
+      phase: "04",
+      status: "executing",
+      category: "execution",
+      role: "Engineering",
+    });
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    void runtime.startTask(startInput);
+    await vi.advanceTimersByTimeAsync(0);
+
+    await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS);
+    await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS);
+
+    const handoffCalls = (postEvent as unknown as Mock).mock.calls.filter(
+      (call) => call[2].type === "agent.handoff_requested",
+    );
+    expect(handoffCalls).toHaveLength(0);
+
+    const cancelPromise = runtime.cancelTask("task-1");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+    await cancelPromise;
+  });
+
+  it("Test 3: requestHandoff does not alter the task's own AgentTaskStatus", async () => {
+    (query as unknown as Mock).mockReturnValue(hangingQuery(initMessage("session-abc")));
+    (observeGsdState as unknown as Mock)
+      .mockResolvedValueOnce({ phase: "04", status: "executing", category: "planning", role: "PM" })
+      .mockResolvedValueOnce({ phase: "04", status: "executing", category: "execution", role: "Engineering" });
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    void runtime.startTask(startInput);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const statusBefore = await runtime.getStatus("task-1");
+    await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS);
+    await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS);
+    const statusAfter = await runtime.getStatus("task-1");
+
+    expect(statusAfter).toBe(statusBefore);
+
+    const handoffCalls = (postEvent as unknown as Mock).mock.calls.filter(
+      (call) => call[2].type === "agent.handoff_requested",
+    );
+    expect(handoffCalls).toHaveLength(1); // role did change, proving requestHandoff actually fired
+
+    const cancelPromise = runtime.cancelTask("task-1");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+    await cancelPromise;
+  });
+
+  it("Test 4: the role-change poll stops firing once the task reaches a terminal status (cancelled)", async () => {
+    (query as unknown as Mock).mockReturnValue(hangingQuery(initMessage("session-abc")));
+    (observeGsdState as unknown as Mock).mockResolvedValue({
+      phase: "04",
+      status: "executing",
+      category: "execution",
+      role: "Engineering",
+    });
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    void runtime.startTask(startInput);
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS); // baseline tick
+
+    const cancelPromise = runtime.cancelTask("task-1");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+    await cancelPromise;
+
+    const callCountAtCancel = (observeGsdState as unknown as Mock).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS * 3); // would tick 3 more times if not cleared
+
+    expect((observeGsdState as unknown as Mock).mock.calls.length).toBe(callCountAtCancel);
   });
 });

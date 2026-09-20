@@ -261,6 +261,9 @@ importers:
       event-schema:
         specifier: workspace:*
         version: link:../event-schema
+      gsd-adapter:
+        specifier: workspace:*
+        version: link:../gsd-adapter
       orchestration-adapter:
         specifier: workspace:*
         version: link:../orchestration-adapter
