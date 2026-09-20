@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 04
 current_phase_name: AgentRuntime & ClaudeCodeRuntime
 status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-09-20T09:00:53.004Z"
+stopped_at: Completed 04-01-PLAN.md
+last_updated: "2026-09-20T10:50:28.978Z"
 last_activity: 2026-09-20
-last_activity_desc: Phase 03 complete, transitioned to Phase 4
-state_head: 3ec4c431a189ab283efb29120f4150c661ae45de
+last_activity_desc: Phase 04 execution started
+state_head: d528bc246ccf84e1d3f3583fe0b0b3ee64a42a4d
 progress:
   total_phases: 8
   completed_phases: 3
   total_plans: 15
-  completed_plans: 11
+  completed_plans: 12
   percent: 38
 ---
 
@@ -23,14 +23,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-09-20)
 
 **Core value:** The pixel office must accurately visualise a real Claude Code + GSD software project — agents genuinely performing the work and requesting CEO approval — using actual company events, never a prerecorded or faked animation.
-**Current focus:** Phase 4 — AgentRuntime & ClaudeCodeRuntime
+**Current focus:** Phase 04 — AgentRuntime & ClaudeCodeRuntime
 
 ## Current Position
 
-Phase: 04 (AgentRuntime & ClaudeCodeRuntime) — READY TO EXECUTE
-Plan: Not started
+Phase: 04 (AgentRuntime & ClaudeCodeRuntime) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-09-20 — Phase 03 complete, transitioned to Phase 4
+Last activity: 2026-09-20 — Phase 04 execution started
 
 Progress: [████░░░░░░] 38%
 
@@ -70,6 +70,7 @@ Progress: [████░░░░░░] 38%
 | Phase 03 P02 | ~11min | 2 tasks | 9 files |
 | Phase 03 P03 | 13min | 2 tasks | 11 files |
 | Phase 03 P04 | 35min | 3 tasks | 12 files |
+| Phase 04 P01 | ~50min | 3 tasks | 14 files |
 
 ## Accumulated Context
 
@@ -105,6 +106,9 @@ Recent decisions affecting current work:
 - [Phase 03]: [Phase 03-04]: startHeartbeat(controlPlaneUrl, token, companyId) added a required companyId param not in the plan's literal signature — worker.heartbeat envelope's companyId is mandatory on BaseEnvelope
 - [Phase 03]: [Phase 03-04]: poll-loop.ts and ws-client.ts's stop() check a stopped flag before every postEvent call, not just clearInterval() — an already in-flight tick's slow isAnyClaudeProcessAlive subprocess call could otherwise still emit after stop() returns
 - [Phase 03]: [Phase 03-04]: poll-loop.ts's isFirstTick guard prevents the first-ever poll tick from reporting active:true from baseline discovery alone, avoiding a false active flip on the second (genuinely unchanged) tick
+- [Phase 04]: [Phase 04]: [Phase 04-01]: Claude MAX subscription billing posture verified live — subscription pool billed, not API-credit pool; claude auth status reported subscriptionType 'pro' not 'max' (flagged, non-blocking)
+- [Phase 04]: [Phase 04]: [Phase 04-01]: @anthropic-ai/claude-agent-sdk@0.3.278 confirmed legitimate (anthropics org, 8.16M weekly downloads) before install
+- [Phase 04]: [Phase 04]: [Phase 04-01]: pauseTask/resumeTask/cancelTask/sendMessage/requestReview/requestHandoff implemented as throwing stubs so createClaudeCodeRuntime satisfies the full AgentRuntime type immediately — real implementations deferred to Plan 04-02/04-03
 
 ### Pending Todos
 
@@ -127,6 +131,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-20T07:55:26.529Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-agentruntime-claudecoderuntime/04-CONTEXT.md
+Last session: 2026-09-20T10:50:28.864Z
+Stopped at: Completed 04-01-PLAN.md
+Resume file: None
