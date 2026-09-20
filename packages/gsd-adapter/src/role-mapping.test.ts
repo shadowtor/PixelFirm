@@ -22,6 +22,16 @@ describe("role-mapping.ts", () => {
     expect(result).toEqual({ category: "new_project", role: "unknown" });
   });
 
+  it("must_haves truth: SyncSmith's real shape (status: planning, no current_phase, no .planning/phases dir) resolves new_project, never guessing a later-pipeline category", () => {
+    const result = mapToGsdCategory({ status: "planning", phaseFiles: null, roadmapPhaseCompleted: false });
+    expect(result).toEqual({ category: "new_project", role: "unknown" });
+  });
+
+  it("status 'discussing' with no phase-file signal is NOT treated as new_project — falls to unknown/unknown (distinct from the planning/unknown early-lifecycle statuses above)", () => {
+    const result = mapToGsdCategory({ status: "discussing", phaseFiles: null, roadmapPhaseCompleted: false });
+    expect(result).toEqual({ category: "unknown", role: "unknown" });
+  });
+
   it("status planning with NN-CONTEXT.md but zero PLANs: planning / Architect", () => {
     const result = mapToGsdCategory({
       status: "planning",

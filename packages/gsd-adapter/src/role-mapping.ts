@@ -32,10 +32,17 @@ export function mapToGsdCategory(input: RoleMappingInput): RoleMappingResult {
     return { category: "deployment", role: "DevOps" };
   }
 
-  // New project: no STATE.md at all (status normalizes to "unknown") and no
-  // phase-directory signal either — nobody is assigned to work that doesn't
-  // exist yet, so role is "unknown" by design, not a guessed PM assignment.
-  if (status === "unknown" && !hasAnyPhaseSignal(phaseFiles)) {
+  // New project: either no STATE.md at all (status normalizes to "unknown"),
+  // or a STATE.md that's only ever reached "planning" (SyncSmith's real,
+  // verified-this-session shape: status: planning, no current_phase key, no
+  // .planning/phases directory yet) — in both cases no phase-directory
+  // signal exists either. Nobody is assigned to work that doesn't exist yet,
+  // so role is "unknown" by design, not a guessed PM assignment. Deliberately
+  // does NOT cover "discussing"/"executing"/etc. + no phase signal — those
+  // are a genuinely contradictory combination (STATE.md claims later-pipeline
+  // progress the file system doesn't back up), which must fall through to
+  // the final unknown/unknown fallback rather than guess "new_project" too.
+  if ((status === "unknown" || status === "planning") && !hasAnyPhaseSignal(phaseFiles)) {
     return { category: "new_project", role: "unknown" };
   }
 
