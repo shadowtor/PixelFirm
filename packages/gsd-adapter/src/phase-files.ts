@@ -3,6 +3,14 @@ import { existsSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
+// WR-01: phaseId is spliced into new RegExp() source strings below — escape
+// regex metacharacters so a phaseId containing them (once callers derive it
+// from STATE.md's current_phase per CR-02, rather than always undefined)
+// can't throw a SyntaxError or silently match unintended files.
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export interface PhaseFilesResult {
   hasContext: boolean;
   hasResearch: boolean;
@@ -38,8 +46,9 @@ export async function scanPhaseDir(planningDir: string, phaseId: string): Promis
   const phaseDir = join(phasesRoot, phaseDirName);
   const files = readdirSync(phaseDir);
 
-  const planRegex = new RegExp(`^${phaseId}-\\d+-PLAN\\.md$`);
-  const summaryRegex = new RegExp(`^${phaseId}-\\d+-SUMMARY\\.md$`);
+  const escapedPhaseId = escapeRegExp(phaseId);
+  const planRegex = new RegExp(`^${escapedPhaseId}-\\d+-PLAN\\.md$`);
+  const summaryRegex = new RegExp(`^${escapedPhaseId}-\\d+-SUMMARY\\.md$`);
   const verificationFile = `${phaseId}-VERIFICATION.md`;
   const hasVerification = files.includes(verificationFile);
 
