@@ -1,0 +1,53 @@
+{
+  "contract": "1.0.0",
+  "flavor": "core",
+  "milestone": null,
+  "phases": [
+    {
+      "number": "1",
+      "name": "Event Schema & State Engine",
+      "status": "complete"
+    },
+    {
+      "number": "2",
+      "name": "Control Plane Skeleton",
+      "status": "complete"
+    },
+    {
+      "number": "3",
+      "name": "Worker, Git Adapter & GSD Adapter",
+      "status": "complete"
+    },
+    {
+      "number": "4",
+      "name": "AgentRuntime & ClaudeCodeRuntime",
+      "status": "pending"
+    },
+    {
+      "number": "5",
+      "name": "Pixel Office Renderer",
+      "status": "pending"
+    },
+    {
+      "number": "6",
+      "name": "CEO Dashboard & Approval Workflow",
+      "status": "pending"
+    },
+    {
+      "number": "7",
+      "name": "Stream-Safe Visibility & Overlay Route",
+      "status": "pending"
+    },
+    {
+      "number": "8",
+      "name": "Twitch EventSub Integration",
+      "status": "pending"
+    }
+  ],
+  "next": {
+    "command": "/gsd:progress --next",
+    "label": "Advance to the next step (plan phase 4)",
+    "reason": "Phase 4 of 8 — needs a plan"
+  },
+  "updated_at": "2026-09-20T05:48:51.666Z"
+}
