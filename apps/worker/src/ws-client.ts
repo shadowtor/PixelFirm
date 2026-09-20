@@ -74,8 +74,14 @@ export function startReconnectingConnection(
       attempt = 0;
       onOpen?.(ws as WebSocket);
     });
+    // "error" is always followed by "close" for `ws` on a connection
+    // failure — listening on both would double-schedule a reconnect (and
+    // double-increment the backoff attempt counter) for a single failure.
+    // Only "close" drives the reconnect; "error" is swallowed here.
     ws.on("close", scheduleReconnect);
-    ws.on("error", scheduleReconnect);
+    ws.on("error", () => {
+      /* swallow: "close" will still fire and drive the reconnect */
+    });
   }
 
   function scheduleReconnect(): void {

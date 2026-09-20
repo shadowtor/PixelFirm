@@ -115,4 +115,43 @@ describe("startReconnectingConnection", () => {
     },
     10_000,
   );
+
+  // CR-01 regression: a real connection failure (refused/reset handshake)
+  // emits both "error" and "close" for `ws` — both must not independently
+  // schedule a reconnect timer, or the attempt counter and connection count
+  // both double per failure.
+  it(
+    "does not double-schedule a reconnect when a connection failure emits both error and close",
+    async () => {
+      const net = await import("node:net");
+      let connectionAttempts = 0;
+      // Destroying the raw TCP socket mid-handshake forces `ws` to emit
+      // "error" (socket hang up / ECONNRESET) followed by "close" for the
+      // same failed attempt — the double-fire scenario CR-01 covers.
+      const server = net.createServer((socket) => {
+        connectionAttempts++;
+        socket.destroy();
+      });
+      await new Promise<void>((resolve) => server.listen(0, resolve));
+      const address = server.address();
+      const failPort = typeof address === "object" && address ? address.port : 0;
+
+      const connection = startReconnectingConnection(`http://127.0.0.1:${failPort}`, "worker-1.secret");
+
+      // Backoff delays are attempt0: ~1.2-1.5s, attempt1: ~2.4-3.0s. A
+      // double-scheduled reconnect leaks a second, overlapping timer at
+      // attempt1's delay on the FIRST failure already, so by ~3.3s a buggy
+      // implementation has made 3 connection attempts (initial + the
+      // legitimate reconnect + the leaked one); the fixed implementation's
+      // legitimate 3rd attempt cannot fire before ~3.6s, so it still shows
+      // only 2.
+      await new Promise<void>((resolve) => setTimeout(resolve, 3300));
+
+      expect(connectionAttempts).toBe(2);
+
+      connection.stop();
+      server.close();
+    },
+    10_000,
+  );
 });
