@@ -1,11 +1,11 @@
 # 04-04 Demo Evidence
 
-Generated: 2026-09-20T22:27:37.131Z
+Generated: 2026-09-20T23:55:40.228Z
 
 SyncSmith phase targeted: Phase 1 — Foundation & Self-Hosted Deployment (lowest-numbered phase still showing "Plans: TBD" at execution time; no CONTEXT.md existed yet).
 GSD slash-command used as startTask's prompt: `/gsd-discuss-phase 1`
-Disposable worktree path: `C:\Users\shado\AppData\Local\Temp\pixelfirm-demo-zGzJMO`
-Disposable branch: `pixelfirm-demo-1789943176301`
+Disposable worktree path: `C:\Users\shado\AppData\Local\Temp\pixelfirm-demo-Kgzmkz`
+Disposable branch: `pixelfirm-demo-1789948472525`
 Terminal status: `completed`
 
 ## Received Events
@@ -13,9 +13,9 @@ Terminal status: `completed`
 ```json
 [
   {
-    "id": "6cb9b45a-7bd3-4d8c-96dd-02c73f42736c",
+    "id": "fb2ab783-fbd8-47bf-bc15-882c9ffc90ab",
     "version": 1,
-    "occurredAt": "2026-09-20T22:26:16.684Z",
+    "occurredAt": "2026-09-20T23:54:32.910Z",
     "companyId": "demo-syncsmith",
     "taskId": "demo-task-1",
     "visibility": "INTERNAL",
@@ -26,9 +26,9 @@ Terminal status: `completed`
     }
   },
   {
-    "id": "e83e2c43-5014-4716-b928-a45340dcf4dc",
+    "id": "9911806d-a2fc-487a-ab38-54150f468068",
     "version": 1,
-    "occurredAt": "2026-09-20T22:27:25.317Z",
+    "occurredAt": "2026-09-20T23:55:28.127Z",
     "companyId": "demo-syncsmith",
     "taskId": "demo-task-1",
     "visibility": "INTERNAL",
@@ -39,9 +39,9 @@ Terminal status: `completed`
     }
   },
   {
-    "id": "300391bf-6dea-43de-94ae-3d60c7625ad3",
+    "id": "fc466106-5bca-4ed7-9716-94141efd3415",
     "version": 1,
-    "occurredAt": "2026-09-20T22:27:25.321Z",
+    "occurredAt": "2026-09-20T23:55:28.131Z",
     "companyId": "demo-syncsmith",
     "taskId": "demo-task-1",
     "visibility": "INTERNAL",
@@ -52,9 +52,9 @@ Terminal status: `completed`
     }
   },
   {
-    "id": "b37cd9a6-8ed5-4dd6-8964-ec0187e21050",
+    "id": "152ce7e3-bae8-49e5-8f4e-0e3fd7ed4a52",
     "version": 1,
-    "occurredAt": "2026-09-20T22:27:35.152Z",
+    "occurredAt": "2026-09-20T23:55:38.326Z",
     "companyId": "demo-syncsmith",
     "taskId": "demo-task-1",
     "visibility": "INTERNAL",
