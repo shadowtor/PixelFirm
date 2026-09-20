@@ -141,3 +141,143 @@ describe("EVENT-03 gap closure — omitted correlation id no-ops instead of corr
     expect(reduce(emptyState(), event)).toEqual(emptyState());
   });
 });
+
+// Phase 3 (RUNTIME-04, WORKTREE-01, GSD-01): git.worktree_observed,
+// gsd.phase_observed, worker.heartbeat handlers.
+function taskCreatedEvent(): CompanyEvent {
+  return {
+    id: "event-task-01",
+    version: 1,
+    occurredAt: "2026-09-19T00:00:00.000Z",
+    companyId: "company-1",
+    taskId: "task-1",
+    visibility: "INTERNAL",
+    type: "task.created",
+    payload: { title: "Build git adapter" },
+  } as CompanyEvent;
+}
+
+function worktreeObservedEvent(overrides: Partial<CompanyEvent> = {}): CompanyEvent {
+  return {
+    id: "event-worktree-01",
+    version: 1,
+    occurredAt: "2026-09-19T00:00:01.000Z",
+    companyId: "company-1",
+    taskId: "task-1",
+    visibility: "INTERNAL",
+    type: "git.worktree_observed",
+    payload: {
+      repoPath: "F:/Sidegigs/syncsmith",
+      branch: "main",
+      worktreePath: "F:/Sidegigs/syncsmith",
+      headSha: "c41f51af54bbf1f9c78c501dac37511169926760",
+      sessionId: "session-1",
+    },
+    ...overrides,
+  } as CompanyEvent;
+}
+
+function phaseObservedEvent(): CompanyEvent {
+  return {
+    id: "event-phase-01",
+    version: 1,
+    occurredAt: "2026-09-19T00:00:02.000Z",
+    companyId: "company-1",
+    visibility: "INTERNAL",
+    type: "gsd.phase_observed",
+    payload: {
+      phase: "03",
+      status: "executing",
+      category: "execution",
+      role: "Engineering",
+      active: true,
+    },
+  } as CompanyEvent;
+}
+
+function heartbeatEvent(): CompanyEvent {
+  return {
+    id: "event-heartbeat-01",
+    version: 1,
+    occurredAt: "2026-09-19T00:00:03.000Z",
+    companyId: "company-1",
+    visibility: "INTERNAL",
+    type: "worker.heartbeat",
+    payload: {},
+  } as CompanyEvent;
+}
+
+describe("git.worktree_observed", () => {
+  it("updates an existing task's repo/branch/worktreePath/headSha/sessionId fields, preserving existing fields", () => {
+    const withTask = reduce(emptyState(), taskCreatedEvent());
+    const result = reduce(withTask, worktreeObservedEvent());
+
+    expect(result.tasks["task-1"]).toEqual({
+      id: "task-1",
+      status: "created",
+      title: "Build git adapter",
+      repo: "F:/Sidegigs/syncsmith",
+      branch: "main",
+      worktreePath: "F:/Sidegigs/syncsmith",
+      headSha: "c41f51af54bbf1f9c78c501dac37511169926760",
+      sessionId: "session-1",
+    });
+  });
+
+  it("no-ops when event.taskId is omitted", () => {
+    const state = emptyState();
+    const event = worktreeObservedEvent({ taskId: undefined });
+    expect(reduce(state, event)).toEqual(state);
+  });
+
+  it("no-ops when taskId references no existing task record", () => {
+    const state = emptyState();
+    const event = worktreeObservedEvent({ taskId: "no-such-task" });
+    expect(reduce(state, event)).toEqual(state);
+  });
+});
+
+describe("gsd.phase_observed", () => {
+  it("always populates state.gsdObservations[companyId] (companyId is a required envelope field)", () => {
+    const result = reduce(emptyState(), phaseObservedEvent());
+    expect(result.gsdObservations["company-1"]).toEqual({
+      companyId: "company-1",
+      phase: "03",
+      status: "executing",
+      category: "execution",
+      role: "Engineering",
+      active: true,
+    });
+  });
+
+  it("replaces a prior observation for the same companyId", () => {
+    const first = reduce(emptyState(), phaseObservedEvent());
+    const second = reduce(first, {
+      ...phaseObservedEvent(),
+      payload: { status: "verifying", category: "verification", role: "QA", active: false },
+    });
+    expect(second.gsdObservations["company-1"]).toEqual({
+      companyId: "company-1",
+      status: "verifying",
+      category: "verification",
+      role: "QA",
+      active: false,
+    });
+  });
+});
+
+describe("worker.heartbeat", () => {
+  it("leaves state deep-equal to the input (no handler — connection status is derived server-side)", () => {
+    const state = emptyState();
+    expect(reduce(state, heartbeatEvent())).toEqual(state);
+  });
+});
+
+describe("replay determinism — Phase 3 event types (EVENT-04)", () => {
+  it("folding a sequence with all 3 new types twice from a fresh state produces deep-equal results", () => {
+    const sequence = [taskCreatedEvent(), worktreeObservedEvent(), phaseObservedEvent(), heartbeatEvent()];
+    const first = fold(sequence, emptyState());
+    const second = fold(sequence, emptyState());
+    expect(second).toEqual(first);
+  });
+});
