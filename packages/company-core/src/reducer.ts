@@ -144,6 +144,47 @@ const handlers: {
   // viewer.event touches none of the five required projection kinds (no
   // dedicated viewer-facing slot exists in ProjectionState yet) — it no-ops
   // via the default fallback below, same as any unrecognized type.
+
+  "git.worktree_observed": (state, event) => {
+    const taskId = event.taskId;
+    const existing = taskId ? state.tasks[taskId] : undefined;
+    if (!taskId || !existing) return state;
+    return {
+      ...state,
+      tasks: {
+        ...state.tasks,
+        [taskId]: {
+          ...existing,
+          repo: event.payload.repoPath,
+          branch: event.payload.branch,
+          worktreePath: event.payload.worktreePath,
+          headSha: event.payload.headSha,
+          sessionId: event.payload.sessionId,
+        },
+      },
+    };
+  },
+
+  // companyId is a required envelope field (never optional) — this handler
+  // always succeeds, replacing any prior observation for the same company.
+  "gsd.phase_observed": (state, event) => ({
+    ...state,
+    gsdObservations: {
+      ...state.gsdObservations,
+      [event.companyId]: {
+        companyId: event.companyId,
+        phase: event.payload.phase,
+        status: event.payload.status,
+        category: event.payload.category,
+        role: event.payload.role,
+        active: event.payload.active,
+      },
+    },
+  }),
+
+  // worker.heartbeat intentionally has no handler — connection status is
+  // derived server-side from socket state + heartbeat receipt timing
+  // (apps/api/src/ws/connection-status.ts), never part of ProjectionState.
 };
 
 // Looks up a handler for the event's type and applies it. An unrecognized type
