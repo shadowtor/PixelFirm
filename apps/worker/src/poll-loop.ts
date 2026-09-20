@@ -50,6 +50,12 @@ export function startPollLoop(options: StartPollLoopOptions): { stop(): void } {
   // the gsd.phase_observed payload and violating "a second, identical poll
   // tick emits zero events."
   let isFirstTick = true;
+  // clearInterval only stops FUTURE ticks — an already-running tick's
+  // pending awaits (e.g. isAnyClaudeProcessAlive's subprocess call, which is
+  // slow) keep executing and would otherwise still postEvent after stop()
+  // returns. Checked before every postEvent call below so stop() genuinely
+  // halts the loop (this plan's own acceptance criterion), not just its timer.
+  let stopped = false;
 
   async function tick(): Promise<void> {
     let anyWorktreeChange = false;
@@ -62,6 +68,7 @@ export function startPollLoop(options: StartPollLoopOptions): { stop(): void } {
         if (changed) {
           anyWorktreeChange = true;
           worktrees.set(record.path, { headSha: record.headSha, branch: record.branch });
+          if (stopped) continue;
           const payload = {
             repoPath,
             branch: record.branch ?? "unknown",
@@ -117,14 +124,16 @@ export function startPollLoop(options: StartPollLoopOptions): { stop(): void } {
 
       if (changed) {
         gsd = next;
-        const payload = {
-          phase: next.phase,
-          status: next.status,
-          category: next.category,
-          role: next.role,
-          active: next.active,
-        };
-        await postEvent(controlPlaneUrl, token, buildEnvelope(companyId, "gsd.phase_observed", payload));
+        if (!stopped) {
+          const payload = {
+            phase: next.phase,
+            status: next.status,
+            category: next.category,
+            role: next.role,
+            active: next.active,
+          };
+          await postEvent(controlPlaneUrl, token, buildEnvelope(companyId, "gsd.phase_observed", payload));
+        }
       }
     } catch (err) {
       console.error("poll-loop: gsd observation failed, skipping this tick's gsd observation", err);
@@ -142,6 +151,7 @@ export function startPollLoop(options: StartPollLoopOptions): { stop(): void } {
 
   return {
     stop(): void {
+      stopped = true;
       clearInterval(handle);
     },
   };

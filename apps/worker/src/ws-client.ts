@@ -32,7 +32,8 @@ export function connectWorker(controlPlaneUrl: string, token: string): WebSocket
   return new WebSocket(deriveWsUrl(controlPlaneUrl), { headers: { Authorization: `Bearer ${token}` } });
 }
 
-function sendHeartbeat(controlPlaneUrl: string, token: string, companyId: string): void {
+function sendHeartbeat(controlPlaneUrl: string, token: string, companyId: string, isStopped: () => boolean): void {
+  if (isStopped()) return;
   void postEvent(controlPlaneUrl, token, buildEnvelope(companyId, "worker.heartbeat", {}));
 }
 
@@ -43,9 +44,16 @@ function sendHeartbeat(controlPlaneUrl: string, token: string, companyId: string
  * fails CompanyEventSchema.safeParse server-side (Rule 3 fix: blocking issue).
  */
 export function startHeartbeat(controlPlaneUrl: string, token: string, companyId: string): { stop(): void } {
-  sendHeartbeat(controlPlaneUrl, token, companyId);
-  const handle = setInterval(() => sendHeartbeat(controlPlaneUrl, token, companyId), HEARTBEAT_INTERVAL_MS);
-  return { stop: () => clearInterval(handle) };
+  let stopped = false;
+  const isStopped = () => stopped;
+  sendHeartbeat(controlPlaneUrl, token, companyId, isStopped);
+  const handle = setInterval(() => sendHeartbeat(controlPlaneUrl, token, companyId, isStopped), HEARTBEAT_INTERVAL_MS);
+  return {
+    stop(): void {
+      stopped = true;
+      clearInterval(handle);
+    },
+  };
 }
 
 export function startReconnectingConnection(
