@@ -424,7 +424,12 @@ describe("ClaudeCodeRuntime.requestHandoff / gsd role-change poll", () => {
   });
 
   it("Test 4: the role-change poll stops firing once the task reaches a terminal status (cancelled)", async () => {
-    (query as unknown as Mock).mockReturnValue(hangingQuery(initMessage("session-abc")));
+    // pausableQuery (not hangingQuery) — its mocked interrupt() releases the
+    // gate, letting runQuery's for-await loop actually exit and its finally
+    // block (which clears the role poll) actually run, unlike a hung stream
+    // that never respects abort/interrupt.
+    const q = pausableQuery(initMessage("session-abc"));
+    (query as unknown as Mock).mockReturnValue(q);
     (observeGsdState as unknown as Mock).mockResolvedValue({
       phase: "04",
       status: "executing",
@@ -437,9 +442,7 @@ describe("ClaudeCodeRuntime.requestHandoff / gsd role-change poll", () => {
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS); // baseline tick
 
-    const cancelPromise = runtime.cancelTask("task-1");
-    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
-    await cancelPromise;
+    await runtime.cancelTask("task-1"); // graceful interrupt ends the loop cleanly
 
     const callCountAtCancel = (observeGsdState as unknown as Mock).mock.calls.length;
     await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS * 3); // would tick 3 more times if not cleared

@@ -1,4 +1,6 @@
+import { join } from "node:path";
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
+import { observeGsdState } from "gsd-adapter";
 import type { AgentRuntime, AgentTaskStatus, StartTaskInput } from "orchestration-adapter";
 import { buildEnvelope, postEvent } from "./event-emitter.js";
 import { classifySignal } from "./signal-detection.js";
@@ -11,12 +13,19 @@ interface TaskRecord {
   controller?: AbortController;
   runPromise?: Promise<void>;
   handle?: Query;
+  lastRole?: string;
 }
 
 // D-03's grace period for cancelTask/pauseTask's "did the process exit after
 // we asked nicely" wait — distinct from and much shorter than the watchdog's
 // hang-detection window (that answers "has anything happened at all").
 const GRACEFUL_TIMEOUT_MS = 5000;
+
+// D-08 source 1: role-change poll interval, matching
+// apps/worker/src/poll-loop.ts's DEFAULT_INTERVAL_MS convention (a plan-
+// specified numeric constant, not necessarily the identical 2500ms value —
+// see this plan's Task 2 action text).
+const ROLE_POLL_INTERVAL_MS = 5000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -62,6 +71,18 @@ export function createClaudeCodeRuntime(options: {
     );
   }
 
+  // D-08 source 1: real, non-stub requestHandoff — fired by the role-change
+  // poll wired below in runQuery (gsd-adapter's reused observeGsdState, never
+  // a second .planning/ parser). Deliberately observation-only: does not
+  // touch the task's own AgentTaskStatus, since no second agent exists yet in
+  // Phase 4 to actually receive control (CONTEXT.md domain boundary).
+  async function requestHandoff(taskId: string, toAgentId: string): Promise<void> {
+    await postEvent(
+      options.controlPlaneUrl,
+      options.token,
+      buildEnvelope(options.companyId, "agent.handoff_requested", { taskId, toAgentId }, taskId),
+    );
+  }
 
   // Shared for-await message loop — startTask (prompt = input.prompt, no
   // resume), resumeTask, and sendMessage all call this instead of each
@@ -135,6 +156,35 @@ export function createClaudeCodeRuntime(options: {
       })();
     });
 
+    // D-08 source 1: role-change poll, one per invocation (same lifecycle as
+    // the watchdog above) — reuses gsd-adapter's observeGsdState rather than
+    // re-parsing .planning/ (04-RESEARCH.md's named Anti-Pattern). The first
+    // tick only records a baseline role (mirrors poll-loop.ts's isFirstTick
+    // guard) so a first observation is never itself treated as a "change".
+    // Only started when a worktreePath is known (always true for a real
+    // startTask/resumeTask/sendMessage call).
+    let isFirstRoleTick = true;
+    const rolePoll = record.worktreePath
+      ? setInterval(() => {
+          void (async () => {
+            try {
+              const observed = await observeGsdState(join(record.worktreePath!, ".planning"), undefined, false);
+              if (isFirstRoleTick) {
+                isFirstRoleTick = false;
+                record.lastRole = observed.role;
+                return;
+              }
+              if (observed.role !== record.lastRole) {
+                record.lastRole = observed.role;
+                await requestHandoff(taskId, observed.role);
+              }
+            } catch (err) {
+              console.error(`ClaudeCodeRuntime.runQuery: role-poll failed for task ${taskId}`, err);
+            }
+          })();
+        }, ROLE_POLL_INTERVAL_MS)
+      : undefined;
+
     const runPromise = (async () => {
       watchdog.reset();
       try {
@@ -162,8 +212,10 @@ export function createClaudeCodeRuntime(options: {
       } finally {
         // A completed task's watchdog must never fire after the fact —
         // clear on every exit path (result received, graceful/hard cancel,
-        // or an uncaught stream error).
+        // or an uncaught stream error). The role poll is cleared here too —
+        // no tick should fire once the task has reached a terminal status.
         watchdog.clear();
+        if (rolePoll) clearInterval(rolePoll);
       }
     })();
     record.runPromise = runPromise;
@@ -254,8 +306,6 @@ export function createClaudeCodeRuntime(options: {
     },
 
     requestReview,
-    async requestHandoff(_taskId: string, _toAgentId: string): Promise<void> {
-      throw new Error("not implemented — see Plan 04-03 Task 2");
-    },
+    requestHandoff,
   };
 }
