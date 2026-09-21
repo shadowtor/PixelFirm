@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { AgentStatus } from "event-schema";
 import { upsertCharacterFromAgent, getCharacter, _resetForTests, DEFAULT_ROWS } from "./index";
-import { CharacterState } from "./types";
+import { CharacterState, Direction } from "./types";
 import { findPath } from "./layout/tileMap";
 import { TileType } from "./types";
+import { getCharacterSprites } from "./sprites/spriteData";
 
 beforeEach(() => {
   _resetForTests();
@@ -50,6 +51,39 @@ describe("upsertCharacterFromAgent", () => {
   it("applies deploying's 1.5x frameSpeedMultiplier — the one legitimate procedural-variation state signal", () => {
     upsertCharacterFromAgent("agent-7", AgentStatus.DEPLOYING);
     expect(getCharacter("agent-7")?.frameSpeedMultiplier).toBe(1.5);
+  });
+});
+
+describe("per-agent identity hue (WR-08)", () => {
+  const IDS = ["agent-1", "agent-2", "agent-3", "agent-4", "agent-5", "agent-6"];
+
+  function seedAndRead(): Array<{ id: string; hueShift: number }> {
+    for (const id of IDS) upsertCharacterFromAgent(id, AgentStatus.IDLE);
+    return IDS.map((id) => ({ id, hueShift: getCharacter(id)!.hueShift }));
+  }
+
+  it("gives different agent ids different hues, and those hues produce different pixel data", () => {
+    const seeded = seedAndRead();
+    const hues = seeded.map((s) => s.hueShift);
+    expect(new Set(hues).size).toBeGreaterThan(1);
+
+    const a = seeded[0];
+    const b = seeded.find((s) => s.hueShift !== a.hueShift)!;
+    const spriteA = getCharacterSprites(a.hueShift).walk[Direction.DOWN][0];
+    const spriteB = getCharacterSprites(b.hueShift).walk[Direction.DOWN][0];
+    expect(spriteA).not.toEqual(spriteB);
+  });
+
+  it("derives the hue deterministically — the same agent id yields the same hue across resets", () => {
+    const first = seedAndRead();
+    _resetForTests();
+    const second = seedAndRead();
+    expect(second).toEqual(first);
+  });
+
+  it("maps every hue onto one of the twelve 30-degree identity buckets", () => {
+    const buckets = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
+    for (const { hueShift } of seedAndRead()) expect(buckets).toContain(hueShift);
   });
 });
 
