@@ -91,7 +91,7 @@ const cases: EventCase[] = [
   {
     type: "agent.handoff_requested",
     extra: { sourceAgentId: "agent-1" },
-    payload: { taskId: "task-1", toAgentId: "agent-2" },
+    payload: { taskId: "task-1", fromAgentId: "agent-1", toAgentId: "agent-2" },
     requiredPayloadKey: "toAgentId",
   },
   {
@@ -144,3 +144,16 @@ for (const { type, extra, payload, requiredPayloadKey } of cases) {
     });
   });
 }
+
+describe("CompanyEventSchema — agent.handoff_requested fromAgentId (Phase 5)", () => {
+  it("rejects a payload missing the required \"fromAgentId\" field", () => {
+    const event = {
+      ...baseFields(),
+      sourceAgentId: "agent-1",
+      type: "agent.handoff_requested",
+      payload: { taskId: "task-1", toAgentId: "agent-2" },
+    };
+    const result = CompanyEventSchema.safeParse(event);
+    expect(result.success).toBe(false);
+  });
+});

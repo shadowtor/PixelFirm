@@ -76,7 +76,7 @@ export const stubEventSequence: CompanyEvent[] = [
     sourceAgentId: "agent-1",
     visibility: "INTERNAL",
     type: "agent.handoff_requested",
-    payload: { taskId: "task-1", toAgentId: "agent-2" },
+    payload: { taskId: "task-1", fromAgentId: "agent-1", toAgentId: "agent-2" },
   },
   {
     id: "event-08",

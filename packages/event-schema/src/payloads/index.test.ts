@@ -93,3 +93,23 @@ describe("Phase 3 payloads — worker.heartbeat, git.worktree_observed, gsd.phas
     expect(CompanyEventSchema.safeParse(event).success).toBe(false);
   });
 });
+
+describe("Phase 5 payload — agent.handoff_completed", () => {
+  it("accepts a well-formed agent.handoff_completed event (17th union member round-trips)", () => {
+    const event = {
+      ...baseEnvelope(),
+      type: "agent.handoff_completed",
+      payload: { taskId: "task-1", toAgentId: "agent-2" },
+    };
+    expect(CompanyEventSchema.safeParse(event).success).toBe(true);
+  });
+
+  it("rejects an agent.handoff_completed event missing toAgentId", () => {
+    const event = {
+      ...baseEnvelope(),
+      type: "agent.handoff_completed",
+      payload: { taskId: "task-1" },
+    };
+    expect(CompanyEventSchema.safeParse(event).success).toBe(false);
+  });
+});

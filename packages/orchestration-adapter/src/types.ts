@@ -21,6 +21,10 @@ export interface StartTaskInput {
   repoPath: string;
   worktreePath: string;
   prompt: string;
+  // Phase 5 addition (HANDOFF-01): the owning agent for this task — every
+  // downstream event this runtime emits for the task threads through this
+  // value (task.status_changed's sourceAgentId, requestHandoff's fromAgentId).
+  agentId: string;
 }
 
 export interface AgentRuntime {

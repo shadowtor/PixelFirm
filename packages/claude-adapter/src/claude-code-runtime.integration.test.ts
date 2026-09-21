@@ -191,6 +191,7 @@ describe.skipIf(process.env.CLAUDE_CODE_INTEGRATION_TEST !== "1")(
               repoPath: SYNCSMITH_REPO_PATH,
               worktreePath,
               prompt,
+              agentId: "demo-agent-1",
             });
 
             const deadline = Date.now() + 600_000;
@@ -289,6 +290,7 @@ describe.skipIf(process.env.CLAUDE_CODE_INTEGRATION_TEST !== "1")(
             repoPath: SYNCSMITH_REPO_PATH,
             worktreePath,
             prompt,
+            agentId: "demo-agent-1",
           });
 
           // Wait for the task to reach "running" — init message received,
@@ -357,6 +359,7 @@ describe.skipIf(process.env.CLAUDE_CODE_INTEGRATION_TEST !== "1")(
             repoPath: SYNCSMITH_REPO_PATH,
             worktreePath,
             prompt,
+            agentId: "demo-agent-1",
           });
 
           const runningDeadline = Date.now() + 60_000;

@@ -10,6 +10,10 @@ interface TaskRecord {
   sessionId?: string;
   status: AgentTaskStatus;
   worktreePath?: string;
+  // Phase 5 addition (HANDOFF-01): the owning agent for this task — set once
+  // in startTask from StartTaskInput.agentId, read by emitStatus/requestHandoff
+  // to thread identity through every event this runtime emits for the task.
+  agentId: string;
   controller?: AbortController;
   runPromise?: Promise<void>;
   handle?: Query;
@@ -60,10 +64,11 @@ export function createClaudeCodeRuntime(options: {
   const tasks = new Map<string, TaskRecord>();
 
   async function emitStatus(taskId: string, status: AgentTaskStatus): Promise<void> {
+    const sourceAgentId = tasks.get(taskId)?.agentId;
     await postEvent(
       options.controlPlaneUrl,
       options.token,
-      buildEnvelope(options.companyId, "task.status_changed", { taskId, status }, taskId),
+      buildEnvelope(options.companyId, "task.status_changed", { taskId, status }, taskId, undefined, sourceAgentId),
     );
   }
 
@@ -89,10 +94,31 @@ export function createClaudeCodeRuntime(options: {
   // touch the task's own AgentTaskStatus, since no second agent exists yet in
   // Phase 4 to actually receive control (CONTEXT.md domain boundary).
   async function requestHandoff(taskId: string, toAgentId: string): Promise<void> {
+    // Never fabricate a placeholder fromAgentId (Core Value) — matches
+    // getStatus's own unknown-taskId guard below.
+    const fromAgentId = tasks.get(taskId)?.agentId;
+    if (!fromAgentId) {
+      throw new Error(`ClaudeCodeRuntime.requestHandoff: task ${taskId} has no known agentId`);
+    }
     await postEvent(
       options.controlPlaneUrl,
       options.token,
-      buildEnvelope(options.companyId, "agent.handoff_requested", { taskId, toAgentId }, taskId),
+      buildEnvelope(options.companyId, "agent.handoff_requested", { taskId, fromAgentId, toAgentId }, taskId),
+    );
+  }
+
+  // Phase 5 addition (HANDOFF-01): completes a handoff. Mirrors
+  // requestHandoff's postEvent/buildEnvelope shape exactly. This
+  // single-session simulation has no separate receiving process yet (Phase
+  // 6+ multi-agent orchestration territory) — the role-change poll below
+  // fires this immediately after requestHandoff, since the observed role
+  // transition IS the completion signal here, not a genuinely asynchronous
+  // second event (T-05-08, accepted).
+  async function completeHandoff(taskId: string, toAgentId: string): Promise<void> {
+    await postEvent(
+      options.controlPlaneUrl,
+      options.token,
+      buildEnvelope(options.companyId, "agent.handoff_completed", { taskId, toAgentId }, taskId),
     );
   }
 
@@ -211,6 +237,9 @@ export function createClaudeCodeRuntime(options: {
               if (observed.role !== record.lastRole) {
                 record.lastRole = observed.role;
                 await requestHandoff(taskId, observed.role);
+                // Phase 5: fire completeHandoff back-to-back with
+                // requestHandoff — see completeHandoff's own comment.
+                await completeHandoff(taskId, observed.role);
               }
             } catch (err) {
               console.error(`ClaudeCodeRuntime.runQuery: role-poll failed for task ${taskId}`, err);
@@ -282,7 +311,7 @@ export function createClaudeCodeRuntime(options: {
 
   return {
     async startTask(input: StartTaskInput): Promise<void> {
-      tasks.set(input.taskId, { status: "starting", worktreePath: input.worktreePath });
+      tasks.set(input.taskId, { status: "starting", worktreePath: input.worktreePath, agentId: input.agentId });
       // Fire the "starting" event before the query() loop begins, not after.
       await emitStatus(input.taskId, "starting");
       await runQuery(input.taskId, input.prompt);

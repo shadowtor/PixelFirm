@@ -7,7 +7,14 @@ const ProjectCreatedPayload = z.object({ name: z.string() });
 const TaskCreatedPayload = z.object({ title: z.string() });
 const AgentOnlinePayload = z.object({ name: z.string(), teamId: z.string() });
 const SessionStartedPayload = z.object({ worktreeId: z.string() });
-const AgentHandoffRequestedPayload = z.object({ taskId: z.string(), toAgentId: z.string() });
+const AgentHandoffRequestedPayload = z.object({
+  taskId: z.string(),
+  fromAgentId: z.string(),
+  toAgentId: z.string(),
+});
+// Phase 5 addition (HANDOFF-01): the completion side of a handoff — emitted
+// once the receiving agent has actually accepted and started the task.
+const AgentHandoffCompletedPayload = z.object({ taskId: z.string(), toAgentId: z.string() });
 const ReviewStartedPayload = z.object({ taskId: z.string() });
 const CeoApprovalRequestedPayload = z.object({ taskId: z.string(), reason: z.string() });
 const GitCommitCreatedPayload = z.object({ sha: z.string(), message: z.string() });
@@ -95,6 +102,8 @@ export const CompanyEventSchema = z.discriminatedUnion("type", [
   // Phase 4 addition — union grows from 15 to 16, appended after the prior
   // 15, never reordered (see comment above).
   z.object({ ...BaseEnvelope.shape, type: z.literal("task.status_changed"), payload: TaskStatusChangedPayload }),
+  // Phase 5 addition — union grows from 16 to 17.
+  z.object({ ...BaseEnvelope.shape, type: z.literal("agent.handoff_completed"), payload: AgentHandoffCompletedPayload }),
 ]);
 
 export type CompanyEvent = z.infer<typeof CompanyEventSchema>;

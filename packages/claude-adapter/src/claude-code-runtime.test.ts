@@ -2,12 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({ query: vi.fn() }));
 vi.mock("./event-emitter.js", () => ({
-  buildEnvelope: vi.fn((companyId: string, type: string, payload: unknown, taskId: string) => ({
-    companyId,
-    type,
-    payload,
-    taskId,
-  })),
+  buildEnvelope: vi.fn(
+    (
+      companyId: string,
+      type: string,
+      payload: unknown,
+      taskId: string,
+      _visibility?: string,
+      sourceAgentId?: string,
+    ) => ({
+      companyId,
+      type,
+      payload,
+      taskId,
+      ...(sourceAgentId !== undefined ? { sourceAgentId } : {}),
+    }),
+  ),
   postEvent: vi.fn(async () => {}),
 }));
 vi.mock("gsd-adapter", () => ({ observeGsdState: vi.fn() }));
@@ -108,6 +118,7 @@ const startInput = {
   repoPath: "F:/Sidegigs/syncsmith",
   worktreePath: "F:/Sidegigs/syncsmith",
   prompt: "do the thing",
+  agentId: "test-agent-1",
 };
 
 function runtimeOptions() {
@@ -140,6 +151,14 @@ describe("ClaudeCodeRuntime.startTask / getStatus", () => {
     expect(statusChangedCalls).toHaveLength(2);
     expect(statusChangedCalls[0][2].payload.status).toBe("starting");
     expect(statusChangedCalls[1][2].payload.status).toBe("completed");
+    expect(statusChangedCalls[0][2].sourceAgentId).toBe("test-agent-1");
+    expect(statusChangedCalls[1][2].sourceAgentId).toBe("test-agent-1");
+  });
+
+  it("Test 2b: requestHandoff throws for a task with no known agentId, rather than fabricating one", async () => {
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    await expect(runtime.requestHandoff("never-started", "agent-2")).rejects.toThrow();
   });
 
   it("Test 3: an error result sets getStatus to failed and posts a failed event, never completed", async () => {
@@ -361,7 +380,17 @@ describe("ClaudeCodeRuntime.requestHandoff / gsd role-change poll", () => {
       (call) => call[2].type === "agent.handoff_requested",
     );
     expect(handoffCalls).toHaveLength(1);
-    expect(handoffCalls[0][2].payload).toEqual({ taskId: "task-1", toAgentId: "Engineering" });
+    expect(handoffCalls[0][2].payload).toEqual({
+      taskId: "task-1",
+      fromAgentId: "test-agent-1",
+      toAgentId: "Engineering",
+    });
+
+    const handoffCompletedCalls = (postEvent as unknown as Mock).mock.calls.filter(
+      (call) => call[2].type === "agent.handoff_completed",
+    );
+    expect(handoffCompletedCalls).toHaveLength(1);
+    expect(handoffCompletedCalls[0][2].payload).toEqual({ taskId: "task-1", toAgentId: "Engineering" });
 
     // clean up the still-hanging task (hangingQuery ignores interrupt(), so
     // cancelTask needs the grace period advanced before it settles).

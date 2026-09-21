@@ -15,6 +15,11 @@ export function buildEnvelope(
   payload: unknown,
   taskId: string,
   visibility: Visibility = "INTERNAL",
+  // Phase 5 addition (HANDOFF-01): the owning agent for this event, when
+  // known. Omitted from the returned envelope entirely (never `undefined`)
+  // when not provided — callers without a known agentId yet must not emit a
+  // fabricated placeholder.
+  sourceAgentId?: string,
 ) {
   return {
     id: randomUUID(),
@@ -25,6 +30,7 @@ export function buildEnvelope(
     visibility,
     type,
     payload,
+    ...(sourceAgentId !== undefined ? { sourceAgentId } : {}),
   };
 }
 
