@@ -365,17 +365,19 @@ z.object({ ...BaseEnvelope.shape, type: z.literal("agent.handoff_completed"), pa
 | A3 | Furniture/floor/wall/carpet/pet assets are treated as "MIT-covered by default, provenance undocumented" rather than confirmed original work by the fork's maintainer | Common Pitfalls → Pitfall 4 | If these assets were in fact adapted from an uncredited third-party pack, the repo's MIT licence would not actually cover them — same risk class as PITFALLS.md's Pitfall 1 describes generally; D-05 already scopes the fix (re-audit before commercial distribution) |
 | A4 | Recommending `apps/web` be stood up now (real, minimal) rather than a throwaway harness | Architecture Patterns → Pattern 4 | If Phase 6's actual dashboard needs a substantially different app shell, the minimal shell built here may need rework rather than pure extension — low risk, both are Vite+React and the fork's own structure supports this shape |
 
-## Open Questions
+## Open Questions (RESOLVED at planning time)
 
 1. **Should `fromAgentId` be a new payload field or should the existing (currently-unused) `sourceAgentId`/`destinationAgentId` envelope fields be populated instead for handoff events?**
    - What we know: `BaseEnvelope` already has both fields, optional, unused by any current producer.
    - What's unclear: Whether other event types should start using them too (broader consistency question beyond this phase's scope) or whether handoff-specific payload fields are cleaner.
    - Recommendation: Planner's call — either satisfies HANDOFF-01, but populating the existing envelope fields is slightly more consistent with the schema's own design intent (the fields exist precisely for this "who sent, who received" case) and avoids adding a payload field that duplicates envelope data.
+   - **RESOLVED:** 05-03-PLAN.md Task 1 adds `fromAgentId` as a new payload field on `agent.handoff_completed`; the envelope's `sourceAgentId`/`destinationAgentId` fields are left untouched.
 
 2. **Should the fork be vendored as a git submodule/subtree, or should specific files be copy-pasted into `packages/pixel-office`?**
    - What we know: PROJECT.md says "fork/extend rather than rebuilding... Preserve attribution." The fork is MIT-licensed and copy-paste with attribution is legally sufficient.
    - What's unclear: Whether the user wants to track upstream fork updates (submodule/subtree, higher merge-conflict overhead per PITFALLS.md's technical-debt table) or freeze at a point-in-time copy (simpler, per PITFALLS.md: "acceptable only if the fork is explicitly frozen").
    - Recommendation: Copy-paste the specific engine/sprite/layout modules with a clear attribution header pointing at the source commit SHA, treating it as explicitly frozen (matches PITFALLS.md's stated acceptable case) — confirm with the user during planning since it's a real tradeoff, not purely technical.
+   - **RESOLVED:** 05-01-PLAN.md Task 2 copy-pastes the specific engine/sprite/layout modules with a 3-line attribution header (source repo, commit SHA, licence), treated as explicitly frozen.
 
 ## Environment Availability
 
