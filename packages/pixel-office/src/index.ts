@@ -65,11 +65,27 @@ export function getTileMap(): TileType[][] {
   return tileMap;
 }
 
+// 05-10 (CR-02): desk rows need real glyph headroom, worked out from this
+// package's own geometry — 16x32 sprite frames, TILE_SIZE 16 grid pitch,
+// 11x13 glyphs, BUBBLE_ICON_GAP_PX 2. A character on interior row r draws at
+// y = 16r - 24 and its glyph occupies [16r - 39, 16r - 26].
+//
+/** First interior row whose glyph clears y = 0: 16r - 39 >= 0 needs r >= 3. */
+const DESK_ROW_START = 3;
+/** Smallest row pitch p where a glyph clears the sprite box of the desk row
+ *  behind it ([16(r-p) - 24, 16(r-p) + 8]): needs 16p > 47, i.e. p >= 3. */
+const DESK_ROW_PITCH = 3;
+
 function nextDeskPosition(): { col: number; row: number } {
   const slot = nextSlot++;
+  const row = DESK_ROW_START + DESK_ROW_PITCH * Math.floor(slot / interiorCols);
   return {
     col: 1 + (slot % interiorCols),
-    row: 1 + Math.floor(slot / interiorCols),
+    // ponytail: 54 desks on the default 20x11 grid (rows 3/6/9 x 18 cols);
+    // past that, agents stack on the last valid row rather than being seated
+    // inside the wall border. Upgrade path: a larger grid or a scrolling
+    // camera — neither exists yet and neither is needed below 54 agents.
+    row: Math.min(row, DEFAULT_ROWS - 2),
   };
 }
 

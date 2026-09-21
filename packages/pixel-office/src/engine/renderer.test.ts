@@ -91,10 +91,12 @@ describe("renderScene bubble/badge overlay draw pass", () => {
     expect(lowestBubbleY).toBeLessThanOrEqual(highestBaseY);
   });
 
-  it("keeps the bubble on-canvas for a top-row character instead of painting it above y=0", () => {
-    // Interior row 1 is where the default office seats its first 18 agents,
-    // and a 32px sprite anchored at y=24 already starts at drawY = -8 — an
-    // unclamped bubble would land entirely off the top of the canvas (05-08).
+  it("attaches a headroom-less character's bubble to its OWN sprite box, on-canvas, rather than a canvas row a neighbour owns", () => {
+    // Interior row 1 is no longer used by the default seating layout (05-10
+    // moved desks to rows 3/6/9) but is still a valid manual placement: a
+    // 32px sprite anchored at y=24 starts at drawY = -8, so there is no room
+    // above. The glyph is then attached to the owner's own sprite box —
+    // never relocated onto whoever occupies y=0 (CR-02).
     const ch = createCharacter("agent-1", 1, 1);
     ch.bubbleType = "blocked";
 

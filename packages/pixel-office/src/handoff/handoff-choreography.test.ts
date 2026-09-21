@@ -51,8 +51,8 @@ beforeEach(() => {
 
 describe("handleHandoffEvent — agent.handoff_requested", () => {
   it("sets the sending character's state to WALK with a non-empty path computed via the real forked findPath (not a stub)", () => {
-    upsertCharacterFromAgent("agent-a", AgentStatus.IDLE); // desk (1,1)
-    upsertCharacterFromAgent("agent-b", AgentStatus.IDLE); // desk (2,1)
+    upsertCharacterFromAgent("agent-a", AgentStatus.IDLE); // first desk of row DESK_ROW_START
+    upsertCharacterFromAgent("agent-b", AgentStatus.IDLE); // next desk along the same row
     const fromChar = getCharacter("agent-a")!;
     const toChar = getCharacter("agent-b")!;
 
@@ -61,7 +61,7 @@ describe("handleHandoffEvent — agent.handoff_requested", () => {
     expect(fromChar.state).toBe(CharacterState.WALK);
     expect(fromChar.path.length).toBeGreaterThan(0);
 
-    const realPath = findPath(1, 1, toChar.seatCol, toChar.seatRow, getTileMap(), new Set());
+    const realPath = findPath(fromChar.tileCol, fromChar.tileRow, toChar.seatCol, toChar.seatRow, getTileMap(), new Set());
     expect(fromChar.path).toEqual(realPath);
     expect(fromChar.path[0]).toBeDefined();
     expect(fromChar.path[fromChar.path.length - 1]).toEqual({ col: toChar.seatCol, row: toChar.seatRow });
