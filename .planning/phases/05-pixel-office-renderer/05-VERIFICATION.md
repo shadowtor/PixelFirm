@@ -1,19 +1,46 @@
 ---
 phase: 05-pixel-office-renderer
-verified: 2026-09-21T16:55:00Z
+verified: 2026-09-21T20:50:00Z
 status: gaps_found
-score: 1/4 must-haves verified
+score: 3/4 must-haves verified
 covered_files:
   - ".planning/REQUIREMENTS.md"
   - ".planning/ROADMAP.md"
+  - ".planning/phases/05-pixel-office-renderer/05-01-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-01-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-02-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-02-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-03-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-03-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-04-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-04-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-05-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-05-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-06-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-06-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-07-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-07-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-08-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-08-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-09-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-09-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-10-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-10-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-11-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-11-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-12-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-12-SUMMARY.md"
   - "apps/api/src/routes/events.ts"
   - "apps/api/src/routes/ws-browser.ts"
+  - "apps/api/src/ws/browser-connections.ts"
+  - "apps/web/src/App.test.tsx"
   - "apps/web/src/App.tsx"
+  - "apps/web/src/agent-event-mapper.test.ts"
   - "apps/web/src/agent-event-mapper.ts"
+  - "apps/web/src/ws-client.ts"
   - "packages/claude-adapter/src/claude-code-runtime.ts"
   - "packages/company-core/src/reducer.ts"
   - "packages/pixel-office/LICENSE"
-  - "packages/pixel-office/src/constants.ts"
   - "packages/pixel-office/src/engine/characters.ts"
   - "packages/pixel-office/src/engine/renderer.ts"
   - "packages/pixel-office/src/handoff/dialogue-templates.ts"
@@ -21,144 +48,154 @@ covered_files:
   - "packages/pixel-office/src/index.ts"
   - "packages/pixel-office/src/sprites/bubbleSprites.ts"
   - "packages/pixel-office/src/sprites/spriteData.ts"
+  - "packages/pixel-office/src/status/status-mapping.ts"
   - "references/ASSET-LICENSES.md"
   - "scripts/verify-pixel-office-live.mjs"
-covered_digest: "v1:sha256:4f86994943d7526a21cb9c98abe718740be65dc43d8c782c87d1799474c429b9"
+covered_digest: "v1:sha256:e1f73416d0a06332ac4760fded8b59697d509e22c2d222d2b77ccd09d13d9ee9"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
   previous_score: 1/4
   gaps_closed:
-    - "Invisible sprites — getCharacterSprites() now returns real decoded MetroCity pixel data (05-06); renderer paints genuine non-transparent pixels"
-    - "No bubble/icon render pass — renderScene now draws Character.bubbleType via resolveBubbleSprite (05-07); 12/12 BubbleType members resolve to real distinct-silhouette assets"
-    - "CR-01 (old) worker allow-list — WORKER_ALLOWED_EVENT_TYPES now carries all 7 producer-emitted types (events.ts:18-26)"
+    - "Criterion 1 live path — applyLiveEvent now runs company-core's own reduce over the live projection; OBSERVED live this session: 588 sprite pixels painted from relayed events on an already-open page, single navigation, empty canvas before the first event"
+    - "CR-02 (glyph on the wrong agent) — resolveBubbleY is owner-bound and desk rows are re-pitched to 3/6/9; independently reproduced clean this session (20 seated agents, blocked agent on row 6: zero glyph pixels inside the row-3 agent's sprite box, glyph strictly above its own)"
+    - "CR-04 (GSD role label written into record.agentId) — completeHandoff's ownership reassignment is gone; the role poll now emits gsd.phase_observed and no role string reaches any agent-id field"
+    - "WR-09 (ASSET-LICENSES.md over-claim) — §1 is split into the two evidence links it actually depends on, §3 accounts for all 12 bubble/badge assets, and the in-app footer no longer asserts a licence over the shipped bytes"
+    - "WR-08 (all agents pixel-identical) — partially closed: getCharacterSprites now takes and reads a per-agent hue; see gap 2 for the residual"
+    - "unrun-verify (WINDOWS #7) — scripts/verify-pixel-office-live.mjs EXECUTED BY THIS VERIFIER, twice in succession, both runs LIVE PROOF: PASS on all four truths"
+    - "OFFICE-02 attribution prohibition — now enforced by a wired, passing test (apps/web/src/App.test.tsx pins the complete footer sentence); footer additionally observed rendering in a real headless browser"
   gaps_remaining:
-    - "Criterion 1 is not true live — the client never re-derives AgentStatus from any event that actually flows; appearance changes only on page reload"
-    - "Criterion 3 cannot fire in production — the choreography's unknown-character guard plus role-name toAgentId means the real producer path animates nothing"
-  regressions:
-    - "CR-02 (new): the 05-08 bubble clamp paints a row-2 agent's status glyph entirely inside the row-1 agent's sprite — empirically reproduced this session. 05-07 shipped a correct overlay; 05-08's clamp broke whose agent it belongs to."
-    - "CR-04 (new): 05-05's completeHandoff ownership reassignment writes a GSD role string into record.agentId, so every later event's sourceAgentId is a role name, permanently, in an append-only table."
-    - "WR-01 -> CR-03 (new): 05-05 moved registerBrowserSocket after the snapshot send, converting a recoverable duplicate-delivery race into an unrecoverable silent event-drop window."
+    - "Handoff dialogue is generated and stored but never painted — no renderer path draws Character.bubbleText, so the office shows no dialogue at all during a handoff"
+    - "Two different agent ids can still render byte-identical characters (12 hue buckets, no name label); observed 7 distinct hues across 10 plausible agent ids"
+  regressions: []
 gaps:
-  - truth: "Agents are visible on screen on one floor, with sprites/animations matching their real current state (15 AgentStatus values)"
-    status: partial
-    reason: "Agents are now genuinely VISIBLE (05-06 wired real MetroCity pixel data; verified by direct read of spriteData.ts and by the live proof's non-zero sprite pixel count). But their appearance does not track real current state LIVE. apps/web/src/agent-event-mapper.ts:11 returns non-null only for agent.online and session.started; a repo-wide grep over apps/ packages/ scripts/ finds ZERO producers of either type (only schema, reducer, fixtures, tests, comments). The one status-bearing event that actually flows end-to-end is task.status_changed, and App.tsx's onEvent has no branch for it. A connected browser therefore receives the relayed event, the mapper returns null, and nothing changes: no pose, no bubble, no despawn. Agent appearance is frozen at whatever the connect-time snapshot fold produced until the user reloads the page. The 05-08 live proof concedes this in its own comment at line 374-376 and calls page.reload() before asserting the blocked bubble. Separately, CR-04 means the identity the office renders is wrong: claude-code-runtime.ts:249 calls completeHandoff(taskId, observed.role) and completeHandoff does record.agentId = toAgentId (:124), writing a GSD role label (\"Engineering\") into agentId, which becomes sourceAgentId on every later event and makes the reducer upsert a phantom role-named agent while the real agent is orphaned mid-task."
-    artifacts:
-      - path: "apps/web/src/agent-event-mapper.ts"
-        issue: "Maps only agent.online/session.started — two event types no producer emits and neither of which is in WORKER_ALLOWED_EVENT_TYPES. The type that actually flows (task.status_changed) has no branch, here or in App.tsx's onEvent."
-      - path: "packages/claude-adapter/src/claude-code-runtime.ts"
-        issue: "Line 249 passes observed.role (a GSD role label) as toAgentId; line 124 writes it into record.agentId, corrupting sourceAgentId on every subsequent event in an append-only table."
-      - path: "scripts/verify-pixel-office-live.mjs"
-        issue: "Both Truth 1 and Truth 2 are asserted through the snapshot/reload path, not the live relay — the artifact named 'live end-to-end proof' does not exercise the live status path for the state it proves."
-    missing:
-      - "A task.status_changed branch in deriveCharacterUpsertFromStatusEvent reusing company-core's deriveAgentStatus, so the live path and the fold path cannot drift"
-      - "A test asserting a relayed task.status_changed with status 'blocked' yields a BLOCKED upsert"
-      - "Removal of page.reload() from the live proof's Truth 2 once the above lands, so the proof proves the live path it names"
-      - "Separate role observation from agent identity at claude-code-runtime.ts:248-250 — a GSD role change is not a handoff to an agent named after the role"
-  - truth: "A blocked or waiting-for-input agent is visually distinguishable at a glance from an active agent"
-    status: failed
-    reason: "Empirically falsified this session with a throwaway vitest against the real renderScene and a recording ctx (two characters, same column, interior rows 1 and 2, only the row-2 one carrying bubbleType 'blocked'). Measured result: row-1 agent's sprite occupies x 49-63, y -5..23; the row-2 agent's blocked glyph paints at x 52-61, y 1..11 — ENTIRELY INSIDE the row-1 agent's sprite box, and it does not touch its own sprite at all (row-2 sprite starts at y=11, glyph ends at y=11). renderer.ts:109's Math.max(0, ...) clamp collapses both row 1 and row 2 to bubbleY=0, and row 2 sorts later by zY (renderer.ts:116) so it paints last, over row 1's already-drawn head. nextDeskPosition() (index.ts:68-74) with interiorCols = DEFAULT_COLS-2 = 18 puts the first 36 agents on exactly these two rows. The office therefore reports the WRONG agent as blocked for effectively every agent in a normal-sized company — worse than showing no indicator. Compounding it, createCharacter is always called as createCharacter(agentId, col, row) with palette=0/hueShift=0 (index.ts:98) and getCharacterSprites ignores paletteIndex entirely (spriteData.ts:37-47), so every agent renders pixel-identical with no name label — verified: two different agent ids produce byte-identical sprite data. A viewer cannot tell which desk is which agent even before the glyph lands on the wrong one."
-    artifacts:
-      - path: "packages/pixel-office/src/engine/renderer.ts"
-        issue: "Line 109 clamps bubbleY against canvas 0 rather than giving the glyph a position attached to its owner; rows 1 and 2 collapse to the same y and the later-sorted row-2 glyph paints over the row-1 agent. bubbleX is not clamped at all, so an edge-column agent's glyph runs off the side."
-      - path: "packages/pixel-office/src/engine/renderer.test.ts"
-        issue: "The 'strictly above its own base sprite' invariant test only ever exercises row 3; the clamp test only checks y >= 0, never whose sprite the glyph lands on. The defect is invisible to a green suite."
-      - path: "packages/pixel-office/src/sprites/spriteData.ts"
-        issue: "paletteIndex is accepted and folded into the cache key but never read; all agents render identical pixels (WR-08)."
-    missing:
-      - "Draw the glyph inside the character's own sprite box when there is no room above it, instead of clamping it into the row above — and clamp bubbleX against the map bounds"
-      - "A renderer test with two characters in the same column, rows 1 and 2, asserting no bubble-palette pixel lands inside the row-1 character's painted extent"
-      - "A top gutter row in buildDefaultTileMap so interior row 1 is never a desk (the durable fix)"
-      - "A per-agent hue (or a name label) so two desks are tellable apart at all"
   - truth: "When one agent hands off work to another, the office shows the first agent walking over, a task icon appearing, and the second agent accepting it and moving to work — using deterministic, template-based dialogue, never LLM-generated at render time"
     status: partial
-    reason: "The deterministic-dialogue half is genuinely VERIFIED: dialogue-templates.ts is a pure template map, its test suite grep-proves the absence of any forbidden LLM/network substring in both dialogue-templates.ts and handoff-choreography.ts, and the FSM correctly refuses to show acceptance before a real agent.handoff_completed arrives (test-enforced, handoff-choreography.test.ts:70, :98, :131). Handoff events also genuinely ride the LIVE relay (they are in WORKER_ALLOWED_EVENT_TYPES, and App.tsx:50-52 routes both halves to handleHandoffEvent) — this is the one part of the phase that is live rather than reload-bound. But the choreography cannot fire on the real producer path. handoff-choreography.ts:48 guards `if (!fromChar || !toChar) return;` and NOTHING creates a Character from a live event (see truth 1 — the live mapper handles only never-emitted types). So in production both getCharacter() lookups return undefined and the handler silently no-ops. CR-04 makes it strictly worse: the real toAgentId is a GSD role string, so even after a reload the office seats a phantom desk named 'Engineering' in a static CODING pose rather than showing any walk. The 05-08 live proof passes Truth 3 only because it pre-seeds BOTH synthetic agents (statusChanged(SENDER,...) and statusChanged(RECEIVER,...) at lines 353-354) through the snapshot fold on first page load before posting the handoff pair — it never exercises ClaudeCodeRuntime's actual emission path."
+    reason: "The walk/icon/accept half is genuinely VERIFIED and was OBSERVED live end to end this session (live proof TRUTH 3, twice: 36 handoff-icon pixels appeared during the walk and cleared to 0 on agent.handoff_completed, with no navigation). The dialogue half is not rendered at all. resolveHandoffDialogue() is pure, deterministic and template-only (verified: zero fetch/http/LLM substrings in either handoff file), and handoff-choreography.ts writes its output to Character.bubbleText at :77 and :103 — but a repo-wide grep shows bubbleText is read by NOTHING. renderScene (engine/renderer.ts:117-135) draws the base sprite and the bubble GLYPH only; there is no text draw call anywhere in packages/pixel-office. 05-CONTEXT.md D-04 states the dialogue/text is 'shown during the sequence'; it is computed and discarded. Separately and NOT counted against this truth: no in-repo producer emits a handoff pair (user decision `delete-trigger` at 05-11's checkpoint, recorded in deferred-items.md) — that is an accepted scope boundary, and deleting the fabricated role-change trigger was the correct call under the phase's own Core Value. But see the advisory: ROADMAP Phase 6 is CEO Dashboard & Approval Workflow and neither its goal, its success criteria nor its requirements (CEO-01..05) mention multi-agent orchestration, so the deferral currently has no owning phase."
     artifacts:
+      - path: "packages/pixel-office/src/engine/renderer.ts"
+        issue: "No text draw pass. drawSpriteData is the only draw primitive; Character.bubbleText is never read."
       - path: "packages/pixel-office/src/handoff/handoff-choreography.ts"
-        issue: "Line 48's unknown-character guard is correct defensively, but combined with the absent live character-creation path it means the production handoff path no-ops silently rather than animating."
-      - path: "packages/claude-adapter/src/claude-code-runtime.ts"
-        issue: "Lines 248-250 emit requestHandoff/completeHandoff with observed.role as toAgentId, so the receiving 'agent' is a workflow role name that will never have a desk."
-      - path: "scripts/verify-pixel-office-live.mjs"
-        issue: "Truth 3 pre-seeds both participants with synthetic ids via the snapshot path; it does not prove the real producer's handoff renders."
+        issue: "Lines 77 and 103 write dialogue into a field nothing renders — the HANDOFF-02 template pipeline terminates in dead data."
+      - path: "packages/pixel-office/src/handoff/dialogue-templates.ts"
+        issue: "No length cap on taskTitle (05-10's backstop truth asked for one). Currently inert because the text is never painted; it becomes live the moment a text pass lands."
     missing:
-      - "Live character creation (the truth-1 fix) so getCharacter() can resolve both handoff participants without a reload"
-      - "A real agent id for toAgentId — resolve the observed GSD role through a role-to-agent registry, or stop emitting handoff events for role changes and emit gsd.phase_observed instead (the reducer already consumes it)"
-      - "An end-to-end check that drives ClaudeCodeRuntime's own emission path rather than hand-posted synthetic events"
+      - "A text draw pass in renderScene for Character.bubbleText (owner-bound, same ownership discipline resolveBubbleY now enforces for the glyph), or an explicit recorded decision that dialogue stays non-visual this milestone"
+      - "A truncation/cap on taskTitle in resolveHandoffDialogue, landed together with the text pass"
+      - "A renderer test asserting a character with bubbleText set produces text draw calls inside its own column"
+  - truth: "Two different agent ids produce different character pixel data, so two desks are tellable apart (05-10 must_have)"
+    status: partial
+    reason: "Measured, not inferred. hueForAgentId (index.ts:96-104) hashes into 12 buckets, so collisions begin at the SECOND agent, not the thirteenth. Ran the real upsert path against ten plausible ids: {alpha:330, beta:330, agent-1:120, agent-2:30, claude-1:270, engineer:0, qa:90, worker-a:270, worker-b:0, ceo:60} — 7 distinct hues for 10 agents, and `alpha`/`beta` produce byte-identical sprite data. No name label is drawn (Character.name is set by upsertCharacterFromAgent but never rendered). This is a large improvement on the prior state (every agent identical) but the truth as written is false for ~1 pair in 12, and deferred-items.md's 'Accepted ceilings (05-10)' table states the collision onset incorrectly ('two agents collide on a hue once more than twelve are seated'), which understates it in the audit trail."
+    artifacts:
+      - path: "packages/pixel-office/src/index.ts"
+        issue: "HUE_BUCKETS = 12 with no collision avoidance; the ponytail comment and deferred-items.md both describe collisions as starting past 12 seated agents, which is not how a hash-into-buckets scheme behaves."
+      - path: ".planning/phases/05-pixel-office-renderer/deferred-items.md"
+        issue: "Accepted-ceiling record misstates when the ceiling is reached."
+    missing:
+      - "Either an on-canvas name label (05-UI-SPEC.md already reserves the monospace/11px scale) or seat-ordinal-based hue assignment, which collides only past 12 SEATED agents as the record claims"
+      - "Correct the deferred-items.md ceiling text to 'collisions are possible from the second agent (hash into 12 buckets)'"
+  - truth: "The office seats agents 1:1 with real projection state, with no fabricated or misrepresented desks (05-09 must_have: zero, one, or many characters driven 1:1 by real projection state)"
+    status: partial
+    reason: "nextSlot (index.ts:107) is monotonic and never reclaimed, while upsertCharacterFromAgent DELETES the character on AgentStatus.OFFLINE (:134). An agent that goes offline and returns is seated at a new desk and its old slot is burned permanently. 05-10's row re-pitch (required to fix CR-02) cut capacity from 162 desks to 54, so the burn budget is now three times smaller. Past slot 54, Math.min(row, DEFAULT_ROWS - 2) (:115) clamps every further agent onto interior row 9 at column 1 + (slot % 18) — two agents are then drawn stacked on the same tile with no indication, which is the office showing one figure where the company has two. A worker that restarts a few dozen times reaches this with only a handful of live agents. index.test.ts's overflow case asserts only that the clamp stays inside the wall border, never that two characters do not share a tile."
+    artifacts:
+      - path: "packages/pixel-office/src/index.ts"
+        issue: "Lines 106-117 and 126-143: monotonic slot allocation plus delete-on-offline; the ponytail comment names the 54-desk ceiling but not the churn path that reaches it with three real agents."
+    missing:
+      - "Reclaim the slot on despawn (push it to a free list before characters.delete, pop it in nextDeskPosition; _resetForTests must clear the list)"
+      - "A test asserting no two characters share (seatCol, seatRow) after N offline/online cycles"
+  - truth: "A superseded Claude Code invocation cannot clear the in-flight flag belonging to the invocation that replaced it (05-11's CR-03 fix)"
+    status: failed
+    reason: "Confirmed by source read at two sites. runQuery's finally block executes `record.inFlight = false` unconditionally (claude-code-runtime.ts:~299), but the flag is a single shared field on the task record while its writer is per-invocation. attemptGracefulStop returns false by TIMING OUT after GRACEFUL_TIMEOUT_MS — it does not wait for the abort to drain — so invocation A's stream can throw after B has already claimed the record, and A's finally then clears B's flag. A third sendMessage/resumeTask then sees inFlight === false, skips the stop branch, and starts a third concurrent query(), orphaning B's controller, watchdog and role-poll interval with no path for pauseTask/cancelTask to reach it. That is verbatim the defect the CR-03 comment at :121-128 says the flag prevents. No test issues a second runQuery against a hanging query, so the suite cannot see it."
+    artifacts:
+      - path: "packages/claude-adapter/src/claude-code-runtime.ts"
+        issue: "Lines ~130-138 and ~290-300: unconditional `record.inFlight = false` in a per-invocation finally over a shared record field."
+    missing:
+      - "Per-invocation ownership: store an invocation token on the record and guard both the finally write and the watchdog's `record.status = \"blocked\"` write with `if (record.currentRun === invocation)`"
+      - "A test that calls runQuery twice against a hanging query and asserts only one query() is ever concurrently live"
 deferred: []
 advisory:
-  - finding: "CR-03 — /ws/browser registers the socket after the snapshot send (ws-browser.ts:34-39), so an event committed during the awaited SELECT is in neither the snapshot nor the relay and is lost for the connection's lifetime; ws-client.ts has no resync."
+  - finding: "CR-01 in 05-REVIEW.md (duplicate delivery strands a character at another agent's desk) does not reproduce against the current code. POST /events inserts with onConflictDoNothing on events.id and calls broadcastToBrowsers only in the non-duplicate branch (events.ts:63-86), so each event id broadcasts exactly once; broadcastToBrowsers either queues OR sends per socket, never both. The snapshot/relay overlap therefore causes a re-REDUCE of an event already folded into the snapshot, not a second delivery to the handoff FSM — and company-core's reduce was measured value-idempotent this session for all five relayed types (task.created, task.status_changed, agent.handoff_requested, agent.handoff_completed, gsd.phase_observed). The residual concern is real but latent: handoff-choreography.ts IS non-idempotent (a re-delivered agent.handoff_requested overwrites the record and re-issues the walk), and neither the client nor the flush boundary dedups by event id, so any future path that re-delivers an event turns a latent hazard into the fabricated visual state the Core Value forbids."
     category: architectural
-    reason: "New scope relative to the carried-forward gap set (WR-01's fix introduced it in 05-05). Confirmed by source read, but reproducing the drop needs a gated db.select spy that does not exist yet. Fix: register with a buffering sink first, send snapshot, then promote and flush."
+    reason: "Downgraded from the review's critical on deterministic evidence (id-keyed broadcast dedup + measured reducer idempotence). Cheap hardening: queue the event id alongside the payload in browser-connections.ts and drop, at flush, anything the snapshot already contained."
+    evidence_status: "reducer idempotence measured this session; duplicate-delivery path falsified by source read of events.ts + browser-connections.ts"
+  - finding: "WR-01 in 05-REVIEW.md — ws-browser.ts registers the socket at :36 but attaches close/error handlers at :55-60, after the awaited SELECT. A client that drops during the snapshot window (React StrictMode double-mount does this on every dev page load) fires close with no listener attached, so the entry is never removed from browserSockets and, while still buffering, accumulates a queue that is never flushed or freed."
+    category: architectural
+    reason: "Confirmed by source read; reproducing the leak needs a gated db.select spy that does not exist. Fix is a three-line move of the handlers above the first await."
     evidence_status: "none provided"
-  - finding: "WR-01 — a worker credential can author state for any agent, any company, any visibility. sourceAgentId/companyId/visibility are taken verbatim from the request body (events.ts:47-62); only the heartbeat path keys on the authenticated request.workerId. Widening the allow-list in 05-05 widened the blast radius."
-    category: security
-    reason: "Subject authorization, not event-type authorization, is the gap. Needs workers to carry agentId/companyId columns. If that is Phase 6/7 work it should be recorded as an accepted threat with the same rigour as T-05-03 rather than left implied."
+  - finding: "WR-08 in 05-REVIEW.md — ws-client.ts:27-31 hands the snapshot to onSnapshot as a bare `state as ProjectionState` while relayed events are re-validated with CompanyEventSchema. Since 05-09 that snapshot seeds projectionRef and becomes the `prev` of every later reduce; a snapshot missing `agents` throws inside the WebSocket message listener, leaving the office frozen with the socket still open and therefore NO disconnect banner — the exact silent-freeze mode 05-09's own must_haves call out."
+    category: architectural
+    reason: "Confirmed by source read. Server-produced today, so not currently reachable; a one-line shape guard before onSnapshot closes it."
     evidence_status: "none provided"
-  - finding: "WR-09 — references/ASSET-LICENSES.md §1 is titled 'Confirmed CC0' for the MetroCity pack on the sole evidence of a credit line in the fork's README, while §4 of the same document states the rule 'never silently upgraded to confirmed'. App.tsx:86-87 now asserts that CC0 claim to every end user, and the repo redistributes a decoded derivative (character-metrocity.json). The 12 bubble/badge JSON assets appear nowhere in the document while §3 asserts 'None' for provenance-undocumented assets in use."
+  - finding: "The handoff production trigger is deferred to 'Phase 6's multi-agent orchestration' (deferred-items.md), but ROADMAP Phase 6 is 'CEO Dashboard & Approval Workflow' — neither its goal, its four success criteria nor its requirements (CEO-01..CEO-05) mention multi-agent orchestration or a role-to-agent registry. HANDOFF-01's production half therefore currently has no owning phase in the roadmap."
     category: other
-    reason: "Does not break criterion 4 (attribution is preserved and visible), but the audit over-claims. Resolving requires a human to locate a primary CC0 source by URL. Routed to human verification below."
+    reason: "Not a phase-5 gap (the decision and its consequence were stated and accepted before it was taken). Raised so the deferral is placed into a real phase rather than an implied one."
+    evidence_status: "none provided"
+  - finding: "T-05-11-WR01 (a worker credential can author events for any agent, company and visibility) remains an accepted threat with an acceptance expiry tied to the first non-INTERNAL consumer. Unchanged by this round."
+    category: security
+    reason: "Recorded in deferred-items.md with a fix and an expiry; Phase 6/7 own the authorization model."
     evidence_status: "none provided"
 unverified_prohibitions:
-  - statement: "MUST NOT preserve attribution only in a planning document while the deployed apps/web application itself shows no visible credit"
+  - statement: "MUST NOT present provenance-undocumented assets as 'confirmed' licensed in references/ASSET-LICENSES.md"
     requirement_id: OFFICE-02
     verification: test
-    disposition: "unverified — flagged. The footer IS present (App.tsx:73-88, confirmed by direct read), but NO wired test enforces it; apps/web's suite is 2 files (agent-event-mapper, ws-client) and neither renders App. Fail-closed per the test-tier rule: a test-tier prohibition reaching verify with no enforcement is never green."
-  - statement: "MUST NOT present provenance-undocumented assets (furniture/floor/wall/carpet/pet) as 'confirmed' licensed in references/ASSET-LICENSES.md"
-    requirement_id: OFFICE-02
-    verification: test
-    disposition: "unverified — flagged. Literally satisfied for its named subjects (§3 says 'None', §4 defers all five packs). But no test enforces it, and the sibling over-claim on the MetroCity pack (WR-09) shows the discipline is not mechanically held."
+    disposition: "unverified — flagged. Substantively SATISFIED and materially improved this round: §1 no longer says 'Confirmed CC0' (grep: zero '## 1.*Confirmed' matches), it cites the publisher's own itch.io listing for the pack licence and names the shipped-file identity link as open; §3 now accounts for all 12 bubble/badge assets as repo originals with first-commit evidence. But no wired test enforces the rule, so per the test-tier fail-closed default this is flagged, not green."
   - statement: "MUST NOT rely solely on colour/hue to distinguish blocked/waiting from active — the distinction must remain legible in a grayscale/colourblind-simulated view"
     requirement_id: OFFICE-03
     verification: judgment
-    disposition: "NON-AUTHORITATIVE LLM-judge verdict: the 12 glyphs are distinct-silhouette and test-asserted as such, so the shape-not-colour rule is honoured in the asset data. Moot in practice while CR-02 paints the glyph on the wrong agent. unverified-prohibition — human review recommended."
+    disposition: "NON-AUTHORITATIVE LLM-judge verdict: strongly supported by the asset data — bubbleSprites.test.ts enforces that all 12 glyphs have a pixel pattern no other glyph repeats and that completed's checkmark is not reused for waiting, and blocked/waiting_for_agent/waiting_for_ceo additionally freeze the animation (a motion cue, not a colour cue). unverified-prohibition — human review recommended."
   - statement: "MUST NOT ship a state-signal overlay that is technically data-correct and mechanically confirmed to paint SOME pixels, but is practically illegible at typical stream/viewing scale"
     requirement_id: OFFICE-03
     verification: judgment
-    disposition: "NON-AUTHORITATIVE LLM-judge verdict: FAILS on a stronger ground than legibility — the glyph is not merely hard to read, it is attached to the wrong agent for the first 36 desks (CR-02, empirically reproduced). unverified-prohibition — human review recommended."
+    disposition: "NON-AUTHORITATIVE LLM-judge verdict: no longer moot — the prior round's 'it is on the wrong agent' objection is now falsified (live TRUTH 4 plus an independent renderScene run). What remains is genuine legibility: an 11x13 glyph over a 16x32 character on a 320x176 canvas, scaled to a stream layout. Measured 68 blocked-glyph pixels painted. unverified-prohibition — human review recommended."
   - statement: "MUST NOT treat TaskState.title as inherently safe to interpolate into rendered handoff dialogue/bubble text without limit or filtering"
     requirement_id: HANDOFF-02
     verification: null
-    disposition: "carried forward as explicitly unresolved by 05-05-PLAN.md, scoped to Phase 7 (SAFE-01/02). Legitimately out of phase boundary — flagged forward, not a phase-05 gap."
+    disposition: "carried forward as explicitly unresolved, scoped to Phase 7 (SAFE-01/02). Note it is currently inert for a second reason: the dialogue text is never rendered (gap 1). It must be resolved together with, not after, the text draw pass."
   - statement: "MUST NOT credit/attribute an asset pack in-app or in ASSET-LICENSES.md that the shipped renderer does not actually load"
     requirement_id: OFFICE-02
     verification: judgment
-    disposition: "NON-AUTHORITATIVE LLM-judge verdict: RESOLVED — 05-06 decodes the real pinned-commit char_0.png into character-metrocity.json and spriteData.ts:22 imports it, so the credit now tracks what is drawn. Both 05-05 and 05-06 requested a human visual spot-check that the decoded frames genuinely resemble the upstream art; that check has not been performed. unverified-prohibition — human review recommended."
+    disposition: "NON-AUTHORITATIVE LLM-judge verdict: RESOLVED in both directions this round — spriteData.ts:22 loads the decoded MetroCity data the footer credits, and §3 now lists the 12 bubble/badge assets that were previously credited nowhere. The open half is identity, not credit: that the fork's char_0.png IS the CC0 pack's art rests on a README credit line. Routed to human verification item 3."
 human_verification:
-  - test: "Open the office, leave the page open, and post a task.status_changed event moving a real agent to 'blocked' WITHOUT reloading. Watch the canvas."
-    expected: "The agent's pose freezes and a blocked glyph appears above that agent, live, with no navigation."
-    why_human: "This is the phase's headline claim and the one the automated proof routes around with page.reload(). Source analysis says it cannot work today; a human watching an un-reloaded page settles it beyond dispute."
-  - test: "Seat at least 20 agents (so rows 1 and 2 both fill), put ONLY an agent on interior row 2 into 'blocked', and look at which figure the glyph sits on."
-    expected: "The glyph sits on the blocked row-2 agent, not on the agent in front of it."
-    why_human: "Reproduced mechanically this session (glyph lands entirely inside the row-1 sprite), but 'which agent does a viewer think is blocked' is the actual user-facing bar and deserves one human look before the fix is scoped."
-  - test: "Locate a primary CC0 source for the MetroCity character pack (itch.io / OpenGameArt page, or a LICENSE inside the upstream asset pack) and cite it by URL in references/ASSET-LICENSES.md §1."
-    expected: "Either a citable primary source is found and §1's 'Confirmed CC0' stands, or the pack moves to a 'credited, licence not independently verified' tier and App.tsx's footer softens to match."
-    why_human: "Licence provenance cannot be established by reading this repo — it requires visiting the upstream asset source."
-  - test: "Visually compare a rendered character against the fork's own MetroCity art (webview-ui/public/assets/characters/char_0.png at the pinned commit)."
-    expected: "The rendered figure recognisably matches the upstream sprite — not a mis-decoded, mirrored, or corrupted frame."
-    why_human: "Requested explicitly by both 05-05 and 05-06's OFFICE-02 prohibitions; 'looks like the source art' is not reducible to a pixel-count assertion."
+  - test: "Open the office at the scale you will actually stream at (OBS source size, not a 320x176 native canvas) with an agent in `blocked`, `waiting_for_ceo` and `waiting_for_agent`, and glance at it the way a viewer would — one second, no zoom."
+    expected: "You can tell at a glance which agent is stuck, and which KIND of stuck, without reading anything."
+    why_human: "Legibility at real viewing scale is a judgment call. Mechanically the glyph is proven present (68 px), owner-correct, and distinct-silhouette; none of that settles whether a viewer reads it."
+  - test: "Take the same view through a grayscale filter and a deuteranopia/protanopia simulator."
+    expected: "Blocked/waiting still read as blocked/waiting from the glyph shape and the frozen animation, with no reliance on hue."
+    why_human: "Silhouette distinctness is test-enforced and identity hue is separated from state by construction, but colourblind survivability of the composited frame is a look-at-it check."
+  - test: "Open packages/pixel-office/src/sprites/character-metrocity.json's rendered output side by side with the fork's webview-ui/public/assets/characters/char_0.png at pinned commit 3537e140, and with the MetroCity pack art on the publisher's itch.io page."
+    expected: "The rendered figure recognisably matches the upstream sprite — confirming ASSET-LICENSES.md §1's open 'link 2' (that the file we ship is that CC0 pack's art), or showing it does not."
+    why_human: "Provenance identity cannot be established from inside this repo; it needs the upstream asset source. This is the only thing standing between §1 and a clean confirmed tier."
+  - test: "Seat 13+ agents and look for two characters wearing the same colour with no way to tell them apart (see gap 2 — `alpha` and `beta` already collide)."
+    expected: "Decide whether colour-only identity with a 1-in-12 collision rate is acceptable for this milestone, or whether name labels are needed now rather than later."
+    why_human: "Whether a collision matters depends on how many agents you actually run and whether the stream needs per-agent identification — a product call, not a code call."
 ---
 
 # Phase 5: Pixel Office Renderer Verification Report
 
 **Phase Goal:** The forked Pixel Agents office renders real company state on screen as a pure consumer of projections — never a fabricated animation.
-**Verified:** 2026-09-21T16:55:00Z
+**Verified:** 2026-09-21T20:50:00Z
 **Status:** gaps_found
-**Re-verification:** Yes — after gap-closure plans 05-05 … 05-08
+**Re-verification:** Yes — after gap-closure plans 05-09 … 05-12
 
-## The Specific Question: is criterion 1 true live, or only after a reload?
+## The headline: the live proof was run, and it passes
 
-**Only after a reload.** This is settled by source, not inference:
+The prior verification's central finding was that criterion 1 was true only after a page reload, and that the artifact named "live end-to-end proof" routed around the path it claimed to prove. Both are now fixed, and — unlike every previous round — **this verifier executed the proof rather than reading it**.
 
-1. `apps/web/src/agent-event-mapper.ts:11` returns non-null for exactly two event types: `agent.online` and `session.started`.
-2. A repo-wide grep over `apps/ packages/ scripts/` for those two types hits **only** the schema definition, the reducer, `company-core`'s fixtures, three test files, two comments, and the live-proof script's own explanatory header. **No producer emits either one.** Neither is in `WORKER_ALLOWED_EVENT_TYPES`, so even a hypothetical producer would be 403'd.
-3. The only status-bearing event that actually flows is `task.status_changed`. `App.tsx`'s `onEvent` (lines 41-53) has no branch for it — it calls the mapper (returns `null`), checks `task.created`, and checks the two handoff types. Nothing else.
-4. Therefore a connected browser receives the relayed status event and does nothing with it. Agent appearance is fixed at the connect-time snapshot fold until the page is reloaded.
-5. The phase's own live proof confirms this in a comment it wrote itself (`verify-pixel-office-live.mjs:373-376`): *"A live-connected client does not currently re-derive AgentStatus from task.status_changed (documented gap …), so reload to take a fresh snapshot."* It then calls `page.reload()` before asserting Truth 2. Truth 1 is likewise asserted against a first page load, i.e. also the snapshot path.
+`node scripts/verify-pixel-office-live.mjs`, run twice in succession from a clean container volume, both times:
 
-The live relay is real and works — it is exercised end-to-end for the **handoff** event pair (Truth 3), which is why the phase is not wholly reload-bound. But agent *state* rendering, which is criteria 1 and 2, runs entirely through the fold-on-navigate path.
+```
+[live-proof] office open: canvas 320x176 (scale 1) — sprite=0
+[live-proof] TRUTH 1 PASS — 588 sprite pixels painted from live events on an already-open page
+[live-proof] TRUTH 2 PASS — 68 blocked-bubble pixels, no navigation between the event and the scan
+[live-proof] TRUTH 3 PASS — handoff task icon appeared during the walk and cleared on completion
+[live-proof] TRUTH 4 PASS — 68 blocked-glyph px at y 58..67, inside live-proof-seat-18's own headroom (56 < y < 72) and in no other agent's
+LIVE PROOF: PASS
+```
 
-Against the phase goal — "renders real company state on screen as a pure consumer of projections" — a renderer that requires a human to press F5 to see a state change is not rendering company state. **The goal is not met.**
+The canvas is empty at `page.goto` (`sprite=0`) and every asserted character is created by an event that arrives over the relay while the page stays open. Real Postgres, real API dev server, real Vite dev server, real worker credential, real `POST /events`, real `/ws/browser`, real headless Chromium, real `getImageData`. Two consecutive runs producing the same verdict also closes the second half of WINDOWS ledger entry #7 ("unrun-verify"), which asked for exactly that. No dev servers leaked (checked: no LISTENING sockets on 3000/5177 afterwards).
+
+That settles criteria 1 and 2 on evidence rather than argument, and settles the rendering half of criterion 3.
 
 ## Goal Achievement
 
@@ -166,136 +203,154 @@ Against the phase goal — "renders real company state on screen as a pure consu
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | Agents visible on one floor, sprites/animations matching real current state (15 AgentStatus values) | ✗ FAILED (partial) | **Visibility: closed.** 05-06 wired real decoded MetroCity pixel data into `getCharacterSprites` (`spriteData.ts:22,42-67`) — agents genuinely paint. **State fidelity: broken.** Live path is dead (see section above). Identity is also wrong: `claude-code-runtime.ts:249` passes `observed.role` to `completeHandoff`, which writes it to `record.agentId` (`:124`), so a GSD role string becomes `sourceAgentId` on every later event and the reducer upserts a phantom role-named agent into an append-only table while the real agent is orphaned. |
-| 2 | Blocked/waiting agent visually distinguishable at a glance from an active agent | ✗ FAILED | **Empirically reproduced this session.** Ran the real `renderScene` with a recording ctx: two characters, same column, interior rows 1 and 2, only row 2 blocked. Row-1 sprite = x 49-63, y −5..23. Row-2's blocked glyph = x 52-61, y 1..11 — **entirely inside the row-1 agent**, and not touching its own sprite at all. `renderer.ts:109`'s `Math.max(0, …)` collapses rows 1-2 to `bubbleY=0`; row 2 sorts later (`:116`) so it paints last, over row 1's head. `nextDeskPosition()` puts the first 36 agents on exactly those rows. The office reports the **wrong agent** as blocked. Also verified: two different agent ids produce byte-identical sprite data (`paletteIndex` accepted but never read, `spriteData.ts:37-47`; `createCharacter(agentId, col, row)` always defaults, `index.ts:98`) with no name label — desks are not tellable apart at all. |
-| 3 | Handoff shows walk / task icon / acceptance, with deterministic template dialogue | ✗ FAILED (partial) | **Dialogue half verified.** Pure template map; test-proven absence of any LLM/network substring in both handoff files; acceptance is test-gated on a real `agent.handoff_completed` (`handoff-choreography.test.ts:70,:98,:131`). Handoff events genuinely ride the live relay. **Choreography half cannot fire in production.** `handoff-choreography.ts:48` guards `if (!fromChar || !toChar) return;` and nothing creates a Character from a live event — so both lookups return `undefined` and the handler no-ops. CR-04 compounds it: the real `toAgentId` is a role string that will never have a desk. The 05-08 proof passes only by pre-seeding both synthetic agents via the snapshot on first load (`:353-354`) before posting the handoff. |
-| 4 | Pixel Agents attribution and licence notices remain visible and preserved | ✓ VERIFIED | `packages/pixel-office/LICENSE` reproduces the MIT text verbatim with source URL and pinned commit `3537e140…`; every forked file under `src/` carries a 3-line attribution header (spot-checked across 10 files); `App.tsx:73-88` renders an always-on fixed footer crediting `pixel-agents-hq/pixel-agents (MIT)` and the MetroCity pack, not gated behind a menu; `references/ASSET-LICENSES.md` exists with all four sections. ⚠️ See WR-09 in Advisory — §1's "Confirmed CC0" over-claims on README-credit evidence, and the footer now asserts that claim to end users. Attribution is preserved; the licence *audit* over-claims. |
+| 1 | Agents visible on one floor, sprites/animations matching real current state (15 AgentStatus values) | ✓ VERIFIED | **Live, observed.** 588 sprite px painted from relayed `task.status_changed` events on an already-open page, single navigation, empty canvas beforehand. The live path IS the fold path: `applyLiveEvent` (agent-event-mapper.ts:34) calls company-core's own `reduce` and diffs by reference, with an anti-drift test pinning `applyLiveEvent`-threaded state equal to `fold()` over the same array. `STATUS_MAP` is exhaustive 15/15 with no fallback branch; OFFLINE despawns. `apps/web` 18 tests, `pixel-office` 63 tests, all green (run this session). |
+| 2 | Blocked/waiting agent visually distinguishable at a glance from an active agent | ✓ VERIFIED (mechanically) | **CR-02 is closed, confirmed twice independently.** Live TRUTH 4: the blocked glyph sits at y 58..67, inside its own agent's headroom band (56 < y < 72) and in no other agent's. My own throwaway run against the real `renderScene` with 20 seated agents (rows 3 and 6, same column, only the row-6 agent blocked) measured **zero** glyph pixels inside the row-3 agent's sprite box and the whole glyph strictly above its own. `resolveBubbleY` is owner-bound with a comment explaining exactly why the old canvas clamp was wrong. Frozen animation on blocked/waiting_for_agent/waiting_for_ceo, 12 distinct-silhouette glyphs (test-enforced). ⚠️ "At a glance" at stream scale and under grayscale stays judgment-tier — human items 1 and 2. |
+| 3 | Handoff shows walk / task icon / acceptance, with deterministic template dialogue | ✗ PARTIAL | **Walk/icon/accept: VERIFIED live** (TRUTH 3, twice — 36 handoff-icon px appear during the walk, clear to 0 on `agent.handoff_completed`, no navigation), plus cross-package tests that create both participants from live events alone and assert the sender's path terminates on the receiver's seat. **Dialogue: not rendered at all.** `resolveHandoffDialogue` is pure, deterministic, template-only (zero LLM/network substrings — grep-verified), and its output is written to `Character.bubbleText` — which **nothing reads**. `renderScene` has no text draw pass. D-04 says the dialogue is "shown during the sequence"; it is computed and discarded. The absent production trigger is separately accounted for as the recorded `delete-trigger` scope boundary and is NOT counted against this truth. |
+| 4 | Pixel Agents attribution and licence notices remain visible and preserved | ✓ VERIFIED | `packages/pixel-office/LICENSE` reproduces MIT verbatim with source URL and pinned SHA `3537e140…`; 8 forked source files carry the 3-line header. The footer was **observed rendering in a real headless browser** this session, text intact and unconditional. `apps/web/src/App.test.tsx` now pins the complete sentence and asserts it is never behind `<details>`/`<dialog>`/`hidden` — the test-tier prohibition that failed closed last round is now genuinely enforced. `references/ASSET-LICENSES.md` is materially more honest: §1 split into pack-licence (cited to the publisher's listing) vs shipped-file identity (named as open), §3 accounts for all 12 bubble assets. |
 
-**Score:** 1/4 truths verified
+**Score:** 3/4 truths verified
 
-### Deferred Items
+### Plan-level must_haves that did not hold
 
-None. No later milestone phase (6, 7, or 8) covers live status relay, bubble positioning, or agent-identity correctness. Phase 7's SAFE-01/02 covers the carried-forward `TaskState.title` filtering prohibition only.
+These are `must_haves.truths` from 05-09/05-10 that the ROADMAP criteria do not restate. They are gaps 2 and 3 in the frontmatter.
 
-### Advisory (New Scope, Unevidenced)
+| Plan | Truth | Status | Measured |
+|---|---|---|---|
+| 05-10 | "Two different agent ids produce different character pixel data" | ✗ PARTIAL | 7 distinct hues across 10 plausible agent ids; `alpha` and `beta` both land on 330° and render byte-identical |
+| 05-09 | "zero, one, or many characters driven 1:1 by real projection state" | ✗ PARTIAL | Desk slots are never reclaimed on OFFLINE despawn; past 54 slots characters stack silently on one tile |
+| 05-10 (backstop) | "A very long TaskState.title … capped or truncated" | ✗ UNMET | No cap anywhere in `dialogue-templates.ts`; inert only because the text is never painted |
+| 05-09 (backstop) | "A WS socket close/error surfaces some user-observable signal" | ✓ VERIFIED | **Directly observed**: started `apps/web` with the API down, opened it in headless Chromium, and read back `role="status"` → *"Disconnected from the office feed — what you see is the last known state, not live."* Zero page errors. |
+
+### Advisory (New Scope / Re-scored)
 
 | # | Finding | Category | Why Advisory |
 |---|---------|----------|--------------|
-| 1 | CR-03 — `/ws/browser` silently drops events committed during the snapshot SELECT window | architectural | New scope (introduced by 05-05's WR-01 fix). Confirmed by source read; reproducing the drop needs a gated `db.select` spy that does not exist. |
-| 2 | WR-01 — worker credential can author state for any agent/company/visibility | security | Subject authorization gap, not event-type. Needs schema columns; plausibly Phase 6/7 work. |
-| 3 | WR-09 — `ASSET-LICENSES.md` §1 upgrades MetroCity to "Confirmed CC0" on evidence §4 calls insufficient | other | Resolving needs a human to find a primary upstream source. Routed to human verification. |
+| 1 | 05-REVIEW.md CR-01 (duplicate delivery strands a character) — **does not reproduce** | architectural | Falsified on deterministic evidence: `POST /events` dedups on `events.id` and broadcasts only in the non-duplicate branch, and `broadcastToBrowsers` queues XOR sends. The reducer was additionally measured value-idempotent for all five relayed types. Residual: the FSM is non-idempotent and nothing dedups by id, so the hazard is latent, not live. |
+| 2 | 05-REVIEW.md WR-01 — close/error handlers attached after the awaited SELECT; a drop during the snapshot window leaks a registration and an unflushable queue | architectural | Confirmed by source; needs a gated `db.select` spy to reproduce. Three-line fix. |
+| 3 | 05-REVIEW.md WR-08 — the snapshot is trusted unvalidated and now seeds every later `reduce`; a malformed one throws inside the message listener and freezes the office with the socket still open, so no disconnect banner | architectural | Confirmed by source; server-produced today. One-line shape guard closes it. |
+| 4 | HANDOFF-01's production trigger is deferred to "Phase 6's multi-agent orchestration", but ROADMAP Phase 6 is CEO Dashboard & Approval Workflow and owns no such work | other | Not a phase-5 gap — the decision and its consequence were stated before acceptance. Raised so the deferral gets a real owning phase. |
+| 5 | `T-05-11-WR01` — a worker credential can author events for any agent/company/visibility | security | Accepted threat with a stated expiry (first non-INTERNAL consumer). Unchanged this round. |
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `packages/pixel-office/src/sprites/spriteData.ts` | Real, non-transparent pixel data | ✓ VERIFIED | Imports `character-metrocity.json`; frame→pose mapping matches the fork verbatim. Closes the prior invisible-sprite gap. (`paletteIndex` dead — WR-08.) |
-| `packages/pixel-office/src/sprites/bubbleSprites.ts` | 12 distinct-silhouette glyphs | ✓ VERIFIED | All 12 `BubbleType` members resolve; distinctness test-asserted. |
-| `packages/pixel-office/src/engine/renderer.ts` | Bubble draw pass above own character | ⚠️ HOLLOW | Draw pass exists and paints real pixels, but positions the glyph over a *different* agent for the first 36 desks (CR-02, reproduced). |
-| `packages/pixel-office/src/status/status-mapping.ts` | Exhaustive 15-value STATUS_MAP | ✓ VERIFIED | 15/15, no fallthrough, correct `frozen` flags, distinct waiting bubbles. |
-| `packages/pixel-office/src/handoff/handoff-choreography.ts` | Walk/icon/accept FSM | ⚠️ ORPHANED in production | Logic correct and test-covered; unreachable on the real producer path (unknown-character guard + role-name `toAgentId`). |
-| `packages/pixel-office/src/handoff/dialogue-templates.ts` | Deterministic template dialogue | ✓ VERIFIED | Pure map; grep-proven zero LLM/network surface. |
-| `apps/api/src/routes/events.ts` | Allow-list covering producer-emitted types | ✓ VERIFIED | All 7 types present (`:18-26`), 202 regression tests exist. Closes old CR-01. |
-| `apps/web/src/agent-event-mapper.ts` | Live status→character mapper | ✗ STUB (in effect) | Pure and correctly guarded, but maps only never-emitted types. Dead code in production. |
-| `apps/api/src/routes/ws-browser.ts` | Snapshot-then-relay | ⚠️ VERIFIED w/ defect | Snapshot fold is real; registration ordering opens a silent drop window (CR-03, advisory). |
-| `packages/pixel-office/LICENSE` | Verbatim MIT + provenance | ✓ VERIFIED | Correct text, URL, pinned SHA. |
-| `references/ASSET-LICENSES.md` | D-05 asset-licence audit | ⚠️ VERIFIED w/ over-claim | All 4 sections present; §1 over-claims (WR-09), bubble assets unlisted. |
+| `apps/web/src/agent-event-mapper.ts` | Live status→character path | ✓ VERIFIED | Runs company-core's `reduce`; reference-inequality diff is sound (every handler returns a fresh object per touched agent). No second derivation table. |
+| `apps/web/src/App.tsx` | Live wiring + footer + disconnect banner | ✓ VERIFIED | Upsert loop above `handleHandoffEvent` (ordering test-pinned); banner and footer both observed in a real browser. |
+| `packages/pixel-office/src/engine/renderer.ts` | Owner-bound glyph draw pass | ✓ VERIFIED | `resolveBubbleY` attaches to the owner's sprite box, never the canvas edge. No text pass (see gap 1). |
+| `packages/pixel-office/src/index.ts` | Desk layout + per-agent identity | ⚠️ VERIFIED w/ defects | Rows 3/6/9 pitch is arithmetically correct against the engine's own geometry. Slot reclamation missing; 12 hue buckets collide early. |
+| `packages/pixel-office/src/status/status-mapping.ts` | Exhaustive 15-value map | ✓ VERIFIED | 15/15, no fallthrough, correct frozen flags, distinct waiting bubbles. |
+| `packages/pixel-office/src/handoff/handoff-choreography.ts` | Walk/icon/accept FSM | ✓ VERIFIED (live) | Proven end to end on a real canvas; acceptance still gated on a real `agent.handoff_completed`. Non-idempotent under re-delivery (advisory 1). |
+| `packages/pixel-office/src/handoff/dialogue-templates.ts` | Deterministic template dialogue | ⚠️ ORPHANED | Pure and correct; output never reaches the screen. |
+| `packages/claude-adapter/src/claude-code-runtime.ts` | Role observation separated from agent identity | ⚠️ VERIFIED w/ defect | CR-04 closed — the poll emits `gsd.phase_observed` and no role string touches an agent-id field. `inFlight` stale-write remains (gap 4). |
+| `apps/api/src/ws/browser-connections.ts` | Register-then-buffer-then-flush | ✓ VERIFIED | Buffering preserves "first message is always the snapshot". No id dedup (advisory 1). |
+| `references/ASSET-LICENSES.md` | Honest D-05 audit | ✓ VERIFIED | Two-link provenance tier, 12 bubble assets accounted, §4 rule applied rather than bypassed. |
+| `scripts/verify-pixel-office-live.mjs` | Live end-to-end proof | ✓ VERIFIED (executed) | 0 `page.reload`, 1 `page.goto`; **run twice this session, PASS both times**. |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|-----|-----|--------|---------|
-| `claude-adapter/claude-code-runtime.ts` | `apps/api/routes/events.ts` | `postEvent` → `POST /events` | ✓ WIRED | All 4 runtime-emitted types now accepted (old CR-01 closed). |
-| `apps/api/routes/events.ts` | `ws/browser-connections.ts` | `broadcastToBrowsers` | ✓ WIRED | Called after every non-duplicate insert. |
-| `apps/web/ws-client.ts` | `apps/api/routes/ws-browser.ts` | `ws/browser?token=` | ✓ WIRED | Re-validates every relayed event. |
-| relayed `task.status_changed` | `pixel-office` `upsertCharacterFromAgent` | `agent-event-mapper` → `App.tsx onEvent` | ✗ NOT WIRED | **The break.** Mapper has no branch for the type; `onEvent` has none either. Live status never reaches the renderer. |
-| relayed handoff pair | `handleHandoffEvent` | `App.tsx:50-52` | ✓ WIRED (but inert) | Reaches the FSM live; FSM returns early because neither participant has a Character. |
-| `claude-code-runtime` role poll | `record.agentId` | `completeHandoff(taskId, observed.role)` | ✗ BROKEN (CR-04) | Writes a GSD role label where an agent id belongs; propagates to `sourceAgentId` permanently. |
-| `App.tsx` | attribution footer | always-on `<footer>` | ✓ WIRED | Not gated behind a menu/modal. |
+| relayed `task.status_changed` | `upsertCharacterFromAgent` | `applyLiveEvent` → `App.tsx onEvent` | ✓ WIRED | The prior round's break. Now closed and observed live. |
+| relayed handoff pair | `handleHandoffEvent` | `App.tsx:75-77`, below the upsert loop | ✓ WIRED | Both participants exist by the time the FSM runs — test-pinned and observed live. |
+| `claude-code-runtime` role poll | `gsd.phase_observed` → reducer | `buildEnvelope(... "gsd.phase_observed")` | ✓ WIRED | Role is an observation again, not an identity. |
+| `registerBrowserSocket` (buffering) | `flushBrowserSocket` | snapshot send between them | ✓ WIRED | Close/error registration is late (advisory 2). |
+| `handoff-choreography` dialogue | rendered pixels | `Character.bubbleText` | ✗ NOT WIRED | **The gap.** Nothing reads `bubbleText`. |
+| `App.tsx` footer | `references/ASSET-LICENSES.md` | pinned sentence + `?raw` existence check | ✓ WIRED | Cannot drift silently. |
 
 ### Data-Flow Trace (Level 4)
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 |----------|---------------|--------|---------------------|--------|
-| Character sprite pixels | `SpriteData` from `getCharacterSprites()` | Decoded real MetroCity `char_0.png` | Yes | ✓ FLOWING |
-| `Character.state` / `bubbleType` on **connect** | snapshot `fold()` over real stored rows | Real append-only event log | Yes | ✓ FLOWING |
-| `Character.state` / `bubbleType` on **live event** | `deriveCharacterUpsertFromStatusEvent` | Returns `null` for every type that flows | No | ✗ DISCONNECTED |
-| `Character.palette` / `hueShift` | always `0` / `0` at the call site | Hardcoded defaults | No | ✗ HOLLOW_PROP |
-| Handoff walk path | `walkCharacterTo` via real `findPath` BFS | Real tile coords — but unreachable in prod | No (prod) | ✗ DISCONNECTED |
-| Attribution footer text | static JSX | Intentionally static | N/A | ✓ (correct as static) |
+| Character sprite pixels | `getCharacterSprites(hueShift)` | Decoded real MetroCity `char_0.png` + per-agent hue | Yes | ✓ FLOWING |
+| `Character.state` / `bubbleType` on live event | `applyLiveEvent` → company-core `reduce` | Real relayed events | Yes | ✓ FLOWING (observed) |
+| `Character.hueShift` | `hueForAgentId(agentId)` | Real agent id, FNV-1a | Yes, but 12-way | ⚠️ COLLIDING |
+| `Character.name` | `upsertCharacterFromAgent`'s 3rd param | Real `AgentState.name` | Set, never drawn | ⚠️ HOLLOW |
+| `Character.bubbleText` | `resolveHandoffDialogue` | Real `TaskState.title` | Set, never drawn | ✗ DISCONNECTED |
+| Disconnect banner | `disconnected` state | Real socket close/error | Yes | ✓ FLOWING (observed) |
+| Footer text | static JSX | Intentionally static | N/A | ✓ (correct as static) |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Row-2 agent's blocked glyph stays off the row-1 agent | throwaway vitest against real `renderScene` + recording ctx | `BUBBLE_OVERLAPS_ROW1_AGENT: true`; glyph y 1..11 inside row-1 sprite y −5..23; `bubbleTouchesOwnSprite: false` | ✗ FAIL (CR-02 confirmed) |
-| Two different agent ids render different pixels | same run | `ALL_AGENTS_PIXEL_IDENTICAL: true` | ✗ FAIL (WR-08 confirmed) |
-| Any producer emits `agent.online` / `session.started` | `grep -rn` over `apps packages scripts` | Only schema, reducer, fixtures, tests, comments, proof-script header | ✗ FAIL (CR-01 confirmed) |
-| `WORKER_ALLOWED_EVENT_TYPES` covers runtime-emitted types | direct read `events.ts:18-26` | All 7 present | ✓ PASS (old CR-01 closed) |
-| `getCharacterSprites` returns non-transparent data | direct read `spriteData.ts:22,42-67` | Real JSON-backed frames | ✓ PASS (invisible-sprite gap closed) |
-| `completeHandoff` receives a real agent id | direct read `claude-code-runtime.ts:248-250, :117-130` | Receives `observed.role`; writes it to `record.agentId` | ✗ FAIL (CR-04 confirmed) |
-| `pixel-office` suite | `npx vitest run --root packages/pixel-office` | 7 files, 50 tests, all passed | ✓ PASS |
-| `apps/web` suite | `npx vitest run --root apps/web` | 2 files, 9 tests, all passed | ✓ PASS |
-| Debt markers in phase-touched files | `grep -rn "TBD\|FIXME\|XXX"` | None | ✓ PASS |
-
-**Note on green suites:** both suites pass while all four criticals are live. That is the central signal of this verification — every defect found here sits in a seam the tests do not cover (row-1/row-2 collision, producer/consumer event-type drift, role-vs-agent-id semantics, snapshot registration timing).
+| Full live end-to-end proof | `node scripts/verify-pixel-office-live.mjs` | `LIVE PROOF: PASS` (4/4 truths) | ✓ PASS |
+| Same, run twice in succession (clean-store property) | re-ran immediately | `LIVE PROOF: PASS` again; no leaked listeners on 3000/5177 | ✓ PASS |
+| Blocked glyph stays off the agent seated in front | throwaway vitest, real `renderScene`, 20 seated agents, rows 3 & 6 | 0 glyph px inside the row-3 sprite box; glyph strictly above its own | ✓ PASS |
+| Two agent ids render different pixels | same run, 10 plausible ids | 7 distinct hues / 10; `alpha` ≡ `beta` | ✗ FAIL |
+| Reducer idempotent under a re-delivered event | throwaway vitest, `reduce(reduce(s,e),e)` vs `reduce(s,e)` | Equal by value for all 5 relayed types | ✓ PASS |
+| Disconnect banner is user-observable | headless Chromium against `apps/web` with the API down | `role="status"` → "Disconnected from the office feed…" | ✓ PASS |
+| Footer renders in a real browser | same run | Complete attribution sentence, 0 page errors | ✓ PASS |
+| `apps/web` suite | `npx vitest run --root apps/web` | 3 files, 18 tests passed | ✓ PASS |
+| `pixel-office` suite | `npx vitest run --root packages/pixel-office` | 7 files, 63 tests passed | ✓ PASS |
+| Any LLM/network surface in handoff files | grep over `handoff/*.ts` | Only comment text | ✓ PASS |
+| Role label reaching an agent-id field | grep `record.agentId` / `observed.role` | No assignment; poll emits `gsd.phase_observed` | ✓ PASS |
+| Debt markers in phase-touched files | `grep -E "TBD|FIXME|XXX"` over the 23 changed files | None (one base64 lockfile false positive) | ✓ PASS |
 
 ### Probe Execution
 
-No conventional `scripts/*/tests/probe-*.sh` probes exist in this repo. `scripts/verify-pixel-office-live.mjs` is the phase's live proof; it was **not** executed here because it starts two dev servers, connects to Postgres, and `CREATE DATABASE`s against whatever `DATABASE_URL` names with no locality guard (WR-05) — a state-mutating side effect this verification must not cause. Its logic was read in full instead, which is how the `page.reload()` and pre-seeding workarounds were found.
+| Probe | Command | Result | Status |
+|-------|---------|--------|--------|
+| `scripts/verify-pixel-office-live.mjs` | `node scripts/verify-pixel-office-live.mjs` | exit 0, `LIVE PROOF: PASS`, twice | PASS |
+
+No conventional `scripts/*/tests/probe-*.sh` exist. The live proof is this phase's probe and was executed here rather than read — it is guarded by `assertHarnessOwnedTarget`, which resolves its target from `apps/api/docker-compose.test.yml` (`pixelfirm_test`, port 5434) and refuses to run against anything else, and it resets via `docker compose down -v` rather than destructive SQL.
 
 ### Requirements Coverage
 
 | Requirement | Source Plan(s) | Description | Status | Evidence |
 |-------------|----------------|-------------|--------|----------|
-| OFFICE-01 | 05-01, 05-02, 05-03, 05-05, 05-06, 05-07, 05-08 | 15-value status→sprite fidelity on one floor | ✗ BLOCKED | Sprites visible and mapping exhaustive, but state only updates on reload; rendered agent identity corrupted by CR-04 (Truth 1) |
-| OFFICE-02 | 05-02, 05-05, 05-06 | Attribution/licence preserved | ✓ SATISFIED | LICENSE verbatim + per-file headers + always-on footer + audit doc (Truth 4). ⚠️ audit over-claims (WR-09); no test pins the footer |
-| OFFICE-03 | 05-02, 05-07, 05-08 | Blocked/waiting glanceable signal | ✗ BLOCKED | Glyph paints on the wrong agent for the first 36 desks; all agents pixel-identical (Truth 2) |
-| HANDOFF-01 | 05-03, 05-04, 05-05, 05-07, 05-08 | Physical walk/icon/accept handoff | ✗ BLOCKED | FSM correct and live-wired but unreachable in production (Truth 3) |
-| HANDOFF-02 | 05-04, 05-05 | Deterministic/template dialogue, never LLM | ✓ SATISFIED | Pure template map, grep-proven zero LLM/network surface, test-enforced |
+| OFFICE-01 | 05-01/02/03/05/06/07/08/09/10/11/12 | 15-value status→sprite fidelity on one floor | ✓ SATISFIED | Truth 1 — live path observed, exhaustive mapping, real sprite data. Recommend flipping REQUIREMENTS.md line 134 from Gaps Found to Complete. |
+| OFFICE-02 | 05-02/05/06/09/12 | Attribution/licence preserved | ✓ SATISFIED | Truth 4 — LICENSE + headers + browser-observed footer + wired pinning test + honest audit. One judgment-tier provenance link open (human item 3). |
+| OFFICE-03 | 05-02/07/08/10/12 | Blocked/waiting glanceable signal | ✓ SATISFIED (pending human look) | Truth 2 — glyph proven owner-correct on a real canvas, twice, independently. Legibility/grayscale are judgment-tier and routed to human. Recommend Complete only after human items 1-2. |
+| HANDOFF-01 | 05-03/04/05/07/08/09/10/11/12 | Physical walk/icon/accept handoff | ⚠️ PARTIAL | Rendering half proven live (TRUTH 3). Dialogue not rendered (gap 1). Production trigger is a recorded, accepted scope boundary with no owning phase (advisory 4). Keep as Gaps Found. |
+| HANDOFF-02 | 05-04/05/10/11/12 | Deterministic/template dialogue, never LLM | ⚠️ PARTIAL | The generator is pure, deterministic and grep-proven LLM-free; the prohibition holds. But the dialogue never reaches the screen, so "handoff dialogue" as a user-visible thing does not exist yet. |
 
-No orphaned requirements — all five Phase 5 IDs are claimed by at least one plan's `requirements` frontmatter, and REQUIREMENTS.md maps no additional IDs to Phase 5.
-
-**REQUIREMENTS.md accuracy:** lines 31-46 and 134-138 mark all five as `[x]` / "Complete". For OFFICE-01, OFFICE-03 and HANDOFF-01 that is premature — three of the four criteria they serve are not achieved. 05-05's own must_have truth said these should stay marked Gaps Found until 05-06/07/08 landed; they landed but did not close. Recommend reverting those three to Gaps Found.
+All five Phase 5 requirement IDs are claimed by at least one plan's `requirements` frontmatter and REQUIREMENTS.md maps no additional IDs to Phase 5. **No orphaned requirements.** Every executor correctly left `requirements-completed` empty for the shared IDs and deferred the call to this verification.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `packages/pixel-office/src/engine/renderer.ts` | 109 | Clamp-to-canvas that relocates an owner-bound overlay onto a neighbour | 🛑 Blocker | Reports the wrong agent as blocked (CR-02) |
-| `packages/pixel-office/src/engine/renderer.ts` | 115 | Comment states the opposite of the ascending sort below it | ℹ️ Info | It is the comment a future reader will trust while reasoning about exactly the overlay ordering that broke (IN-06) |
-| `apps/web/src/agent-event-mapper.ts` | 11 | Guard clause filtering to types no producer emits — dead branch | 🛑 Blocker | Live status rendering is a no-op (CR-01) |
-| `packages/claude-adapter/src/claude-code-runtime.ts` | 124, 249 | Type-level-valid but semantically wrong value (role string as agent id) | 🛑 Blocker | Phantom agents in an append-only table (CR-04) |
-| `packages/pixel-office/src/sprites/spriteData.ts` | 37-47 | Parameter accepted, cached on, never read | ⚠️ Warning | All agents pixel-identical (WR-08) |
-| `packages/pixel-office/src/sprites/spriteData.ts` | 42-66 | Unvalidated fixed-index access `d[0]`..`d[6]` | ℹ️ Info | A regenerated JSON with a different frame count crashes inside the render loop rather than at load (IN-04) |
+| `packages/pixel-office/src/handoff/handoff-choreography.ts` | 77, 103 | Computed value written to a field nothing reads | 🛑 Blocker | The HANDOFF-02 dialogue pipeline terminates in dead data (gap 1) |
+| `packages/claude-adapter/src/claude-code-runtime.ts` | ~299 | Per-invocation `finally` writing a shared record field | 🛑 Blocker | A superseded run clears its successor's in-flight flag (gap 4) |
+| `packages/pixel-office/src/index.ts` | 107, 134 | Monotonic allocation with deletion but no reclamation | ⚠️ Warning | Desks burn on churn; past 54 slots characters stack silently (gap 3) |
+| `packages/pixel-office/src/index.ts` | 96-104 | Hash into 12 buckets described as colliding "past twelve seated" | ⚠️ Warning | Collisions begin at the second agent (gap 2) |
+| `apps/api/src/routes/ws-browser.ts` | 36 vs 55-60 | Registration before the first `await`, lifecycle handlers after | ⚠️ Warning | Registration leak on a drop during the snapshot (advisory 2) |
+| `apps/web/src/ws-client.ts` | 28-29 | `state as ProjectionState` — validation asymmetry with the event path | ⚠️ Warning | A malformed snapshot freezes the office with no banner (advisory 3) |
+| `apps/api/src/ws/browser-connections.ts` | 44-53 | Broadcast carries no event id, so neither boundary can dedup | ⚠️ Warning | Latent; the FSM is non-idempotent (advisory 1) |
 
-No `TBD` / `FIXME` / `XXX` debt markers in any phase-touched file.
+No `TBD` / `FIXME` / `XXX` debt markers in any of the 23 files this phase changed.
 
-**Re-verification evidence gate:** the two blockers that are *not* carried-forward gaps (CR-02 in `renderer.ts`, CR-04 in `claude-code-runtime.ts`) both sit in files git-modified after the prior verification's `2026-09-21T14:10` timestamp, and both additionally carry deterministic evidence — CR-02 a red test run live this session, CR-04 a direct two-site source read. Both block unconditionally. CR-03 and WR-01 are new-scope without deterministic reproduction and are recorded as Advisory only.
+**Re-verification evidence gate:** both 🛑 blockers sit in files git-modified since the prior verification's `2026-09-21T16:55` timestamp and both carry deterministic evidence — gap 1 a repo-wide grep showing `bubbleText` has no reader plus a source read of every draw call in `renderScene`, gap 4 a two-site source read of the shared-field/per-invocation-writer mismatch. Both block. 05-REVIEW.md's CR-01 was re-scored to Advisory because the evidence *falsifies* the stated mechanism rather than merely failing to confirm it.
 
 ### Human Verification Required
 
-1. **Live status change without reload** — post `task.status_changed` → `blocked` for a real agent with the office page open and untouched. Expect: pose freezes, glyph appears, no navigation. This is the claim the automated proof routes around with `page.reload()`.
-2. **Whose agent is blocked** — seat 20+ agents so rows 1 and 2 both fill, block only a row-2 agent, and look. Expect the glyph on the blocked agent. Mechanically it lands on the agent in front of it.
-3. **MetroCity CC0 provenance** — find a primary CC0 source by URL, or downgrade §1 and soften the in-app footer. Cannot be resolved from inside this repo.
-4. **Decoded sprite fidelity** — compare a rendered character against the fork's `char_0.png` at the pinned commit. Requested by both 05-05 and 05-06's OFFICE-02 prohibitions; never performed.
+1. **Glyph legibility at real stream scale** — glance test at OBS source size across blocked / waiting_for_ceo / waiting_for_agent.
+2. **Grayscale + colourblind survivability** — same view through a grayscale filter and a deuteranopia simulator.
+3. **MetroCity provenance, link 2** — compare a rendered character against the fork's `char_0.png` at the pinned commit and the publisher's itch.io art. This is the only thing between `ASSET-LICENSES.md` §1 and a clean confirmed tier.
+4. **Colour-collision tolerance** — decide whether 12 hue buckets with no name labels is acceptable for this milestone (`alpha` and `beta` already collide).
+
+**Closed by evidence this round, no longer human items:** "does a live status change render without a reload" (live TRUTH 1/2, observed), "which agent does a viewer think is blocked" (live TRUTH 4 plus an independent `renderScene` run), and "does a socket close surface a signal" (banner observed in a real browser).
 
 ### Gaps Summary
 
-The four gap-closure plans did real work. Three prior gaps are genuinely closed: sprites are no longer transparent (05-06 decoded the real pinned-commit MetroCity art), the bubble overlay draw pass exists with all 12 glyphs authored and distinct (05-07), and the worker allow-list now carries every type the runtime emits (05-05). Those are not paper fixes — each is confirmed by direct source read.
+This round did the real work the last one asked for, and it shows. The unifying defect the prior verification named — *`apps/web` has no live path that creates or updates a Character* — is genuinely gone, fixed at the root rather than at the symptom: `applyLiveEvent` runs company-core's own `reduce`, so the live view and a replay of the same log cannot disagree by construction. CR-02's glyph-on-the-wrong-agent is fixed by binding the overlay to its owner instead of the canvas, and re-pitching the desk rows so the geometry actually has room — I reproduced that clean independently, not just via the repo's own test. CR-04 is fixed by deleting a fabrication rather than by patching it, which is the right call under this phase's Core Value even though it costs the production handoff trigger. And the proof artifact has, for the first time in this phase, been *run* — twice, from a clean store, passing all four truths on a real canvas in a real browser.
 
-But the phase goal is still not met, and two of the remaining failures were **introduced** by the closure round rather than surviving it:
+Three of four ROADMAP criteria are met. What remains:
 
-- **CR-02 is a regression.** 05-07 shipped an overlay that drew correctly above its own character. 05-08 then clamped it to the canvas to rescue row-1 agents from an invisible glyph — and in doing so collapsed rows 1 and 2 onto the same y. Because row 2 sorts later, its glyph now paints on top of the row-1 agent's head. Reproduced here with a real `renderScene` run: the glyph lands **entirely inside** the other agent's sprite and never touches its own. For a blocked indicator that is worse than the original problem: an invisible glyph shows nothing, this one accuses the wrong agent. And it affects the first 36 desks, i.e. every agent in a normal company.
-- **CR-04 is a regression.** The prior verification asked for `completeHandoff` to reassign `record.agentId`. 05-05 implemented exactly that — with the wrong value. The only caller passes `observed.role`, a GSD workflow label, so a role name is now written into `agentId` and rides out as `sourceAgentId` on every later event into an **append-only** table that cannot be corrected by an UPDATE. The test codifies it as intended (`expect(pausedCall![2].sourceAgentId).toBe("Engineering")`).
+**Gap 1 — the handoff dialogue is never rendered.** `resolveHandoffDialogue` is exemplary: pure, deterministic, template-only, grep-proven free of any LLM or network surface, with tone rules enforced by tests. Its output goes into `Character.bubbleText`, and `bubbleText` has no reader anywhere in the repo. `renderScene` draws a sprite and a glyph; there is no text pass. Criterion 3 and D-04 both describe dialogue *shown during the sequence*. Nine plans touched this pipeline and none noticed the last hop was missing, because every test asserts the string's content rather than its arrival on screen — the same seam-blindness the prior verification flagged, in a new place. The `TaskState.title` truncation backstop must land with the text pass, not after it.
 
-And the original headline gap was never closed at all. The old CR-01 fix widened the *server* allow-list to the four types the runtime emits, while the *client* mapper was left handling the two types nobody emits. The two halves of that fix point in opposite directions, and the seam between them is where live rendering lives. **Answering the question this verification was asked:** criterion 1 is true only after a page reload. The office's agent state is a snapshot taken at navigation time, not a live projection. The phase's own live-proof script documents this in a comment and works around it with `page.reload()` — which means the artifact named "live end-to-end proof" does not exercise the live path for the thing it proves. Criterion 3 is worse still: the choreography is correctly wired to the live relay, but its unknown-character guard can never be satisfied in production because nothing creates a Character from a live event, so the real handoff path silently animates nothing.
+**Gap 2 — identity colour collides much earlier than the record admits.** Hashing into 12 buckets collides at the second agent, not the thirteenth; measured 7 distinct hues across 10 plausible ids, with `alpha` and `beta` byte-identical. This is a genuine improvement over "every agent identical", and the ceiling itself may be an acceptable product call — but the deferred-items record states it wrongly, which is the part that matters for the audit trail.
 
-The unifying root cause is narrow and cheap to fix: **`apps/web` has no live path that creates or updates a Character.** One branch in `deriveCharacterUpsertFromStatusEvent` for `task.status_changed`, reusing `company-core`'s existing `deriveAgentStatus` so the live and fold paths cannot drift, resolves criterion 1 and unblocks criterion 3's guard in a handful of lines. CR-02 needs the glyph attached to its owner rather than clamped to the canvas (plus a two-character regression test that would have caught it). CR-04 needs role observation kept separate from agent identity at the single call site.
+**Gap 3 — desks burn on churn.** Slots are allocated monotonically and the character is deleted on OFFLINE, so an agent cycling offline/online is re-seated and its desk is lost forever. CR-02's required row pitch cut capacity from 162 to 54, tripling the rate at which that budget runs out; past it, characters are drawn stacked on one tile with no indication. An office showing one figure where the company has two is the goal's own failure mode, reached by a mundane worker restart loop.
 
-One structural note for the next round: every defect here passed a green suite. The tests assert the right things about single characters, pure functions, and allow-list membership; the bugs all live in the seams between two components (row 1 vs row 2, producer vs consumer type sets, role vs agent id, registration vs snapshot timing). Gap-closure plans for this phase should each carry at least one test that spans two components, not one.
+**Gap 4 — `inFlight` can be cleared by the invocation it replaced.** Shared record field, per-invocation writer, and a graceful-stop that returns on a timeout rather than on a drain. A third concurrent `query()` becomes reachable in exactly the scenario the flag exists to prevent, with no way for `pauseTask`/`cancelTask` to reach the orphan.
+
+**On 05-REVIEW.md's two criticals, one is downgraded on evidence.** CR-01's stranding mechanism does not reproduce: `POST /events` inserts with `onConflictDoNothing` on the event id and broadcasts only in the non-duplicate branch, and `broadcastToBrowsers` queues *or* sends per socket, never both — so no socket can receive the same event twice, and the choreography FSM cannot be driven twice by one handoff. The snapshot/relay overlap the reviewer correctly identified causes a *re-reduce* of an already-folded event, and I measured company-core's `reduce` value-idempotent for all five relayed types. The hazard is real but latent, and worth the cheap id-dedup at the flush boundary because the FSM genuinely is not idempotent. CR-02 (the `inFlight` race) stands and is gap 4.
+
+**One process note for whoever plans the closure round.** Every gap here is again a seam: a value with no reader, an allocator with no deallocator, a flag with two writers. The previous round's advice — each gap-closure plan carries at least one test spanning two components — held up well where it was followed (the cross-package live-handoff tests in `agent-event-mapper.test.ts` are the strongest tests in this phase). Gap 1 is what happens when it is not: the seam between a package that produces a string and a package that paints pixels.
 
 ---
 
-*Verified: 2026-09-21T16:55:00Z*
+*Verified: 2026-09-21T20:50:00Z*
 *Verifier: Claude (gsd-verifier)*
