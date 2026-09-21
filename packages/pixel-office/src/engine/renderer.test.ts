@@ -68,20 +68,24 @@ describe("renderScene bubble/badge overlay draw pass", () => {
   });
 
   it("draws the bubble strictly above the character's own base sprite", () => {
+    // Control render (no bubble) isolates the base sprite's true extent — a
+    // colour partition can't, since bubble-blocked shares #000000/#ffffff
+    // with the character sprite.
+    const control = createCharacter("agent-1", 3, 3);
+    const { ctx: controlCtx, rects: baseRects } = mockCtx();
+    renderScene(controlCtx, [control], 0, 0, 1);
+    expect(baseRects.length).toBeGreaterThan(0);
+    const highestBaseY = Math.min(...baseRects.map((r) => r.y));
+
     const ch = createCharacter("agent-1", 3, 3);
     ch.bubbleType = "blocked";
-
     const { ctx, rects } = mockCtx();
     renderScene(ctx, [ch], 0, 0, 1);
 
-    const bubbleColors = bubbleOnlyColors(ch);
-    const bubbleRects = rects.filter((r) => bubbleColors.has(r.color.toLowerCase()));
-    const baseRects = rects.filter((r) => !bubbleColors.has(r.color.toLowerCase()));
+    const bubbleRects = rects.filter((r) => !baseRects.some((b) => b.x === r.x && b.y === r.y));
     expect(bubbleRects.length).toBeGreaterThan(0);
-    expect(baseRects.length).toBeGreaterThan(0);
 
     const lowestBubbleY = Math.max(...bubbleRects.map((r) => r.y + r.h));
-    const highestBaseY = Math.min(...baseRects.map((r) => r.y));
     expect(lowestBubbleY).toBeLessThanOrEqual(highestBaseY);
   });
 

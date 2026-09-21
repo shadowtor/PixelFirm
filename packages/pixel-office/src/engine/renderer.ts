@@ -16,12 +16,14 @@
 // furniture/carpets/areas/pets/bubbles.
 
 import {
+  BUBBLE_ICON_GAP_PX,
   CHARACTER_SITTING_OFFSET_PX,
   CHARACTER_Z_SORT_OFFSET,
   FALLBACK_FLOOR_COLOR,
   TILE_SIZE,
   WALL_COLOR,
 } from "../constants.js";
+import { resolveBubbleSprite } from "../sprites/bubbleSprites.js";
 import { getCharacterSprites } from "../sprites/spriteData.js";
 import type { Character, SpriteData, TileType as TileTypeVal } from "../types.js";
 import { CharacterState, TileType } from "../types.js";
@@ -86,7 +88,22 @@ export function renderScene(
 
     const zY = ch.y + TILE_SIZE / 2 + CHARACTER_Z_SORT_OFFSET;
 
-    return { zY, draw: () => drawSpriteData(ctx, spriteData, drawX, drawY, zoom) };
+    return {
+      zY,
+      draw: () => {
+        drawSpriteData(ctx, spriteData, drawX, drawY, zoom);
+        // D-03 icon overlay (05-07): drawn inside the SAME z-sorted drawable as
+        // its own character, immediately after the base sprite — so it can never
+        // z-sort behind a character that should be in front of it.
+        if (!ch.bubbleType) return;
+        const bubbleSprite = resolveBubbleSprite(ch.bubbleType);
+        const bubbleWidth = bubbleSprite[0]?.length ?? 0;
+        const bubbleHeight = bubbleSprite.length;
+        const bubbleX = Math.round(drawX + (spriteWidth * zoom - bubbleWidth * zoom) / 2);
+        const bubbleY = Math.round(drawY - bubbleHeight * zoom - BUBBLE_ICON_GAP_PX * zoom);
+        drawSpriteData(ctx, bubbleSprite, bubbleX, bubbleY, zoom);
+      },
+    };
   });
 
   // Sort by Y (lower = in front = drawn later)
