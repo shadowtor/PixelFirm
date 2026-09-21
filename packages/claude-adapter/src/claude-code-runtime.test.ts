@@ -478,4 +478,30 @@ describe("ClaudeCodeRuntime.requestHandoff / gsd role-change poll", () => {
 
     expect((observeGsdState as unknown as Mock).mock.calls.length).toBe(callCountAtCancel);
   });
+
+  it("Test C (CR-02): completeHandoff reassigns the task's agentId so a later task.status_changed event attributes to the receiving agent, not the original sender", async () => {
+    (query as unknown as Mock).mockReturnValue(hangingQuery(initMessage("session-abc")));
+    (observeGsdState as unknown as Mock)
+      .mockResolvedValueOnce({ phase: "04", status: "executing", category: "planning", role: "PM" })
+      .mockResolvedValueOnce({ phase: "04", status: "executing", category: "execution", role: "Engineering" });
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    void runtime.startTask(startInput);
+    await vi.advanceTimersByTimeAsync(0); // let the init message be processed
+
+    await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS); // tick 1: baseline (isFirstTick), no handoff
+    await vi.advanceTimersByTimeAsync(ROLE_POLL_INTERVAL_MS); // tick 2: role changed PM -> Engineering; requestHandoff+completeHandoff fire
+
+    const pausePromise = runtime.pauseTask("task-1");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS); // hangingQuery ignores interrupt() — let the grace-period race settle before the hard abort
+    await pausePromise;
+
+    const statusChangedCalls = (postEvent as unknown as Mock).mock.calls.filter(
+      (call) => call[2].type === "task.status_changed",
+    );
+    const pausedCall = statusChangedCalls.find((call) => call[2].payload.status === "paused");
+    expect(pausedCall).toBeDefined();
+    expect(pausedCall![2].sourceAgentId).toBe("Engineering");
+    expect(pausedCall![2].sourceAgentId).not.toBe("test-agent-1");
+  });
 });

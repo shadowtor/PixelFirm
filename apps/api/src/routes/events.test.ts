@@ -130,4 +130,47 @@ describe("POST /events", () => {
 
     await fastify.close();
   });
+
+  // CR-01 regression (05-REVIEW.md / 05-05-PLAN.md Task 1): a worker
+  // credential must be accepted (202), not 403'd, for the 4 event types
+  // ClaudeCodeRuntime actually emits.
+  it("Test A (CR-01): accepts a schema-valid task.status_changed event from a worker credential", async () => {
+    const fastify = buildServer();
+    const event = {
+      id: randomUUID(),
+      type: "task.status_changed",
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      companyId: "company-1",
+      taskId: "task-1",
+      visibility: "INTERNAL",
+      payload: { taskId: "task-1", status: "completed" },
+    };
+    const headers = { authorization: `Bearer ${token}` };
+
+    const res = await fastify.inject({ method: "POST", url: "/events", payload: event, headers });
+    expect(res.statusCode).toBe(202);
+
+    await fastify.close();
+  });
+
+  it("Test B (CR-01): accepts a schema-valid agent.handoff_completed event from a worker credential", async () => {
+    const fastify = buildServer();
+    const event = {
+      id: randomUUID(),
+      type: "agent.handoff_completed",
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      companyId: "company-1",
+      taskId: "task-1",
+      visibility: "INTERNAL",
+      payload: { taskId: "task-1", toAgentId: "Engineering" },
+    };
+    const headers = { authorization: `Bearer ${token}` };
+
+    const res = await fastify.inject({ method: "POST", url: "/events", payload: event, headers });
+    expect(res.statusCode).toBe(202);
+
+    await fastify.close();
+  });
 });

@@ -115,6 +115,13 @@ export function createClaudeCodeRuntime(options: {
   // transition IS the completion signal here, not a genuinely asynchronous
   // second event (T-05-08, accepted).
   async function completeHandoff(taskId: string, toAgentId: string): Promise<void> {
+    // CR-02 (05-REVIEW.md): reassign ownership BEFORE posting the completion
+    // event, so every emitStatus call for this taskId made after this point
+    // (the same in-flight runQuery's subsequent result/watchdog/pause/cancel
+    // paths, or any later call) reads the receiving agent's ID, never the
+    // stale original sender's.
+    const record = tasks.get(taskId);
+    if (record) record.agentId = toAgentId;
     await postEvent(
       options.controlPlaneUrl,
       options.token,

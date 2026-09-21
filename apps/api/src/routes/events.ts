@@ -8,10 +8,22 @@ import { broadcastToBrowsers } from "../ws/browser-connections.js";
 
 // WR-03: authenticateWorker only proves "this is a valid, non-revoked
 // worker credential" — it does not scope which event *types* that
-// credential may submit. A worker process only ever originates these three
-// types (apps/worker/src/event-emitter.ts, ws-client.ts); reject anything
-// else before it reaches the reducer's shared projection state.
-const WORKER_ALLOWED_EVENT_TYPES = new Set(["worker.heartbeat", "git.worktree_observed", "gsd.phase_observed"]);
+// credential may submit. A worker process/ClaudeCodeRuntime only ever
+// originates these seven types (apps/worker/src/event-emitter.ts,
+// ws-client.ts, packages/claude-adapter/src/claude-code-runtime.ts); reject
+// anything else before it reaches the reducer's shared projection state.
+// CR-01 (05-REVIEW.md): the original 3-member allow-list silently 403'd the
+// 4 event types ClaudeCodeRuntime actually emits (task.status_changed,
+// ceo.approval_requested, agent.handoff_requested, agent.handoff_completed).
+const WORKER_ALLOWED_EVENT_TYPES = new Set([
+  "worker.heartbeat",
+  "git.worktree_observed",
+  "gsd.phase_observed",
+  "task.status_changed",
+  "ceo.approval_requested",
+  "agent.handoff_requested",
+  "agent.handoff_completed",
+]);
 
 export async function registerEventsRoute(fastify: FastifyInstance) {
   fastify.post(
