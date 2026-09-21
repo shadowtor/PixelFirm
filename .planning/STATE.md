@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-09-PLAN.md
-last_updated: "2026-09-21T09:36:35.539Z"
+stopped_at: Completed 05-11-PLAN.md
+last_updated: "2026-09-21T09:55:22.822Z"
 last_activity: 2026-09-21
 last_activity_desc: Phase 05 execution started
-state_head: cfebf15960211a503640db33168bd1b836170db2
+state_head: c00dd4e58d9f7c9d741d3d80a29bbdf2a63480c8
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 27
-  completed_plans: 25
+  completed_plans: 26
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 3 of 12
+Plan: 4 of 12
 Status: Ready to execute
 Last activity: 2026-09-21 — Phase 05 execution started
 
@@ -85,6 +85,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P08 | ~35min | 1 tasks | 3 files |
 | Phase 05 P10 | 20 min | 2 tasks | 9 files |
 | Phase 05 P09 | 20 min | 3 tasks | 4 files |
+| Phase 05 P11 | 16 min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -161,6 +162,7 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-09: deriveCharacterUpsertFromStatusEvent deleted, not extended — it mapped only agent.online/session.started, which no producer emits and WORKER_ALLOWED_EVENT_TYPES does not admit (the CR-01 fix itself)
 - [Phase 05]: 05-09: App.tsx's upserts-before-handleHandoffEvent ordering is pinned by a source-order test proven red by inverting the code — the onEvent closure is not exported and its effect never runs under static rendering, so source order is the invariant's only observable form
 - [Phase 05]: 05-09: vite's ?raw replaces node:fs for filesystem reads in apps/web tests — the package has no @types/node and Task 3 forbids adding a dependency
+- [Phase 05]: D-04 checkpoint answered delete-trigger: the role poll's simulated handoff trigger is deleted; HANDOFF-01 lands as its rendering half in Phase 5 — A GSD workflow role change is an observation, not a handoff to a role-named agent. The choreography stays intact; only the dishonest trigger defers to Phase 6.
 
 ### Pending Todos
 
@@ -175,6 +177,7 @@ None yet.
 - Phase 5 (05-01): pre-existing repo-wide TS module-resolution gap — event-schema/index.ts and company-core/index.ts re-export without .js extensions, which tsc --noEmit flags under moduleResolution NodeNext (pnpm --filter api typecheck already failed on this before 05-01). Doesn't block any required verify command for 05-01 through 05-04 but worth a dedicated fix pass. See deferred-items.md.
 - Phase 5 (05-08): still no producer of agent.online anywhere in the codebase — the literal 'agent walks into the office when it comes online' demo remains unreproducible. The live proof demonstrates the rendering truths via task.status_changed (what ClaudeCodeRuntime actually emits) and deliberately does NOT close this gap.
 - Phase 5 (05-08): an already-connected browser client never re-derives AgentStatus from task.status_changed / gsd.phase_observed / agent.handoff_completed — only a fresh snapshot reflects them. Phase 6's CEO dashboard has the identical need; proper fix is a live-projection-diff broadcast.
+- T-05-11-WR01 accepted: a worker credential can author state for any agent/company/visibility at POST /events. Acceptance expires the moment a non-INTERNAL consumer is pointed at the control plane (Phase 6/7 owns the fix).
 
 ## Deferred Items
 
@@ -186,6 +189,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-21T09:36:15.091Z
-Stopped at: Completed 05-09-PLAN.md
+Last session: 2026-09-21T09:54:57.029Z
+Stopped at: Completed 05-11-PLAN.md
 Resume file: None

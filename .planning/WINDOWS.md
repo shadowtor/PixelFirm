@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 5
+open_count: 6
 waived_count: 0
 fixed_count: 0
-total_count: 5
-last_updated: 2026-09-21T09:11:22.159Z
+total_count: 6
+last_updated: 2026-09-21T09:55:30.785Z
 ---
 
 # Broken Windows Ledger
@@ -20,6 +20,7 @@ last_updated: 2026-09-21T09:11:22.159Z
 | 3 | 05 | deviation | packages/pixel-office/src/engine/renderer.ts |  | Bubble overlay Y clamped to canvas top; a row-1 agent's status glyph now overlaps its own sprite head instead of floating clear above it — legibility trade needs human eyeball (OFFICE-03) | open |  | 2026-09-21T06:13:09.430Z |  |
 | 4 | 05 | unmet-truth | scripts/verify-pixel-office-live.mjs |  | No producer of agent.online exists; the live proof substitutes task.status_changed and does not close the agent.online gap | open |  | 2026-09-21T06:13:10.735Z |  |
 | 5 | 05 | unmet-truth | packages/pixel-office/src/engine/renderer.ts |  | 05-10: glyph legibility at typical stream/viewing scale and grayscale/colourblind survivability remain judgment-tier and unverified — routed to 05-12 human verification (coverage D6) | open |  | 2026-09-21T09:11:22.159Z |  |
+| 6 | 05 | deviation | apps/api/src/routes/ws-browser.test.ts |  | Route-level CR-03 case is a timing race that passed against the unfixed code; browser-connections.test.ts Test 2 is the deterministic regression detector. Needs a gated db.select spy to be reliable. | open |  | 2026-09-21T09:55:30.785Z |  |
 
 ````json
 [
@@ -85,6 +86,19 @@ last_updated: 2026-09-21T09:11:22.159Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-21T09:11:22.159Z",
+    "resolved_at": null,
+    "milestone": null
+  },
+  {
+    "id": 6,
+    "kind": "deviation",
+    "phase": "05",
+    "file": "apps/api/src/routes/ws-browser.test.ts",
+    "line": null,
+    "description": "Route-level CR-03 case is a timing race that passed against the unfixed code; browser-connections.test.ts Test 2 is the deterministic regression detector. Needs a gated db.select spy to be reliable.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-21T09:55:30.785Z",
     "resolved_at": null,
     "milestone": null
   }
