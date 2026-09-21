@@ -14,11 +14,21 @@
 // credential is 403'd for both, and no producer of `agent.online` exists
 // anywhere in this codebase (flagged since 05-01). Widening that allow-list to
 // make a demo pass would be faking the proof. Instead this script drives the
-// same three truths using only event types the REAL pipeline actually carries
-// today, all of which packages/claude-adapter's ClaudeCodeRuntime genuinely
-// emits: `task.status_changed` (whose reducer handler upserts the owning agent
-// and derives its AgentStatus) and the `agent.handoff_requested` /
+// same truths using only event types the REAL pipeline actually carries today:
+// `task.status_changed` (whose reducer handler upserts the owning agent and
+// derives its AgentStatus) and the `agent.handoff_requested` /
 // `agent.handoff_completed` pair.
+//
+// One precision about the handoff pair, so this header does not out-claim the
+// code (05-11, D-04 answered `delete-trigger`): ClaudeCodeRuntime emits that
+// pair through `requestHandoff`/`completeHandoff`, but NO in-repo producer
+// triggers it automatically any more — the role-poll that used to fabricate a
+// handoff out of a GSD workflow role change was deleted, because a role change
+// is an observation, not a handoff to a role-named agent. A real pair needs a
+// caller supplying a genuine receiving agent id, which Phase 6's multi-agent
+// orchestration owns. What this script proves is the RENDERING half end to end:
+// a real pair on the live relay drives reducer -> character upsert ->
+// choreography -> painted canvas.
 //
 // T-05-26 (accepted, low): this script reads secrets from the local, already
 // gitignored apps/api/.env and sends them only to the localhost dev server it
