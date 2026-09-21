@@ -17,9 +17,12 @@ Fork source: <https://github.com/pixel-agents-hq/pixel-agents>, commit
 - **MetroCity character pack** — credited in the fork's own README ("Diverse
   characters ... based on the amazing work of [JIK-A-4, Metro City]"). This
   is the character sprite source `packages/pixel-office/src/sprites/spriteData.ts`
-  is built to consume (currently returning transparent placeholder frames —
-  no real pixel art has been wired in yet, per 05-01-SUMMARY.md's documented
-  stub; the CC0 credit applies to the pack this module is designed to load).
+  actually loads: the fork's own `webview-ui/public/assets/characters/char_0.png`,
+  fetched at the pinned commit `3537e140c2094761beae748592aeb92ece8edfdd` and
+  decoded by `packages/pixel-office/scripts/decode-metrocity-sprites.mjs` into
+  `packages/pixel-office/src/sprites/character-metrocity.json` (05-06). The
+  CC0 credit now matches what the renderer actually draws, not just what it
+  was designed to load.
 
 ## 2. MIT (fork's own code)
 
