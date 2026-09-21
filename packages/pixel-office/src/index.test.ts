@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { AgentStatus } from "event-schema";
-import { upsertCharacterFromAgent, getCharacter, _resetForTests } from "./index";
+import { upsertCharacterFromAgent, getCharacter, _resetForTests, DEFAULT_ROWS } from "./index";
 import { CharacterState } from "./types";
 import { findPath } from "./layout/tileMap";
 import { TileType } from "./types";
@@ -50,6 +50,35 @@ describe("upsertCharacterFromAgent", () => {
   it("applies deploying's 1.5x frameSpeedMultiplier — the one legitimate procedural-variation state signal", () => {
     upsertCharacterFromAgent("agent-7", AgentStatus.DEPLOYING);
     expect(getCharacter("agent-7")?.frameSpeedMultiplier).toBe(1.5);
+  });
+});
+
+describe("desk layout headroom (CR-02)", () => {
+  /** Seats n agents through the real layout and returns their desk rows. */
+  function seatRows(n: number): number[] {
+    for (let i = 0; i < n; i++) upsertCharacterFromAgent(`agent-${i}`, AgentStatus.IDLE);
+    return Array.from({ length: n }, (_, i) => getCharacter(`agent-${i}`)!.seatRow);
+  }
+
+  it("seats the first desk row at interior row 3 and the next at interior row 6, sharing column 1", () => {
+    const rows = seatRows(19);
+    for (let i = 0; i < 18; i++) expect(rows[i]).toBe(3);
+    expect(rows[18]).toBe(6);
+    expect(getCharacter("agent-0")!.seatCol).toBe(1);
+    expect(getCharacter("agent-18")!.seatCol).toBe(1);
+  });
+
+  it("never seats a desk on interior row 1 or 2, and keeps consecutive desk rows at least 3 apart", () => {
+    const distinct = [...new Set(seatRows(60))].sort((a, b) => a - b);
+    expect(distinct[0]).toBeGreaterThanOrEqual(3);
+    for (let i = 1; i < distinct.length; i++) {
+      expect(distinct[i] - distinct[i - 1]).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("clamps overflow desks to the last interior row rather than seating a character inside the wall border", () => {
+    const rows = seatRows(80);
+    for (const row of rows) expect(row).toBeLessThanOrEqual(DEFAULT_ROWS - 2);
   });
 });
 
