@@ -20,10 +20,10 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-20)
+See: .planning/PROJECT.md (updated 2026-09-21)
 
 **Core value:** The pixel office must accurately visualise a real Claude Code + GSD software project — agents genuinely performing the work and requesting CEO approval — using actual company events, never a prerecorded or faked animation.
-**Current focus:** Phase 04 — AgentRuntime & ClaudeCodeRuntime
+**Current focus:** Phase 05 — Pixel Office Renderer
 
 ## Current Position
 
@@ -129,8 +129,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 4 planning: re-verify Claude Max-subscription billing terms for SDK/headless usage haven't changed before scaling worker usage.
 - Phase 4 planning: apps/api's test suite has an intermittent parallel-test-file migration race (`pg_type_typname_nsp_index` duplicate-key error) when multiple test files apply the same enum-creating migration concurrently against the local test Postgres — observed twice in Phase 3, non-reproducible on rerun, does not affect production migrations (drizzle-kit migrate runs once, sequentially). Worth a proper fix (serialize test-DB migration application) before it masks a real regression.
+- [Phase 4]: CR-01/CR-02/CR-03 code-review fixes (ANTHROPIC_API_KEY env-stripping, terminal-status guard, runQuery reentrancy guard) have no dedicated unit regression test exercising the guard logic directly — real-subprocess integration coverage and direct code inspection back them today, but a future refactor could silently regress any of the three while the existing suite stays green. Non-blocking, flagged by the phase verifier.
 - Phase 5 planning: full asset-licence audit of the Pixel Agents fork beyond the credited CC0 character pack is still outstanding.
 - Phase 8 planning: verify current Twitch EventSub reconnect/signature details against live docs; budget subscription total_cost before choosing event types.
 
@@ -144,6 +144,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-20T22:37:15.266Z
-Stopped at: Phase 04 complete, ready to plan Phase 5
+Last session: 2026-09-21T14:20:00Z
+Stopped at: Phase 04 complete (verified passed, UAT 2/2, security 13/13 closed, code review clean) — ready to plan Phase 5
 Resume file: None

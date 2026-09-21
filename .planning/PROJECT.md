@@ -14,12 +14,12 @@ The pixel office must accurately visualise a real Claude Code + GSD software pro
 
 - ✓ Worker connects from wherever Claude Code is authenticated and can point at any git repository/worktree the user chooses via `--repo`/`WORKER_REPO_PATH`, not hardcoded to one project — Phase 3 (proven live against the separate SyncSmith repo; read-only git + GSD state observation, no mutation). Process/build/test execution (running Claude Code sessions, GSD commands) remains Active below — Phase 3 built observation only.
 - ✓ GSD adapter mapping observed GSD workflow state onto company events, observed rather than guessed where possible — Phase 3 (explicit fallback to `unknown`/`unknown` when signals don't clearly support a category; never fabricates a pipeline stage/role)
+- ✓ ClaudeCodeRuntime implementing an AgentRuntime abstraction (startTask/pauseTask/resumeTask/cancelTask/getStatus/sendMessage/requestReview/requestHandoff) so other orchestrators (Maestro, Codex, etc.) can be added later without changing the company model — Phase 4 (zero `@anthropic-ai/` import anywhere in `orchestration-adapter`, structurally enforced; `ClaudeCodeRuntime` drives a real Claude Code session on subscription auth alone, no `ANTHROPIC_API_KEY` fallback, verified live against a real disposable-worktree demo and real pause/cancel subprocess termination — not just unit-tested against a mock)
 
 ### Active
 
 - [ ] Company/event domain model: Company → Buildings → Floors → Teams → Agents → Projects, with typed event schema flowing Claude Code / Git / CI / GSD → Company Event Bus → Company State Engine → Pixel Office → Stream Overlay/Dashboard
 - [ ] Pixel Agents fork integrated as the office renderer/movement/character base (attribution and licence notices preserved)
-- [ ] ClaudeCodeRuntime implementing an AgentRuntime abstraction (startTask/pauseTask/resumeTask/cancelTask/getStatus/sendMessage/requestReview/requestHandoff) so other orchestrators (Maestro, Codex, etc.) can be added later without changing the company model
 - [ ] Worker handles Claude Code process management, GSD command execution, and builds/tests (beyond Phase 3's read-only git/GSD observation)
 - [ ] Control plane (web app, API, Postgres, WebSocket/event gateway, stream overlay, auth, activity history) deployable via Docker to the user's existing Coolify server, with worker connecting to it without the control plane needing direct filesystem access to worker repos
 - [ ] Persistent agent/employee model (id, name, role, title, team, floor, sprite, personality, status, current project/task/session/worktree, availability, stats, history) with pixel animation reflecting standardised agent states (offline/idle/planning/researching/coding/reading/testing/reviewing/discussing/deploying/blocked/waiting_for_agent/waiting_for_ceo/failed/completed)
@@ -80,9 +80,11 @@ The pixel office must accurately visualise a real Claude Code + GSD software pro
 | PixelFirm's own repo is not the MVP demo target (no dogfooding on itself for the demo flow) | Avoids self-referential confusion; SyncSmith already has a real GSD roadmap ready to observe | — Pending |
 | Twitch integration targets real, already-live channel from the start (not placeholder auth) | User is already streaming; no need to stub auth before that phase | — Pending |
 | Control plane targets the user's existing Coolify server from early phases | Infra already exists; no need to defer deployment design | — Pending |
-| AgentRuntime abstraction (ClaudeCodeRuntime first) instead of hardcoding Claude Code into the company model | Brief requires future support for Maestro/Codex/OpenCode without rearchitecting | — Pending |
+| AgentRuntime abstraction (ClaudeCodeRuntime first) instead of hardcoding Claude Code into the company model | Brief requires future support for Maestro/Codex/OpenCode without rearchitecting | ✓ Phase 4 — interface ships with zero SDK dependency, `ClaudeCodeRuntime` is its only implementation so far |
 | No automated/unsafe merging or autonomous deployment in MVP | Brief treats this as a privileged dev-control system; CEO gate is a hard safety boundary | — Pending |
 | Worker observes pointed-at repos read-only via poll-diff (git-adapter/gsd-adapter), structurally guaranteed to never issue a mutating git command | Worker can safely be pointed at any of the user's real repos without risk of corrupting them — matches the "no unsafe automated merging" constraint and the control-plane's no-filesystem-access design | ✓ Phase 3 |
+| `query()`'s subprocess `env` is always explicitly built (never left to default inheritance), actively stripping `ANTHROPIC_API_KEY` | The SDK inherits the full host `process.env` when `env` is omitted — a stray API key anywhere in the host shell would silently leak into the subprocess and violate the no-API-key-billing requirement with zero detection; caught by code review, not by the original implementation | ✓ Phase 4 |
+| Real (non-mocked) OS-subprocess termination proof for pauseTask/cancelTask, not just mocked-SDK unit tests | The SDK's own `interrupt()` is documented as streaming-input-only and may no-op for this codebase's plain-string-prompt call shape — the actual termination guarantee (`AbortController.abort()` hard-kill) had never been observed against a real spawned process; added as permanent gated (`CLAUDE_CODE_INTEGRATION_TEST=1`) regression coverage via real `claude.exe` OS-PID snapshotting | ✓ Phase 4 |
 
 ## Evolution
 
@@ -102,4 +104,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-20 after Phase 3*
+*Last updated: 2026-09-21 after Phase 4*
