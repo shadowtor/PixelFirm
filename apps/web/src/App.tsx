@@ -41,11 +41,32 @@ export function App() {
   }, []);
 
   return (
-    <canvas
-      id="office-canvas"
-      ref={canvasRef}
-      width={DEFAULT_COLS * TILE_SIZE}
-      height={DEFAULT_ROWS * TILE_SIZE}
-    />
+    <>
+      <canvas
+        id="office-canvas"
+        ref={canvasRef}
+        width={DEFAULT_COLS * TILE_SIZE}
+        height={DEFAULT_ROWS * TILE_SIZE}
+      />
+      {/* OFFICE-02: attribution must be visible in the running app, not only
+          recorded in references/ASSET-LICENSES.md — always-on, never gated
+          behind a menu/modal. */}
+      <footer
+        style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: "4px 8px",
+          fontSize: "11px",
+          fontFamily: "monospace",
+          color: "#cccccc",
+          background: "rgba(0, 0, 0, 0.6)",
+        }}
+      >
+        Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character
+        sprites: MetroCity pack (CC0) · full audit: references/ASSET-LICENSES.md
+      </footer>
+    </>
   );
 }
