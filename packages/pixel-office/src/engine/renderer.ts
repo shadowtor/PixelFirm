@@ -100,7 +100,13 @@ export function renderScene(
         const bubbleWidth = bubbleSprite[0]?.length ?? 0;
         const bubbleHeight = bubbleSprite.length;
         const bubbleX = Math.round(drawX + (spriteWidth * zoom - bubbleWidth * zoom) / 2);
-        const bubbleY = Math.round(drawY - bubbleHeight * zoom - BUBBLE_ICON_GAP_PX * zoom);
+        // 05-08: clamped into the canvas. The default office seats its first
+        // 18 agents on interior row 1, where drawY is already negative (a
+        // 32px-tall sprite anchored at y=24) — an unclamped bubble lands
+        // entirely above y=0 and is never painted at all, which is exactly
+        // what the live end-to-end proof caught. Overlapping the top of the
+        // character is strictly better than being invisible.
+        const bubbleY = Math.max(0, Math.round(drawY - bubbleHeight * zoom - BUBBLE_ICON_GAP_PX * zoom));
         drawSpriteData(ctx, bubbleSprite, bubbleX, bubbleY, zoom);
       },
     };

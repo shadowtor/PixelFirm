@@ -89,6 +89,22 @@ describe("renderScene bubble/badge overlay draw pass", () => {
     expect(lowestBubbleY).toBeLessThanOrEqual(highestBaseY);
   });
 
+  it("keeps the bubble on-canvas for a top-row character instead of painting it above y=0", () => {
+    // Interior row 1 is where the default office seats its first 18 agents,
+    // and a 32px sprite anchored at y=24 already starts at drawY = -8 — an
+    // unclamped bubble would land entirely off the top of the canvas (05-08).
+    const ch = createCharacter("agent-1", 1, 1);
+    ch.bubbleType = "blocked";
+
+    const { ctx, rects } = mockCtx();
+    renderScene(ctx, [ch], 0, 0, 1);
+
+    const bubbleColors = bubbleOnlyColors(ch);
+    const bubbleRects = rects.filter((r) => bubbleColors.has(r.color.toLowerCase()));
+    expect(bubbleRects.length).toBeGreaterThan(0);
+    expect(Math.min(...bubbleRects.map((r) => r.y))).toBeGreaterThanOrEqual(0);
+  });
+
   it("centers the bubble horizontally over the character", () => {
     const ch = createCharacter("agent-1", 3, 3);
     ch.bubbleType = "handoff-task";
