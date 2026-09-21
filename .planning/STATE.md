@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-11-PLAN.md
-last_updated: "2026-09-21T09:55:22.822Z"
+stopped_at: Completed 05-12-PLAN.md
+last_updated: "2026-09-21T10:24:24.567Z"
 last_activity: 2026-09-21
 last_activity_desc: Phase 05 execution started
-state_head: c00dd4e58d9f7c9d741d3d80a29bbdf2a63480c8
+state_head: 7fe8efb2dfb4719e9620561a02065e78836247a2
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 27
-  completed_plans: 26
+  completed_plans: 27
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 4 of 12
+Plan: 5 of 12
 Status: Ready to execute
 Last activity: 2026-09-21 — Phase 05 execution started
 
@@ -86,6 +86,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P10 | 20 min | 2 tasks | 9 files |
 | Phase 05 P09 | 20 min | 3 tasks | 4 files |
 | Phase 05 P11 | 16 min | 3 tasks | 7 files |
+| Phase 05 P12 | 17 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -163,6 +164,11 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-09: App.tsx's upserts-before-handleHandoffEvent ordering is pinned by a source-order test proven red by inverting the code — the onEvent closure is not exported and its effect never runs under static rendering, so source order is the invariant's only observable form
 - [Phase 05]: 05-09: vite's ?raw replaces node:fs for filesystem reads in apps/web tests — the package has no @types/node and Task 3 forbids adding a dependency
 - [Phase 05]: D-04 checkpoint answered delete-trigger: the role poll's simulated handoff trigger is deleted; HANDOFF-01 lands as its rendering half in Phase 5 — A GSD workflow role change is an observation, not a handoff to a role-named agent. The choreography stays intact; only the dishonest trigger defers to Phase 6.
+- [Phase 05]: 05-12: the MetroCity CC0 claim splits into two links — the PACK is CC0 at its publisher's cited itch.io listing (re-fetched 2026-09-21), but that the shipped char_0.png IS that pack's art rests on the fork's README credit alone; ASSET-LICENSES.md §1 states both separately rather than averaging them into one tier
+- [Phase 05]: 05-12: the in-app footer drops the sprite licence claim entirely rather than restating a softer one — a one-line footer cannot carry a two-link provenance distinction honestly, so it credits both sources and asserts only the fork's documented MIT
+- [Phase 05]: 05-12: the live proof's per-run reset is the repo's own db:test:down volume removal, never a DROP or row deletion — the harness parses its target from docker-compose.test.yml so it can never be aimed at a developer's dev database (WR-05)
+- [Phase 05]: 05-12: Truth 4's glyph-band assertion is scoped to the blocked agent's own tile column — a whole-canvas colour count is a claim about every agent on the floor, and the Truth-2 agent's glyph sits in exactly the band the assertion excludes
+- [Phase 05]: 05-12: requirements-completed left empty (matching 05-11) — three of Phase 5's four observable truths still depend on an unrun live proof and human verification; flipping them Complete would be the over-claim this plan exists to remove
 
 ### Pending Todos
 
@@ -178,6 +184,7 @@ None yet.
 - Phase 5 (05-08): still no producer of agent.online anywhere in the codebase — the literal 'agent walks into the office when it comes online' demo remains unreproducible. The live proof demonstrates the rendering truths via task.status_changed (what ClaudeCodeRuntime actually emits) and deliberately does NOT close this gap.
 - Phase 5 (05-08): an already-connected browser client never re-derives AgentStatus from task.status_changed / gsd.phase_observed / agent.handoff_completed — only a fresh snapshot reflects them. Phase 6's CEO dashboard has the identical need; proper fix is a live-projection-diff broadcast.
 - T-05-11-WR01 accepted: a worker credential can author state for any agent/company/visibility at POST /events. Acceptance expires the moment a non-INTERNAL consumer is pointed at the control plane (Phase 6/7 owns the fix).
+- Phase 5 (05-12): the restructured live proof (scripts/verify-pixel-office-live.mjs) has never been executed end to end — it recreates a Docker volume and starts two dev servers, so it is a deliberate human run. Truths 1-4 are structurally complete and node --check clean, but none has been observed passing on a real canvas. Running it twice in succession is human-verification item 1 for this phase.
 
 ## Deferred Items
 
@@ -189,6 +196,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-21T09:54:57.029Z
-Stopped at: Completed 05-11-PLAN.md
+Last session: 2026-09-21T10:24:04.786Z
+Stopped at: Completed 05-12-PLAN.md
 Resume file: None

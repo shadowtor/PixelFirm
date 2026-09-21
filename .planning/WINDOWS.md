@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 6
+open_count: 8
 waived_count: 0
 fixed_count: 0
-total_count: 6
-last_updated: 2026-09-21T09:55:30.785Z
+total_count: 8
+last_updated: 2026-09-21T10:21:12.655Z
 ---
 
 # Broken Windows Ledger
@@ -21,6 +21,8 @@ last_updated: 2026-09-21T09:55:30.785Z
 | 4 | 05 | unmet-truth | scripts/verify-pixel-office-live.mjs |  | No producer of agent.online exists; the live proof substitutes task.status_changed and does not close the agent.online gap | open |  | 2026-09-21T06:13:10.735Z |  |
 | 5 | 05 | unmet-truth | packages/pixel-office/src/engine/renderer.ts |  | 05-10: glyph legibility at typical stream/viewing scale and grayscale/colourblind survivability remain judgment-tier and unverified — routed to 05-12 human verification (coverage D6) | open |  | 2026-09-21T09:11:22.159Z |  |
 | 6 | 05 | deviation | apps/api/src/routes/ws-browser.test.ts |  | Route-level CR-03 case is a timing race that passed against the unfixed code; browser-connections.test.ts Test 2 is the deterministic regression detector. Needs a gated db.select spy to be reliable. | open |  | 2026-09-21T09:55:30.785Z |  |
+| 7 | 05 | unrun-verify | scripts/verify-pixel-office-live.mjs |  | 05-12: the live proof's own end-to-end run (node scripts/verify-pixel-office-live.mjs, twice in succession) was never executed — it recreates a Docker volume and starts two dev servers, so it is a deliberate human run. All four truths are structurally complete and node --check clean, but no truth has been observed passing on a real canvas since the restructure. | open |  | 2026-09-21T10:21:10.862Z |  |
+| 8 | 05 | unmet-truth | references/ASSET-LICENSES.md |  | 05-12: MetroCity provenance link 2 is open — the PACK is CC0 at the publisher's cited itch.io listing, but that the shipped file (the fork's char_0.png, decoded) IS that pack's art rests on the fork's README credit alone. Closes on 05-VERIFICATION.md human-verification item 4 (visual comparison against the upstream art). | open |  | 2026-09-21T10:21:12.655Z |  |
 
 ````json
 [
@@ -99,6 +101,32 @@ last_updated: 2026-09-21T09:55:30.785Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-21T09:55:30.785Z",
+    "resolved_at": null,
+    "milestone": null
+  },
+  {
+    "id": 7,
+    "kind": "unrun-verify",
+    "phase": "05",
+    "file": "scripts/verify-pixel-office-live.mjs",
+    "line": null,
+    "description": "05-12: the live proof's own end-to-end run (node scripts/verify-pixel-office-live.mjs, twice in succession) was never executed — it recreates a Docker volume and starts two dev servers, so it is a deliberate human run. All four truths are structurally complete and node --check clean, but no truth has been observed passing on a real canvas since the restructure.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-21T10:21:10.862Z",
+    "resolved_at": null,
+    "milestone": null
+  },
+  {
+    "id": 8,
+    "kind": "unmet-truth",
+    "phase": "05",
+    "file": "references/ASSET-LICENSES.md",
+    "line": null,
+    "description": "05-12: MetroCity provenance link 2 is open — the PACK is CC0 at the publisher's cited itch.io listing, but that the shipped file (the fork's char_0.png, decoded) IS that pack's art rests on the fork's README credit alone. Closes on 05-VERIFICATION.md human-verification item 4 (visual comparison against the upstream art).",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-21T10:21:12.655Z",
     "resolved_at": null,
     "milestone": null
   }
