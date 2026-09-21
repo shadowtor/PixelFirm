@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-06-PLAN.md
-last_updated: "2026-09-21T05:46:30.851Z"
+stopped_at: Completed 05-07-PLAN.md
+last_updated: "2026-09-21T05:56:38.894Z"
 last_activity: 2026-09-21
 last_activity_desc: Phase 05 execution started
-state_head: 5a8beb5582dd9248acd92df797eb830749222fc5
+state_head: b24dcc3b6b2bec27daa6987e6889a38ede290c54
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 23
-  completed_plans: 21
+  completed_plans: 22
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 3 of 8
+Plan: 4 of 8
 Status: Ready to execute
 Last activity: 2026-09-21 — Phase 05 execution started
 
@@ -81,6 +81,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P04 | 20min | 2 tasks | 9 files |
 | Phase 05 P05 | 15min | 3 tasks | 10 files |
 | Phase 05 P06 | 20min | 2 tasks | 7 files |
+| Phase 05 P07 | 12min | 2 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -140,6 +141,10 @@ Recent decisions affecting current work:
 - [Phase 05]: [Phase 05]: 05-05: no-change assumption-delta decision — HANDOFF-01's 'second agent' roadmap phrasing does not require an agent-model architecture change; characters Map was already keyed by agentId (multi-agent) before this plan
 - [Phase 05]: [Phase 05]: 05-06: Verified char_0.png's assumed geometry (112x96, down/up/right rows, walk=[0,1,2,1]/typing=[3,4]/reading=[5,6]) against the fork's own pngDecoder.ts/constants.ts/spriteData.ts before finalizing the decode script — matched exactly, no correction needed
 - [Phase 05]: [Phase 05]: 05-06: Kept the plan's specified alpha<128 binary transparent/opaque threshold rather than the fork's stricter alpha<2 cutoff — deliberate simplification, flagged as a ponytail known-ceiling comment
+- [Phase 05]: 05-07: bubble-waiting.json is an hourglass not the fork's original checkmark — bubble-completed.json already owns the checkmark silhouette, and OFFICE-03 forbids a glyph being another's recolour
+- [Phase 05]: 05-07: bubble-permission.json is a question mark not three-dots-in-a-bubble — badge-discussing.json already owns the bubble-with-dots silhouette
+- [Phase 05]: 05-07: the bubble overlay draws inside the character's own {zY, draw} closure, never as a separate z-sort entry, so an icon can't sort behind a character in front of it
+- [Phase 05]: 05-07: renderer draw-proof pattern — a plain object recording fillRect + the fillStyle in effect, cast to CanvasRenderingContext2D at the call site; bubble-vs-base partitioning uses a control render (bubbleType null), not colour, since bubble-blocked shares #000000/#ffffff with the character sprite
 
 ### Pending Todos
 
@@ -163,6 +168,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-21T05:46:30.620Z
-Stopped at: Completed 05-06-PLAN.md
+Last session: 2026-09-21T05:56:19.584Z
+Stopped at: Completed 05-07-PLAN.md
 Resume file: None
