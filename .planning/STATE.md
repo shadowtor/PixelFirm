@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Phase 5 context gathered
-last_updated: "2026-09-21T02:01:00.902Z"
+stopped_at: Completed 05-01-PLAN.md
+last_updated: "2026-09-21T02:51:25.940Z"
 last_activity: 2026-09-21
-last_activity_desc: Phase 04 complete, transitioned to Phase 5
-state_head: 38dacdab78b5bf32d9753c477977739de05c93f9
+last_activity_desc: Phase 05 execution started
+state_head: 5be2437e3f4590c2b405ee9cf3a5349855b25239
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 19
-  completed_plans: 15
+  completed_plans: 16
   percent: 50
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 
 ## Current Position
 
-Phase: 05 (Pixel Office Renderer) — READY TO EXECUTE
-Plan: Not started
+Phase: 05 (Pixel Office Renderer) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-09-21 — Phase 04 complete, transitioned to Phase 5
+Last activity: 2026-09-21 — Phase 05 execution started
 
 Progress: [█████░░░░░] 50%
 
@@ -75,6 +75,7 @@ Progress: [█████░░░░░] 50%
 | Phase 04 P02 | 45min | 2 tasks | 4 files |
 | Phase 04 P03 | 35min | 2 tasks | 6 files |
 | Phase 04 P04 | ~9min + checkpoint wait | 3 tasks | 6 files |
+| Phase 05 P01 | 25min | 2 tasks | 46 files |
 
 ## Accumulated Context
 
@@ -122,6 +123,9 @@ Recent decisions affecting current work:
 - [Phase 04]: [Phase 04]: [Phase 04-03]: role-change poll uses the plan-specified 5000ms interval (not poll-loop.ts's own 2500ms DEFAULT_INTERVAL_MS) -- ClaudeCodeRuntime now implements the complete eight-method AgentRuntime with zero remaining stubs
 - [Phase 04]: [Phase 04]: [Phase 04-04]: Demo target SyncSmith Phase 1 via /gsd-discuss-phase 1 — real ClaudeCodeRuntime.startTask drove it to completed with a genuine unscripted AskUserQuestion -> ceo.approval_requested signal, all events schema-valid
 - [Phase 04]: [Phase 04]: [Phase 04-04]: Human approved Task 3 checkpoint after independently re-verifying evidence content plus SyncSmith's restored clean git state (status/worktree list/branch list)
+- [Phase 05]: [Phase 05]: [05-01]: Trimmed the forked pixel-agents-hq renderer/types/constants to the IDLE-only render pipeline this plan needs (human-approved at the Task 1 checkpoint), dropping ~10 fork-internal modules (furniture/carpet/area/pet/matrix-effect/editor-overlay, PNG sprite cache) not in this plan's file list
+- [Phase 05]: [Phase 05]: [05-01]: BROWSER_ACCESS_TOKEN is one shared timing-safe-compared token (not a per-client HMAC credential table) — proportionate for this MVP's single trusted browser viewer
+- [Phase 05]: [Phase 05]: [05-01]: No producer of agent.online exists anywhere in this codebase yet — the phase's literal live-browser demo isn't reproducible until a future plan adds an agent-identity event producer
 
 ### Pending Todos
 
@@ -133,6 +137,7 @@ None yet.
 - [Phase 4]: CR-01/CR-02/CR-03 code-review fixes (ANTHROPIC_API_KEY env-stripping, terminal-status guard, runQuery reentrancy guard) have no dedicated unit regression test exercising the guard logic directly — real-subprocess integration coverage and direct code inspection back them today, but a future refactor could silently regress any of the three while the existing suite stays green. Non-blocking, flagged by the phase verifier.
 - Phase 5 planning: full asset-licence audit of the Pixel Agents fork beyond the credited CC0 character pack is still outstanding.
 - Phase 8 planning: verify current Twitch EventSub reconnect/signature details against live docs; budget subscription total_cost before choosing event types.
+- Phase 5 (05-01): pre-existing repo-wide TS module-resolution gap — event-schema/index.ts and company-core/index.ts re-export without .js extensions, which tsc --noEmit flags under moduleResolution NodeNext (pnpm --filter api typecheck already failed on this before 05-01). Doesn't block any required verify command for 05-01 through 05-04 but worth a dedicated fix pass. See deferred-items.md.
 
 ## Deferred Items
 
@@ -144,6 +149,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-21T01:00:42.150Z
-Stopped at: Phase 5 context gathered
-Resume file: F:/Sidegigs/PixelFirm/.planning/phases/05-pixel-office-renderer/05-CONTEXT.md
+Last session: 2026-09-21T02:51:25.761Z
+Stopped at: Completed 05-01-PLAN.md
+Resume file: None

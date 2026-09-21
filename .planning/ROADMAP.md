@@ -167,11 +167,11 @@ Plans:
   3. When one agent hands off work to another, the office shows the first agent walking over, a task icon appearing, and the second agent accepting it and moving to work — using deterministic, template-based dialogue, never LLM-generated at render time.
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
 
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 
 Plans:
 
-- [ ] 05-01-PLAN.md — Tracer: AgentStatus contract + browser Broadcast Hub (auth/snapshot/relay) + forked Canvas2D engine + apps/web, one real agent's status end-to-end
+- [x] 05-01-PLAN.md — Tracer: AgentStatus contract + browser Broadcast Hub (auth/snapshot/relay) + forked Canvas2D engine + apps/web, one real agent's status end-to-end
 - [ ] 05-02-PLAN.md — Exhaustive 15-value AgentStatus visual mapping + blocked/waiting signal (OFFICE-01/03) + asset-licence audit + in-app attribution (OFFICE-02)
 - [ ] 05-03-PLAN.md — agent.handoff_completed/fromAgentId schema + agentId threading through ClaudeCodeRuntime + real per-agent AgentStatus derivation
 - [ ] 05-04-PLAN.md — Handoff choreography FSM (walk-to-desk, findPath) + deterministic dialogue templates (HANDOFF-01/02)
@@ -246,7 +246,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 0/TBD | Not started | - |
+| 5. Pixel Office Renderer | 1/4 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
