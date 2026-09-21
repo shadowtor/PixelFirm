@@ -4,6 +4,7 @@ import { db } from "../db/client.js";
 import { events } from "../db/schema.js";
 import { authenticateWorker } from "../auth/worker-auth.js";
 import { recordHeartbeat } from "../ws/connection-status.js";
+import { broadcastToBrowsers } from "../ws/browser-connections.js";
 
 // WR-03: authenticateWorker only proves "this is a valid, non-revoked
 // worker credential" — it does not scope which event *types* that
@@ -58,12 +59,19 @@ export async function registerEventsRoute(fastify: FastifyInstance) {
           { eventId: event.id, eventType: event.type },
           "duplicate event id ignored (onConflictDoNothing)",
         );
-      } else if (event.type === "worker.heartbeat") {
-        // T-03-01 Tampering mitigation: key by the AUTHENTICATED
-        // request.workerId, never event.payload — a worker must not be able
-        // to report a heartbeat for a different workerId than the one its
-        // credential authenticated as.
-        recordHeartbeat(request.workerId as string);
+      } else {
+        if (event.type === "worker.heartbeat") {
+          // T-03-01 Tampering mitigation: key by the AUTHENTICATED
+          // request.workerId, never event.payload — a worker must not be
+          // able to report a heartbeat for a different workerId than the
+          // one its credential authenticated as.
+          recordHeartbeat(request.workerId as string);
+        }
+        // Phase 5: relay every newly-inserted (non-duplicate) event to every
+        // open browser socket. Same already-validated `event` object the
+        // insert used — no re-derivation, no other change to this route's
+        // existing WORKER_ALLOWED_EVENT_TYPES gate or dedup logic.
+        broadcastToBrowsers({ type: "event", event });
       }
 
       return reply.code(202).send({ accepted: true });

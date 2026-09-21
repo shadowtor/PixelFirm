@@ -1,4 +1,5 @@
 import type { CompanyEvent } from "event-schema";
+import { AgentStatus } from "event-schema";
 import type { ProjectionState } from "./projections";
 import { emptyState } from "./projections";
 
@@ -65,7 +66,7 @@ const handlers: {
       ...state,
       agents: {
         ...state.agents,
-        [agentId]: { id: agentId, status: "idle", name: event.payload.name },
+        [agentId]: { id: agentId, status: AgentStatus.IDLE, name: event.payload.name },
       },
       teams: {
         ...state.teams,
@@ -74,6 +75,8 @@ const handlers: {
     };
   },
 
+  // A started session defaults to the most common active state until
+  // Plan 05-03's real per-task derivation refines it further.
   "session.started": (state, event) => {
     const agentId = event.sourceAgentId;
     const existing = agentId ? state.agents[agentId] : undefined;
@@ -82,11 +85,14 @@ const handlers: {
       ...state,
       agents: {
         ...state.agents,
-        [agentId]: { ...existing, status: "working" },
+        [agentId]: { ...existing, status: AgentStatus.CODING },
       },
     };
   },
 
+  // The receiving agent is waiting on the sending agent to complete the
+  // handoff — the one honest, reachable derivation path for
+  // waiting_for_agent this plan has (05-01 must_haves.truths).
   "agent.handoff_requested": (state, event) => {
     const { taskId, toAgentId } = event.payload;
     const existingTask = state.tasks[taskId];
@@ -98,7 +104,10 @@ const handlers: {
         : state.tasks,
       agents: {
         ...state.agents,
-        [toAgentId]: { ...(existingToAgent ?? { id: toAgentId, status: "idle" }), status: "assigned" },
+        [toAgentId]: {
+          ...(existingToAgent ?? { id: toAgentId, status: AgentStatus.IDLE }),
+          status: AgentStatus.WAITING_FOR_AGENT,
+        },
       },
     };
   },

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { CompanyEvent } from "event-schema";
+import { AgentStatus } from "event-schema";
 import { fold, reduce, emptyState } from "./reducer";
 import { stubEventSequence } from "./fixtures/stub-events";
 
@@ -61,8 +62,8 @@ describe("fold — full 12-event fixture (EVENT-03)", () => {
 
     expect(result.tasks["task-1"].status).toBe("committed");
     expect(result.projects["project-1"].status).toBe("deploying");
-    expect(result.agents["agent-1"].status).toBe("working");
-    expect(result.agents["agent-2"].status).toBe("assigned");
+    expect(result.agents["agent-1"].status).toBe(AgentStatus.CODING);
+    expect(result.agents["agent-2"].status).toBe(AgentStatus.WAITING_FOR_AGENT);
   });
 });
 

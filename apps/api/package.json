@@ -14,6 +14,7 @@
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",
     "@fastify/websocket": "^11.3.0",
+    "company-core": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "event-schema": "workspace:*",
     "fastify": "^5.12.5",

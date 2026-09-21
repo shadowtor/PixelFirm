@@ -5,6 +5,7 @@ import fastifyRateLimit from "@fastify/rate-limit";
 import { env } from "./env.js";
 import { registerEventsRoute } from "./routes/events.js";
 import { registerWsRoute } from "./routes/ws.js";
+import { registerWsBrowserRoute } from "./routes/ws-browser.js";
 import { registerAdminWorkersRoute } from "./routes/admin-workers.js";
 
 // SEC-04 CSRF posture (RESEARCH.md Pattern 5): this API is authenticated only
@@ -33,6 +34,7 @@ export function buildServer() {
   fastify.register(registerEventsRoute);
   fastify.register(fastifyWebsocket);
   fastify.register(registerWsRoute);
+  fastify.register(registerWsBrowserRoute);
   fastify.register(registerAdminWorkersRoute);
 
   return fastify;

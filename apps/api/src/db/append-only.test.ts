@@ -1,6 +1,7 @@
 process.env.DATABASE_URL = "postgres://postgres:postgres@localhost:5434/pixelfirm_test";
 process.env.CREDENTIAL_PEPPER = "test-pepper";
 process.env.BOOTSTRAP_SECRET = "test-bootstrap";
+process.env.BROWSER_ACCESS_TOKEN = "test-browser-access-token";
 
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -36,9 +37,17 @@ beforeAll(async () => {
   eventId = randomUUID();
   rawClient = new Client({ connectionString: process.env.DATABASE_URL });
   await rawClient.connect();
+  // Payload must be a schema-valid company.started payload (not '{}') —
+  // this row is never deleted (that's the point of this test) and persists
+  // in the shared test DB for the rest of the suite run. Phase 5's
+  // ws-browser.ts route folds every row in this table into a snapshot and
+  // throws on any row that fails CompanyEventSchema.safeParse (by design —
+  // a stored row failing its own schema is real corruption); an
+  // append-only-only-relevant `{}` payload here would poison every other
+  // test file's snapshot fold for the rest of the run.
   await rawClient.query(
     `INSERT INTO events (id, type, version, occurred_at, company_id, visibility, payload)
-     VALUES ($1, 'company.started', 1, now(), 'company-1', 'INTERNAL', '{}'::jsonb)`,
+     VALUES ($1, 'company.started', 1, now(), 'company-1', 'INTERNAL', '{"name":"Append Only Test Co"}'::jsonb)`,
     [eventId],
   );
 });

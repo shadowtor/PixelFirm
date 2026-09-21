@@ -1,6 +1,7 @@
 process.env.DATABASE_URL = "postgres://postgres:postgres@localhost:5434/pixelfirm_test";
 process.env.CREDENTIAL_PEPPER = "test-pepper";
 process.env.BOOTSTRAP_SECRET = "test-bootstrap";
+process.env.BROWSER_ACCESS_TOKEN = "test-browser-access-token";
 
 import { beforeAll, describe, expect, it } from "vitest";
 import type { issueCredential as issueCredentialType, verifyCredential as verifyCredentialType } from "./credentials.js";

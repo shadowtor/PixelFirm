@@ -1,6 +1,8 @@
+import type { AgentStatus } from "event-schema";
+
 export interface AgentState {
   id: string;
-  status: string;
+  status: AgentStatus;
   name?: string;
 }
 
