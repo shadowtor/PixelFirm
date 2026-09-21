@@ -88,11 +88,15 @@ export function createClaudeCodeRuntime(options: {
     );
   }
 
-  // D-08 source 1: real, non-stub requestHandoff — fired by the role-change
-  // poll wired below in runQuery (gsd-adapter's reused observeGsdState, never
-  // a second .planning/ parser). Deliberately observation-only: does not
-  // touch the task's own AgentTaskStatus, since no second agent exists yet in
-  // Phase 4 to actually receive control (CONTEXT.md domain boundary).
+  // Real, non-stub requestHandoff — a required AgentRuntime interface member.
+  // This runtime has NO automatic handoff trigger: a handoff is initiated by a
+  // caller that already knows a real receiving agent id, which is Phase 6's
+  // multi-agent orchestration territory. The role-change poll below used to
+  // call this with a GSD workflow role label ("Engineering", "QA") as
+  // toAgentId — a fabricated handoff out of a workflow observation (CR-04);
+  // it now emits the observation as an observation instead.
+  // Deliberately observation-only: does not touch the task's own
+  // AgentTaskStatus, since receiving control is the receiver's own business.
   async function requestHandoff(taskId: string, toAgentId: string): Promise<void> {
     // Never fabricate a placeholder fromAgentId (Core Value) — matches
     // getStatus's own unknown-taskId guard below.
@@ -104,28 +108,6 @@ export function createClaudeCodeRuntime(options: {
       options.controlPlaneUrl,
       options.token,
       buildEnvelope(options.companyId, "agent.handoff_requested", { taskId, fromAgentId, toAgentId }, taskId),
-    );
-  }
-
-  // Phase 5 addition (HANDOFF-01): completes a handoff. Mirrors
-  // requestHandoff's postEvent/buildEnvelope shape exactly. This
-  // single-session simulation has no separate receiving process yet (Phase
-  // 6+ multi-agent orchestration territory) — the role-change poll below
-  // fires this immediately after requestHandoff, since the observed role
-  // transition IS the completion signal here, not a genuinely asynchronous
-  // second event (T-05-08, accepted).
-  async function completeHandoff(taskId: string, toAgentId: string): Promise<void> {
-    // CR-02 (05-REVIEW.md): reassign ownership BEFORE posting the completion
-    // event, so every emitStatus call for this taskId made after this point
-    // (the same in-flight runQuery's subsequent result/watchdog/pause/cancel
-    // paths, or any later call) reads the receiving agent's ID, never the
-    // stale original sender's.
-    const record = tasks.get(taskId);
-    if (record) record.agentId = toAgentId;
-    await postEvent(
-      options.controlPlaneUrl,
-      options.token,
-      buildEnvelope(options.companyId, "agent.handoff_completed", { taskId, toAgentId }, taskId),
     );
   }
 
@@ -243,10 +225,36 @@ export function createClaudeCodeRuntime(options: {
               }
               if (observed.role !== record.lastRole) {
                 record.lastRole = observed.role;
-                await requestHandoff(taskId, observed.role);
-                // Phase 5: fire completeHandoff back-to-back with
-                // requestHandoff — see completeHandoff's own comment.
-                await completeHandoff(taskId, observed.role);
+                // CR-04: a GSD workflow role change is an observation ABOUT
+                // the workflow, not a handoff TO an agent named after the
+                // role. Emit the same gsd.phase_observed envelope
+                // apps/worker/src/poll-loop.ts emits and let company-core's
+                // reducer refine the real agent's status from it — the role
+                // string never touches a field typed as an agent id.
+                //
+                // `active: true` is honest here, on a stronger basis than
+                // poll-loop.ts's: this poll only exists inside runQuery, for
+                // the lifetime of an in-flight Claude Code stream, so at the
+                // moment it fires there genuinely is a live process working
+                // in that worktree. poll-loop.ts has to combine its
+                // observation with a separate process-liveness signal
+                // precisely because it has no such guarantee.
+                await postEvent(
+                  options.controlPlaneUrl,
+                  options.token,
+                  buildEnvelope(
+                    options.companyId,
+                    "gsd.phase_observed",
+                    {
+                      phase: observed.phase,
+                      status: observed.status,
+                      category: observed.category,
+                      role: observed.role,
+                      active: true,
+                    },
+                    taskId,
+                  ),
+                );
               }
             } catch (err) {
               console.error(`ClaudeCodeRuntime.runQuery: role-poll failed for task ${taskId}`, err);
