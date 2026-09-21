@@ -181,7 +181,7 @@ Plans:
 - [x] 05-08-PLAN.md — Gap closure: live end-to-end proof (real dev servers + Playwright canvas sampling)
 - [ ] 05-09-PLAN.md — Gap closure 2: live Character path in apps/web via company-core reduce (CR-01) + wired attribution test (OFFICE-02)
 - [ ] 05-10-PLAN.md — Gap closure 2: owner-bound glyph placement + desk headroom (CR-02) + per-agent identity pixels (WR-08) + IN-04/IN-06
-- [ ] 05-11-PLAN.md — Gap closure 2: role-vs-agent-id at the producer (CR-04) + buffered browser-socket registration (CR-03) + WR-01 accepted threat
+- [ ] 05-11-PLAN.md — Gap closure 2: role-vs-agent-id at the producer (CR-04) + buffered browser-socket registration (CR-03) + WR-01 accepted threat *(not autonomous — opens with a `checkpoint:decision` on D-04 scope impact)*
 - [ ] 05-12-PLAN.md — Gap closure 2: honest live proof (no reload, no pre-seed) + licence-audit/footer claim correction (WR-09)
 
 **Wave 1**
