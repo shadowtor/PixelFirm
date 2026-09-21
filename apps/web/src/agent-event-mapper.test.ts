@@ -1,7 +1,14 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
 import { AgentStatus, type CompanyEvent } from "event-schema";
 import { emptyState, fold } from "company-core";
-import { _resetForTests, getCharacter, upsertCharacterFromAgent } from "pixel-office";
+import {
+  _resetForTests,
+  getCharacter,
+  handleHandoffEvent,
+  registerTaskTitle,
+  upsertCharacterFromAgent,
+} from "pixel-office";
 // Namespace import on purpose (05-10 precedent): a named import of a
 // not-yet-existing export is an ESM link failure, which classifies as
 // INVALID_RED rather than a genuine assertion failure in the target test.
@@ -40,6 +47,17 @@ function taskCreated(taskId: string, title: string): CompanyEvent {
     type: "task.created",
     taskId,
     payload: { title },
+  } as CompanyEvent;
+}
+
+function handoffRequested(taskId: string, fromAgentId: string, toAgentId: string): CompanyEvent {
+  return {
+    ...BASE,
+    id: nextId(),
+    type: "agent.handoff_requested",
+    taskId,
+    sourceAgentId: fromAgentId,
+    payload: { taskId, fromAgentId, toAgentId },
   } as CompanyEvent;
 }
 
@@ -127,5 +145,94 @@ describe("applyLiveEvent", () => {
 
     expect(upserts).toEqual([]);
     expect(Object.keys(state.agents)).toEqual([]);
+  });
+});
+
+// HANDOFF-01 (CR-01): before 05-09 nothing on the live path created a
+// Character, so handoff-choreography.ts's `if (!fromChar || !toChar) return;`
+// guard could never be satisfied in production — the choreography was
+// unreachable without a page reload. These tests drive the whole sequence
+// through the real modules, never hand-built Character objects.
+describe("live handoff path", () => {
+  const SENDER = "agent-sender";
+  const RECEIVER = "agent-receiver";
+  const TASK = "task-handoff-1";
+
+  beforeEach(() => {
+    _resetForTests();
+  });
+
+  /** Fold one event into the live projection and apply the Characters it changed. */
+  function thread(state: ReturnType<typeof emptyState>, event: CompanyEvent) {
+    const { state: next, upserts } = mapper.applyLiveEvent(state, event);
+    for (const u of upserts) upsertCharacterFromAgent(u.agentId, u.status, u.name);
+    return next;
+  }
+
+  function liveUpToHandoff(): { state: ReturnType<typeof emptyState>; handoff: CompanyEvent } {
+    let state = emptyState();
+    state = thread(state, taskStatusChanged(SENDER, TASK, "running"));
+    // Matches how App.tsx feeds titles (snapshot + task.created) so the FSM's
+    // dialogue interpolates a real TaskState.title, not the raw taskId.
+    registerTaskTitle(TASK, "Close CR-01");
+    return { state, handoff: handoffRequested(TASK, SENDER, RECEIVER) };
+  }
+
+  it("creates both handoff participants from live events alone — no snapshot, no reload", () => {
+    const { state, handoff } = liveUpToHandoff();
+
+    thread(state, handoff);
+
+    expect(getCharacter(SENDER)).toBeDefined();
+    expect(getCharacter(RECEIVER)).toBeDefined();
+  });
+
+  it("walks the sender to the receiver's desk when the choreography runs after the upserts", () => {
+    const { state, handoff } = liveUpToHandoff();
+    thread(state, handoff);
+
+    handleHandoffEvent(handoff);
+
+    const sender = getCharacter(SENDER);
+    const receiver = getCharacter(RECEIVER);
+    // "walk" is CharacterState.WALK (packages/pixel-office/src/types.ts) —
+    // that const object is not part of this package's public surface.
+    expect(sender?.state).toBe("walk");
+    expect(sender?.path.length).toBeGreaterThan(0);
+    expect(sender?.path.at(-1)).toEqual({ col: receiver?.seatCol, row: receiver?.seatRow });
+  });
+
+  it("leaves the sender standing still when the choreography runs before the upserts — the ordering in App.tsx is load-bearing", () => {
+    const { state, handoff } = liveUpToHandoff();
+    const senderBefore = getCharacter(SENDER);
+    expect(senderBefore).toBeDefined();
+    const stateBefore = senderBefore?.state;
+
+    // Deliberately inverted: choreography first, projection upserts second.
+    handleHandoffEvent(handoff);
+
+    const sender = getCharacter(SENDER);
+    expect(sender?.path.length).toBe(0);
+    expect(sender?.state).toBe(stateBefore);
+
+    // ...and the receiver only ever exists once the upserts are applied.
+    expect(getCharacter(RECEIVER)).toBeUndefined();
+    thread(state, handoff);
+    expect(getCharacter(RECEIVER)).toBeDefined();
+  });
+
+  // The test above proves the guard fires when the order is wrong; this one
+  // pins the order itself. App.tsx's onEvent closure is not exported and its
+  // effect never runs under a static render, so the source order is the only
+  // observable form this invariant has.
+  it("keeps App.tsx's handleHandoffEvent call below its upsert loop", () => {
+    const source = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
+
+    const upsertLine = source.indexOf("upsertCharacterFromAgent(upsert.agentId");
+    const handoffLine = source.indexOf("handleHandoffEvent(event)");
+
+    expect(upsertLine).toBeGreaterThan(-1);
+    expect(handoffLine).toBeGreaterThan(-1);
+    expect(upsertLine).toBeLessThan(handoffLine);
   });
 });
