@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Event Schema & State Engine** - Typed event schema and Company State Engine proven against stubbed events, with replay (completed 2026-09-18)
 - [x] **Phase 2: Control Plane Skeleton** - Durable Postgres event log behind an authenticated WS gateway with a security baseline (completed 2026-09-19)
 - [x] **Phase 3: Worker, Git Adapter & GSD Adapter** - Worker observes a real repository's real git/GSD state and emits real events (completed 2026-09-20)
-- [ ] **Phase 4: AgentRuntime & ClaudeCodeRuntime** - Generic runtime abstraction with Claude Code as the first real implementation
+- [x] **Phase 4: AgentRuntime & ClaudeCodeRuntime** - Generic runtime abstraction with Claude Code as the first real implementation (completed 2026-09-21)
 - [ ] **Phase 5: Pixel Office Renderer** - Forked Pixel Agents office renders real state, never a fabricated animation
 - [ ] **Phase 6: CEO Dashboard & Approval Workflow** - Human approval gate that nothing sensitive can bypass
 - [ ] **Phase 7: Stream-Safe Visibility & Overlay Route** - Server-side visibility filtering plus the public OBS overlay route
@@ -130,7 +130,7 @@ Plans:
   1. An AgentRuntime interface (startTask/pauseTask/resumeTask/cancelTask/getStatus/sendMessage/requestReview/requestHandoff) exists and is callable independent of any specific coding-agent implementation.
   2. ClaudeCodeRuntime starts, pauses, resumes, and cancels a real Claude Code task using Claude MAX subscription auth, with no ANTHROPIC_API_KEY required.
 
-**Plans:** 4/4 plans executed
+**Plans:** 4/4 plans complete
 
 Plans:
 
@@ -224,7 +224,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 1. Event Schema & State Engine | 3/3 | Complete    | 2026-09-18 |
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
-| 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | In Progress|  |
+| 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
 | 5. Pixel Office Renderer | 0/TBD | Not started | - |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
