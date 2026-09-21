@@ -288,7 +288,7 @@ describe("replay determinism — Phase 3 event types (EVENT-04)", () => {
 // exists yet for real Claude Code tasks, so this handler upserts rather than
 // gating on "task must already exist" (mirrors agent.handoff_requested's
 // upsert-if-missing pattern, lines 90-104).
-function taskStatusChangedEvent(status = "completed"): CompanyEvent {
+function taskStatusChangedEvent(status = "completed", overrides: Partial<CompanyEvent> = {}): CompanyEvent {
   return {
     id: "event-task-status-01",
     version: 1,
@@ -298,6 +298,7 @@ function taskStatusChangedEvent(status = "completed"): CompanyEvent {
     visibility: "INTERNAL",
     type: "task.status_changed",
     payload: { taskId: "task-1", status },
+    ...overrides,
   } as CompanyEvent;
 }
 
@@ -315,5 +316,70 @@ describe("task.status_changed", () => {
       status: "failed",
       title: "Build git adapter",
     });
+  });
+
+  // Phase 5 (05-03): sourceAgentId-bearing task.status_changed events now
+  // additionally derive and upsert a real AgentStatus on state.agents.
+  it("upserts state.agents[sourceAgentId] with a real derived AgentStatus when sourceAgentId is present", () => {
+    const event = taskStatusChangedEvent("running", { sourceAgentId: "agent-1" });
+    const result = reduce(emptyState(), event);
+    expect(result.agents["agent-1"]).toEqual({
+      id: "agent-1",
+      status: AgentStatus.CODING,
+      currentTaskId: "task-1",
+      rawTaskStatus: "running",
+    });
+  });
+
+  it("leaves state.agents untouched when sourceAgentId is absent from the same event type (no fabricated agent update)", () => {
+    const event = taskStatusChangedEvent("running");
+    const result = reduce(emptyState(), event);
+    expect(result.agents).toEqual({});
+  });
+});
+
+describe("gsd.phase_observed re-derives active agents' AgentStatus (Phase 5, 05-03)", () => {
+  it("re-derives a running agent's fine-grained status when the company-wide GSD category shifts", () => {
+    const withAgent = reduce(emptyState(), taskStatusChangedEvent("running", { sourceAgentId: "agent-1" }));
+    expect(withAgent.agents["agent-1"].status).toBe(AgentStatus.CODING);
+
+    const result = reduce(withAgent, {
+      ...phaseObservedEvent(),
+      payload: { status: "executing", category: "research", role: "Research Agent", active: true },
+    });
+
+    expect(result.agents["agent-1"].status).toBe(AgentStatus.RESEARCHING);
+  });
+
+  it("does not touch an agent whose rawTaskStatus is not starting/running", () => {
+    const withAgent = reduce(emptyState(), taskStatusChangedEvent("completed", { sourceAgentId: "agent-1" }));
+    expect(withAgent.agents["agent-1"].status).toBe(AgentStatus.COMPLETED);
+
+    const result = reduce(withAgent, {
+      ...phaseObservedEvent(),
+      payload: { status: "executing", category: "research", role: "Research Agent", active: true },
+    });
+
+    expect(result.agents["agent-1"].status).toBe(AgentStatus.COMPLETED);
+  });
+});
+
+function handoffCompletedEvent(): CompanyEvent {
+  return {
+    id: "event-handoff-completed-01",
+    version: 1,
+    occurredAt: "2026-09-20T00:00:01.000Z",
+    companyId: "company-1",
+    taskId: "task-1",
+    visibility: "INTERNAL",
+    type: "agent.handoff_completed",
+    payload: { taskId: "task-1", toAgentId: "agent-2" },
+  } as CompanyEvent;
+}
+
+describe("agent.handoff_completed (Phase 5, 05-03)", () => {
+  it("upserts the receiving agent to AgentStatus.CODING", () => {
+    const result = reduce(emptyState(), handoffCompletedEvent());
+    expect(result.agents["agent-2"].status).toBe(AgentStatus.CODING);
   });
 });
