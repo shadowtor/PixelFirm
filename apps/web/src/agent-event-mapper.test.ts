@@ -1,5 +1,7 @@
-import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it } from "vitest";
+// Vite's ?raw is the filesystem read available here without adding
+// @types/node to a browser package (apps/web has no node typings).
+import appSource from "./App.tsx?raw";
 import { AgentStatus, type CompanyEvent } from "event-schema";
 import { emptyState, fold } from "company-core";
 import {
@@ -226,10 +228,8 @@ describe("live handoff path", () => {
   // effect never runs under a static render, so the source order is the only
   // observable form this invariant has.
   it("keeps App.tsx's handleHandoffEvent call below its upsert loop", () => {
-    const source = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
-
-    const upsertLine = source.indexOf("upsertCharacterFromAgent(upsert.agentId");
-    const handoffLine = source.indexOf("handleHandoffEvent(event)");
+    const upsertLine = appSource.indexOf("upsertCharacterFromAgent(upsert.agentId");
+    const handoffLine = appSource.indexOf("handleHandoffEvent(event)");
 
     expect(upsertLine).toBeGreaterThan(-1);
     expect(handoffLine).toBeGreaterThan(-1);
