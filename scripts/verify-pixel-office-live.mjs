@@ -37,9 +37,10 @@ const SPRITE_DIR = path.join(ROOT, "packages", "pixel-office", "src", "sprites")
 const WEB_PORT = 5177;
 const WEB_URL = `http://localhost:${WEB_PORT}`;
 const COMPANY_ID = "live-proof-co";
-// Fixed ids (never per-run-unique): the events table is append-only, so fixed
-// ids keep a re-run reusing the same three desks instead of accumulating a new
-// cohort of stale agents on the floor every time.
+// Fixed, readable ids. They no longer need to be fixed for correctness — every
+// run starts from an empty store (see the target-resolution block below), so
+// nothing accumulates between runs — they are fixed because a named desk is
+// easier to reason about in a failure message than a fresh UUID.
 const SENDER = "live-proof-sender";
 const RECEIVER = "live-proof-receiver";
 const BLOCKED = "live-proof-blocked";
@@ -71,6 +72,64 @@ for (const key of ["DATABASE_URL", "BOOTSTRAP_SECRET", "BROWSER_ACCESS_TOKEN", "
   }
 }
 
+// ── test-container target resolution (WR-05) ─────────────────────────────────
+//
+// This harness SELECTS its target rather than inheriting it. `apps/api/.env`'s
+// DATABASE_URL names a developer's DEV database; this run wipes its store
+// before every proof, so inheriting that name would aim a volume removal at a
+// developer's data. The only unambiguous description of a harness-owned store
+// in this repo is `apps/api/docker-compose.test.yml`'s own POSTGRES_DB and
+// published port, so both are parsed out of that file at run time (never
+// hardcoded here, so the harness and the container cannot disagree) and
+// override DATABASE_URL's corresponding components. The resulting URL is the
+// single target for the whole run: this file's own pg client AND the
+// DATABASE_URL handed to the spawned apps/api dev server.
+const COMPOSE_PATH = path.join(ROOT, "apps", "api", "docker-compose.test.yml");
+
+function parseComposeTarget(file) {
+  const src = readFileSync(file, "utf8");
+  const db = src.match(/POSTGRES_DB:\s*["']?([A-Za-z0-9_-]+)["']?/)?.[1];
+  const port = src.match(/^\s*-\s*["']?(\d+):\d+["']?\s*$/m)?.[1];
+  if (!db || !port) {
+    throw new Error(`could not read POSTGRES_DB and the published host port from ${file}`);
+  }
+  return { db, port };
+}
+
+const COMPOSE_TARGET = parseComposeTarget(COMPOSE_PATH);
+
+const testDbUrl = new URL(apiEnv.DATABASE_URL);
+testDbUrl.pathname = `/${COMPOSE_TARGET.db}`;
+testDbUrl.port = COMPOSE_TARGET.port;
+const TEST_DATABASE_URL = testDbUrl.toString();
+
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+/**
+ * Halts unless the resolved target is the loopback container `docker-compose
+ * .test.yml` describes. Its job is NOT to make a destructive statement safe —
+ * this harness issues none — but to guarantee the container whose volume is
+ * about to be recreated is the same one the dev server will then connect to,
+ * and to stop a dev server plus a volume wipe ever being pointed at a
+ * non-local Postgres.
+ */
+function assertHarnessOwnedTarget() {
+  const url = new URL(TEST_DATABASE_URL);
+  const db = decodeURIComponent(url.pathname.replace(/^\//, ""));
+  const actual = `host=${url.hostname} port=${url.port} db=${db}`;
+  const expected = `host=<loopback> port=${COMPOSE_TARGET.port} db=${COMPOSE_TARGET.db}`;
+  if (!LOOPBACK_HOSTS.has(url.hostname) || db !== COMPOSE_TARGET.db || url.port !== COMPOSE_TARGET.port) {
+    throw new Error(
+      `refusing to run — the resolved target is not the docker-compose.test.yml container.\n` +
+        `  expected: ${expected}\n` +
+        `  actual:   ${actual}\n` +
+        `Nothing has been reset. This harness recreates that container's volume and starts a dev\n` +
+        `server against the same URL; both must be the local test container.`,
+    );
+  }
+  log(`target resolved from apps/api/docker-compose.test.yml: ${actual}`);
+}
+
 // The browser talks to whatever VITE_WS_BASE_URL names; post to that same
 // server so a port mismatch can never make this proof silently test two
 // different API processes.
@@ -79,11 +138,49 @@ const API_PORT = Number(wsBase.match(/:(\d+)\s*$/)?.[1] ?? apiEnv.PORT ?? 3000);
 const API_URL = `http://localhost:${API_PORT}`;
 
 const constantsSrc = readFileSync(path.join(ROOT, "packages", "pixel-office", "src", "constants.ts"), "utf8");
+const officeIndexSrc = readFileSync(path.join(ROOT, "packages", "pixel-office", "src", "index.ts"), "utf8");
 function readColorConst(name) {
   const m = constantsSrc.match(new RegExp(`${name}\\s*=\\s*"(#[0-9a-fA-F]{6})"`));
   if (!m) throw new Error(`could not read ${name} from packages/pixel-office/src/constants.ts`);
   return m[1];
 }
+function readNumberConst(src, where, name) {
+  const m = src.match(new RegExp(`${name}\\s*=\\s*(\\d+)`));
+  if (!m) throw new Error(`could not read ${name} from ${where}`);
+  return Number(m[1]);
+}
+
+// Grid geometry, read from the engine's own source rather than restated here:
+// a layout change moves these assertions with it instead of silently
+// invalidating them.
+const TILE_SIZE = readNumberConst(constantsSrc, "constants.ts", "TILE_SIZE");
+const DEFAULT_COLS = readNumberConst(constantsSrc, "constants.ts", "DEFAULT_COLS");
+const DEFAULT_ROWS = readNumberConst(constantsSrc, "constants.ts", "DEFAULT_ROWS");
+const DESK_ROW_START = readNumberConst(officeIndexSrc, "index.ts", "DESK_ROW_START");
+const DESK_ROW_PITCH = readNumberConst(officeIndexSrc, "index.ts", "DESK_ROW_PITCH");
+const INTERIOR_COLS = DEFAULT_COLS - 2;
+const MAP_W = DEFAULT_COLS * TILE_SIZE;
+const MAP_H = DEFAULT_ROWS * TILE_SIZE;
+
+/** `nextDeskPosition()`'s formula (packages/pixel-office/src/index.ts). */
+function deskPosition(slot) {
+  const row = DESK_ROW_START + DESK_ROW_PITCH * Math.floor(slot / INTERIOR_COLS);
+  return { col: 1 + (slot % INTERIOR_COLS), row: Math.min(row, DEFAULT_ROWS - 2) };
+}
+
+// Desk slots are handed out in Character-CREATION order, so which column an
+// agent lands in depends on how many agents were materialised before it. Track
+// that here rather than assuming any agent starts at slot 0.
+let nextDeskSlot = 0;
+const deskSlots = new Map();
+function claimDesk(agentId) {
+  if (!deskSlots.has(agentId)) deskSlots.set(agentId, nextDeskSlot++);
+  return deskPosition(deskSlots.get(agentId));
+}
+
+/** A tile column's x-range in unzoomed canvas px. A glyph is 11 wide and its
+ *  owner's sprite 16, so a centred glyph is always inside its own column. */
+const tileColumnRange = (col) => ({ from: col * TILE_SIZE, to: (col + 1) * TILE_SIZE });
 const hexToRgb = (hex) => [
   parseInt(hex.slice(1, 3), 16),
   parseInt(hex.slice(3, 5), 16),
@@ -237,13 +334,25 @@ const statusChanged = (agentId, taskId, status) => ({
 
 // ── canvas sampling ──────────────────────────────────────────────────────────
 
-async function scanCanvas(page) {
+/**
+ * Counts colour matches on the real composited canvas.
+ *
+ * `xRange` (unzoomed grid px, `{from, to}`) scopes the scan to a horizontal
+ * band — without it every count is a claim about EVERY agent on the floor, not
+ * about one. Backing-store scaling is normalised in both axes, so a band is
+ * always expressed in the engine's own grid coordinates.
+ */
+async function scanCanvas(page, xRange = null) {
   return page.evaluate(
-    ({ floor, wall, blocked, handoff }) => {
+    ({ floor, wall, blocked, handoff, mapW, mapH, band }) => {
       const canvas = document.getElementById("office-canvas");
       if (!canvas) throw new Error("#office-canvas is not in the DOM");
       const ctx = canvas.getContext("2d");
       const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const scale = canvas.height / mapH;
+      if (Math.abs(canvas.width / mapW - scale) > 1e-6) {
+        throw new Error(`canvas ${canvas.width}x${canvas.height} is not a uniform scale of the ${mapW}x${mapH} map`);
+      }
       const toRgb = (hex) => [
         parseInt(hex.slice(1, 3), 16),
         parseInt(hex.slice(3, 5), 16),
@@ -253,33 +362,48 @@ async function scanCanvas(page) {
       const handoffRgb = handoff.map(toRgb);
       const matches = (r, g, b, list) => list.some((c) => c[0] === r && c[1] === g && c[2] === b);
 
+      const fromX = band ? Math.round(band.from * scale) : 0;
+      const toX = band ? Math.min(Math.round(band.to * scale), canvas.width) : canvas.width;
+
       let sprite = 0;
       let blockedHits = 0;
       let handoffHits = 0;
-      for (let i = 0; i < data.length; i += 4) {
-        const a = data[i + 3];
-        if (a === 0) continue;
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        const isFloor = r === floor[0] && g === floor[1] && b === floor[2];
-        const isWall = r === wall[0] && g === wall[1] && b === wall[2];
-        if (!isFloor && !isWall) sprite++;
-        if (matches(r, g, b, blockedRgb)) blockedHits++;
-        if (matches(r, g, b, handoffRgb)) handoffHits++;
+      for (let y = 0; y < canvas.height; y++) {
+        for (let x = fromX; x < toX; x++) {
+          const i = (y * canvas.width + x) * 4;
+          if (data[i + 3] === 0) continue;
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const isFloor = r === floor[0] && g === floor[1] && b === floor[2];
+          const isWall = r === wall[0] && g === wall[1] && b === wall[2];
+          if (!isFloor && !isWall) sprite++;
+          if (matches(r, g, b, blockedRgb)) blockedHits++;
+          if (matches(r, g, b, handoffRgb)) handoffHits++;
+        }
       }
-      return { width: canvas.width, height: canvas.height, sprite, blockedHits, handoffHits };
+      return { width: canvas.width, height: canvas.height, scale, sprite, blockedHits, handoffHits };
     },
-    { floor: FLOOR_RGB, wall: WALL_RGB, blocked: BLOCKED_COLORS, handoff: HANDOFF_COLORS },
+    {
+      floor: FLOOR_RGB,
+      wall: WALL_RGB,
+      blocked: BLOCKED_COLORS,
+      handoff: HANDOFF_COLORS,
+      mapW: MAP_W,
+      mapH: MAP_H,
+      band: xRange,
+    },
   );
 }
 
-async function openOffice(page, { reload }) {
-  if (reload) await page.reload({ waitUntil: "load" });
-  else await page.goto(WEB_URL, { waitUntil: "load" });
+/** Frames the renderer needs to settle after an event lands (or after load). */
+const RENDER_SETTLE_MS = 1500;
+
+async function openOffice(page) {
+  await page.goto(WEB_URL, { waitUntil: "load" });
   await page.waitForSelector("#office-canvas", { state: "attached", timeout: 15_000 });
   // Snapshot-on-connect + a few render frames.
-  await sleep(1500);
+  await sleep(RENDER_SETTLE_MS);
 }
 
 function assert(condition, message) {
@@ -289,30 +413,27 @@ function assert(condition, message) {
 // ── main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  log("ensuring test Postgres is up...");
+  assertHarnessOwnedTarget();
+
+  // A clean store per run, with no destructive SQL anywhere in this harness:
+  // `db:test:down` is the repo's own `docker compose down -v`, i.e. removal of
+  // the TEST container's volume and nothing else. Row-level cleanup is not
+  // available by design (0001_append_only_trigger.sql raises on UPDATE/DELETE,
+  // 0003_no_truncate_trigger.sql on TRUNCATE) and unblocking it would subvert
+  // the append-only guarantee the whole event store rests on.
+  //
+  // Blast radius, so a reader is not surprised: this also clears anything
+  // apps/api's own vitest suite left in that container. Harmless — those suites
+  // apply their own migrations and depend on no persisted state.
+  log("resetting the test Postgres container (down -v, then up)...");
+  await runToCompletion("pnpm", ["--filter", "api", "db:test:down"]);
   await runToCompletion("pnpm", ["--filter", "api", "db:test:up"]);
 
   const require = createRequire(path.join(ROOT, "apps", "api", "package.json"));
   const { Client } = require("pg");
 
-  // apps/api/.env's DATABASE_URL names the dev database, which the test
-  // container (POSTGRES_DB=pixelfirm_test) does not create for us. Create it
-  // if missing rather than editing the user's gitignored .env.
-  const dbUrl = new URL(apiEnv.DATABASE_URL);
-  const dbName = decodeURIComponent(dbUrl.pathname.replace(/^\//, ""));
-  const adminUrl = new URL(dbUrl);
-  adminUrl.pathname = "/postgres";
-  const admin = new Client({ connectionString: adminUrl.toString() });
-  await admin.connect();
-  const { rowCount } = await admin.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (rowCount === 0) {
-    log(`creating missing database ${dbName}...`);
-    await admin.query(`CREATE DATABASE "${dbName}"`);
-  }
-  await admin.end();
-
   log("applying migrations (idempotent)...");
-  const client = new Client({ connectionString: apiEnv.DATABASE_URL });
+  const client = new Client({ connectionString: TEST_DATABASE_URL });
   await client.connect();
   for (const file of ["0000_init.sql", "0001_append_only_trigger.sql", "0002_workers_table.sql", "0003_no_truncate_trigger.sql"]) {
     const sql = readFileSync(path.join(ROOT, "apps", "api", "drizzle", file), "utf8");
@@ -324,8 +445,13 @@ async function main() {
   }
   await client.end();
 
+  // The dev server gets the SAME overridden URL the reset above operated on —
+  // resetting one database and asserting against another would prove nothing.
+  // (If a dev server is ALREADY serving this port, ensureServer reuses it; a
+  // reused server pointed at some other database shows up immediately as a
+  // non-empty office at the empty-canvas assertion below, not as a silent pass.)
   await ensureServer(`${API_URL}/health`, "apps/api dev server", () =>
-    spawnBackground("pnpm", ["--filter", "api", "dev"], apiEnv),
+    spawnBackground("pnpm", ["--filter", "api", "dev"], { ...apiEnv, DATABASE_URL: TEST_DATABASE_URL }),
   );
   await ensureServer(WEB_URL, "apps/web dev server", () =>
     spawnBackground("pnpm", ["--filter", "web", "exec", "vite", "--port", String(WEB_PORT), "--strictPort"], {}),
@@ -348,45 +474,76 @@ async function main() {
       if (m.type() === "error") log(`browser console error: ${m.text()}`);
     });
 
-    // ── Baseline: three real agents materialised by real task.status_changed
-    // events, all actively working (no bubble on any of them).
-    await postEvent(token, statusChanged(SENDER, HANDOFF_TASK, "running"));
-    await postEvent(token, statusChanged(RECEIVER, "live-proof-task-receiver", "running"));
-    await postEvent(token, statusChanged(BLOCKED, "live-proof-task-blocked", "running"));
+    // ── The office opens EMPTY, and stays open for the whole proof.
+    // Every character asserted on below is therefore created by an event that
+    // arrived over the LIVE relay, not folded in by the connect-time snapshot.
+    // Without this assertion, posting after the open would prove nothing.
+    await openOffice(page);
+    const empty = await scanCanvas(page);
+    log(`office open: canvas ${empty.width}x${empty.height} (scale ${empty.scale}) — sprite=${empty.sprite}`);
+    assert(
+      empty.sprite === 0,
+      `the office was not empty when it opened (${empty.sprite} non-floor/non-wall px). Either the store was ` +
+        `not reset, or the apps/api server on ${API_URL} is connected to a different database than this harness reset`,
+    );
 
-    await openOffice(page, { reload: false });
+    // ── Baseline: two real agents materialised by real task.status_changed
+    // events posted while the page was already open, both actively working
+    // (no bubble on either of them).
+    claimDesk(SENDER);
+    claimDesk(BLOCKED);
+    await postEvent(token, statusChanged(SENDER, HANDOFF_TASK, "running"));
+    await postEvent(token, statusChanged(BLOCKED, "live-proof-task-blocked", "running"));
+    await sleep(RENDER_SETTLE_MS);
+
     const baseline = await scanCanvas(page);
     log(`baseline canvas ${baseline.width}x${baseline.height}: sprite=${baseline.sprite} blocked=${baseline.blockedHits} handoff=${baseline.handoffHits}`);
 
-    // TRUTH 1 — a real agent renders as a real, non-transparent sprite.
+    // TRUTH 1 — a real agent renders as a real, non-transparent sprite, and
+    // it got there LIVE: the canvas was proven empty above, and no navigation
+    // happened between these posts and this scan.
     assert(
       baseline.sprite > 0,
       `no non-floor/non-wall pixel found on the canvas — the sprite never painted (sprite pixel count 0)`,
     );
     // The baseline must be clean, otherwise truths 2 and 3 could pass on
-    // leftover pixels from an earlier run instead of on this run's events.
+    // leftover pixels instead of on this run's events.
     assert(baseline.blockedHits === 0, `blocked-bubble colour already on canvas before the blocked event (${baseline.blockedHits} px)`);
     assert(baseline.handoffHits === 0, `handoff-bubble colour already on canvas before the handoff event (${baseline.handoffHits} px)`);
-    log(`TRUTH 1 PASS — ${baseline.sprite} real sprite pixels on a real canvas`);
+    log(`TRUTH 1 PASS — ${baseline.sprite} sprite pixels painted from live events on an already-open page`);
 
-    // ── TRUTH 2 — a blocked agent's status bubble is really painted.
-    // A live-connected client does not currently re-derive AgentStatus from
-    // task.status_changed (documented gap, 05-08-PLAN.md objective — NOT
-    // fixed here), so reload to take a fresh snapshot through the already
-    // proven-correct fold() path.
+    // ── TRUTH 2 — a blocked agent's status bubble is really painted, live.
+    // The property being proven: a CONNECTED client re-derives AgentStatus
+    // from a relayed task.status_changed with no navigation. That is
+    // 05-VERIFICATION.md's headline gap and the first of its human-verification
+    // items; the 05-08 proof routed around it with a page reload.
     await postEvent(token, statusChanged(BLOCKED, "live-proof-task-blocked", "blocked"));
-    await openOffice(page, { reload: true });
+    await sleep(RENDER_SETTLE_MS);
     const blockedScan = await scanCanvas(page);
     log(`after blocked: sprite=${blockedScan.sprite} blocked=${blockedScan.blockedHits} handoff=${blockedScan.handoffHits}`);
     assert(
       blockedScan.blockedHits > 0,
       `bubble-blocked's distinctive colour(s) ${BLOCKED_COLORS.join(", ")} never appeared on canvas (0 px)`,
     );
-    log(`TRUTH 2 PASS — ${blockedScan.blockedHits} blocked-bubble pixels on canvas`);
+    log(`TRUTH 2 PASS — ${blockedScan.blockedHits} blocked-bubble pixels, no navigation between the event and the scan`);
 
     // ── TRUTH 3 — a real handoff pair paints the task icon, then clears it.
-    // Both halves reach the choreography engine directly off the live relay
-    // (App.tsx's handleHandoffEvent wiring), independent of the status gap.
+    // The RECEIVER is deliberately not pre-seeded: the reducer's
+    // agent.handoff_requested handler upserts it and App.tsx applies that
+    // upsert before calling the choreography, so the receiving character is
+    // created by the handoff event itself. handoff-choreography.ts's
+    // `if (!fromChar || !toChar) return;` guard means a painted task icon is
+    // itself proof that both characters exist — including the one this event
+    // just created.
+    const receiverDesk = claimDesk(RECEIVER);
+    const receiverBand = tileColumnRange(receiverDesk.col);
+    const beforeHandoff = await scanCanvas(page, receiverBand);
+    assert(
+      beforeHandoff.sprite === 0,
+      `the receiver's desk column (col ${receiverDesk.col}, x ${receiverBand.from}..${receiverBand.to}) already ` +
+        `carried ${beforeHandoff.sprite} sprite px before the handoff — Truth 3 would be assuming live receiver ` +
+        `creation rather than demonstrating it`,
+    );
     await postEvent(token, {
       type: "agent.handoff_requested",
       taskId: HANDOFF_TASK,
