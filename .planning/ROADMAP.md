@@ -167,7 +167,28 @@ Plans:
   3. When one agent hands off work to another, the office shows the first agent walking over, a task icon appearing, and the second agent accepting it and moving to work — using deterministic, template-based dialogue, never LLM-generated at render time.
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
 
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+
+- [ ] 05-01-PLAN.md — Tracer: AgentStatus contract + browser Broadcast Hub (auth/snapshot/relay) + forked Canvas2D engine + apps/web, one real agent's status end-to-end
+- [ ] 05-02-PLAN.md — Exhaustive 15-value AgentStatus visual mapping + blocked/waiting signal (OFFICE-01/03) + asset-licence audit + in-app attribution (OFFICE-02)
+- [ ] 05-03-PLAN.md — agent.handoff_completed/fromAgentId schema + agentId threading through ClaudeCodeRuntime + real per-agent AgentStatus derivation
+- [ ] 05-04-PLAN.md — Handoff choreography FSM (walk-to-desk, findPath) + deterministic dialogue templates (HANDOFF-01/02)
+
+**Wave 1**
+
+- [ ] 05-01-PLAN.md — Tracer: browser Broadcast Hub + forked engine + apps/web, one real agent renders end-to-end
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 05-02-PLAN.md — Exhaustive status-mapping fidelity + licensing/attribution
+- [ ] 05-03-PLAN.md — Event-schema handoff additions + real per-agent status derivation
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 05-04-PLAN.md — Handoff choreography + dialogue templates
+
 **UI hint**: yes
 
 ### Phase 6: CEO Dashboard & Approval Workflow
