@@ -31,7 +31,7 @@ function mockCtx(): { ctx: CanvasRenderingContext2D; rects: RecordedRect[] } {
 /** Colours used by a bubble/badge glyph and by NO character base sprite pixel. */
 function bubbleOnlyColors(ch: Character): Set<string> {
   const baseColors = new Set<string>();
-  const baseSprite = getCharacterSprite(ch, getCharacterSprites(ch.palette, ch.hueShift));
+  const baseSprite = getCharacterSprite(ch, getCharacterSprites(ch.hueShift));
   for (const row of baseSprite) for (const cell of row) if (cell) baseColors.add(cell);
 
   const bubbleColors = new Set<string>();

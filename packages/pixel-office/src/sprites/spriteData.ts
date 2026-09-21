@@ -34,14 +34,43 @@ function flipHorizontal(sprite: SpriteData): SpriteData {
   return sprite.map((row) => [...row].reverse());
 }
 
-export function getCharacterSprites(paletteIndex: number, hueShift = 0): CharacterSprites {
-  const cacheKey = `${paletteIndex}:${hueShift}`;
+/** Frames each direction array must carry — spriteData indexes 0..6 below. */
+const FRAMES_PER_DIRECTION = 7;
+
+/**
+ * IN-04: the frame indices below are fixed and unchecked, so a regenerated or
+ * truncated character-metrocity.json used to crash inside the per-frame draw
+ * path — a blank office plus a console stack trace. Fail here instead, naming
+ * what is actually wrong. Exported so tests can exercise it without
+ * corrupting the checked-in asset.
+ */
+export function assertFrameCount(frames: unknown[], directionName: string): void {
+  if (frames.length !== FRAMES_PER_DIRECTION) {
+    throw new Error(
+      `character sprite data for direction "${directionName}" has ${frames.length} frames, expected ${FRAMES_PER_DIRECTION}`,
+    );
+  }
+}
+
+/**
+ * WR-08: takes the hue shift and nothing else. The former first parameter
+ * (a palette index) was accepted, folded into the cache key, and never read —
+ * so every agent rendered byte-identical pixels. There is exactly one
+ * character template in this repo, so that parameter had nothing to select;
+ * it was deleted rather than given an invented meaning.
+ */
+export function getCharacterSprites(hueShift: number): CharacterSprites {
+  const cacheKey = `${hueShift}`;
   const cached = spriteCache.get(cacheKey);
   if (cached) return cached;
 
   const d = characterData.down;
   const u = characterData.up;
   const rt = characterData.right;
+
+  assertFrameCount(d, "down");
+  assertFrameCount(u, "up");
+  assertFrameCount(rt, "right");
 
   const colorAdjust = hueShift !== 0 ? (s: SpriteData) => adjustSprite(s, { h: hueShift, s: 0, b: 0, c: 0 }) : (s: SpriteData) => s;
 

@@ -76,6 +76,33 @@ const DESK_ROW_START = 3;
  *  behind it ([16(r-p) - 24, 16(r-p) + 8]): needs 16p > 47, i.e. p >= 3. */
 const DESK_ROW_PITCH = 3;
 
+/** Identity hues: twelve buckets, 30 degrees apart. */
+const HUE_BUCKETS = 12;
+
+/**
+ * Per-agent IDENTITY colour, derived from the agentId alone (WR-08).
+ *
+ * This is identity, NEVER state: 05-UI-SPEC.md's `## Color` section locks that
+ * separation and OFFICE-03 forbids colour being the only state signal, so no
+ * AgentStatus value may ever influence this value. Pure by design (no
+ * Math.random, no Date.now) matching this package's determinism rule — the
+ * same agent gets the same colour across reloads and across a replay of the
+ * same event log, so a recorded stream and a live view agree about who is who.
+ *
+ * ponytail: twelve buckets means two agents collide on a hue once more than
+ * twelve are seated. Upgrade path: on-canvas name labels, for which
+ * 05-UI-SPEC.md's Typography section already reserves the monospace/11px scale.
+ */
+function hueForAgentId(agentId: string): number {
+  // FNV-1a, 32-bit.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < agentId.length; i++) {
+    hash ^= agentId.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return (hash % HUE_BUCKETS) * (360 / HUE_BUCKETS);
+}
+
 function nextDeskPosition(): { col: number; row: number } {
   const slot = nextSlot++;
   const row = DESK_ROW_START + DESK_ROW_PITCH * Math.floor(slot / interiorCols);
@@ -111,7 +138,7 @@ export function upsertCharacterFromAgent(agentId: string, status: AgentStatus, n
   let ch = characters.get(agentId);
   if (!ch) {
     const { col, row } = nextDeskPosition();
-    ch = createCharacter(agentId, col, row);
+    ch = createCharacter(agentId, col, row, hueForAgentId(agentId));
     characters.set(agentId, ch);
   }
   ch.state = visual.pose;

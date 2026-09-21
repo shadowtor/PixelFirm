@@ -99,7 +99,7 @@ export function renderScene(
   zoom: number,
 ): void {
   const drawables: ZDrawable[] = characters.map((ch) => {
-    const sprites = getCharacterSprites(ch.palette, ch.hueShift);
+    const sprites = getCharacterSprites(ch.hueShift);
     const spriteData = getCharacterSprite(ch, sprites);
     const spriteHeight = spriteData.length;
     const spriteWidth = spriteData[0]?.length ?? 0;

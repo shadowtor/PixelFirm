@@ -45,7 +45,7 @@ function directionBetween(fromCol: number, fromRow: number, toCol: number, toRow
   return Direction.UP;
 }
 
-export function createCharacter(id: string, tileCol = 1, tileRow = 1, palette = 0, hueShift = 0): Character {
+export function createCharacter(id: string, tileCol = 1, tileRow = 1, hueShift = 0): Character {
   const center = tileCenter(tileCol, tileRow);
   return {
     id,
@@ -60,7 +60,6 @@ export function createCharacter(id: string, tileCol = 1, tileRow = 1, palette = 
     path: [],
     moveProgress: 0,
     currentTool: null,
-    palette,
     hueShift,
     frame: 0,
     frameTimer: 0,
