@@ -64,6 +64,21 @@ function nextMessage(ws: WebSocket): Promise<unknown> {
   });
 }
 
+/** Resolves once `count` messages have arrived, preserving their order. */
+function collectMessages(ws: WebSocket, count: number): Promise<unknown[]> {
+  return new Promise((resolve) => {
+    const received: unknown[] = [];
+    const onMessage = (data: Buffer) => {
+      received.push(JSON.parse(data.toString()));
+      if (received.length === count) {
+        ws.off("message", onMessage);
+        resolve(received);
+      }
+    };
+    ws.on("message", onMessage);
+  });
+}
+
 beforeAll(async () => {
   const migrateClient = new Client({ connectionString: process.env.DATABASE_URL });
   await migrateClient.connect();
@@ -200,6 +215,42 @@ describe("GET /ws/browser ordering (WR-01 regression)", () => {
 
     const first = (await firstMsgPromise) as { type: string };
     expect(first.type).toBe("snapshot");
+
+    result.ws.close();
+  });
+
+  it("CR-03: an event posted while the connect handler is still building its snapshot is delivered AFTER the snapshot, never dropped", async () => {
+    const result = await attempt("test-browser-access-token");
+    expect(result.opened).toBe(true);
+    if (!result.opened) throw new Error("unreachable");
+
+    // Again no snapshot-drain: the POST races the handler's awaited SELECT.
+    // Pre-fix the socket was registered only after the snapshot send, so an
+    // event committed inside that window reached neither the snapshot nor
+    // the relay and was lost for the life of the connection — this waits
+    // for two messages and would time out rather than see the event.
+    const event = {
+      id: randomUUID(),
+      type: "worker.heartbeat",
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      companyId: "company-1",
+      visibility: "INTERNAL",
+      payload: {},
+    };
+
+    const bothPromise = collectMessages(result.ws, 2);
+    const res = await fetch(`${httpBaseUrl}/events`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${workerToken}` },
+      body: JSON.stringify(event),
+    });
+    expect(res.status).toBe(202);
+
+    const [first, second] = (await bothPromise) as [{ type: string }, { type: string; event: { id: string } }];
+    expect(first.type).toBe("snapshot");
+    expect(second.type).toBe("event");
+    expect(second.event.id).toBe(event.id);
 
     result.ws.close();
   });
