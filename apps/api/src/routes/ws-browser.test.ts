@@ -168,3 +168,39 @@ describe("POST /events relay", () => {
     result.ws.close();
   });
 });
+
+describe("GET /ws/browser ordering (WR-01 regression)", () => {
+  it("the first message received is always the snapshot, even when a POST /events broadcast fires immediately after the socket opens (no snapshot-drain delay)", async () => {
+    const result = await attempt("test-browser-access-token");
+    expect(result.opened).toBe(true);
+    if (!result.opened) throw new Error("unreachable");
+
+    // Deliberately no `await nextMessage(result.ws)` snapshot-drain here —
+    // fire the POST immediately after the socket opens, racing the
+    // connect handler's own snapshot send. Pre-fix, registerBrowserSocket
+    // ran before the snapshot was built/sent, so this event could reach
+    // the client first.
+    const event = {
+      id: randomUUID(),
+      type: "worker.heartbeat",
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      companyId: "company-1",
+      visibility: "INTERNAL",
+      payload: {},
+    };
+
+    const firstMsgPromise = nextMessage(result.ws);
+    const res = await fetch(`${httpBaseUrl}/events`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${workerToken}` },
+      body: JSON.stringify(event),
+    });
+    expect(res.status).toBe(202);
+
+    const first = (await firstMsgPromise) as { type: string };
+    expect(first.type).toBe("snapshot");
+
+    result.ws.close();
+  });
+});

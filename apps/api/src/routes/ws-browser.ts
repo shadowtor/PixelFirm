@@ -20,16 +20,23 @@ export async function registerWsBrowserRoute(fastify: FastifyInstance) {
       config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
     },
     async (socket) => {
-      registerBrowserSocket(socket);
-
       // Snapshot-on-connect: fold every stored event into a fresh
       // ProjectionState and send it as the first message, before any live
       // event relay. Real company-core fold() over real stored rows — never
       // a hardcoded/stubbed snapshot (must_haves.truths).
+      //
+      // WR-01 (05-REVIEW.md): registerBrowserSocket must run AFTER this send,
+      // never before — otherwise a POST /events broadcast landing in the gap
+      // between registration and the snapshot send could reach this socket
+      // as a live "event" message before its own baseline "snapshot", making
+      // the "first message is always the snapshot" guarantee a race instead
+      // of a guarantee.
       const rows = await db.select().from(events).orderBy(events.occurredAt);
       const companyEvents = rows.map(rowToCompanyEvent);
       const state = fold(companyEvents);
       socket.send(JSON.stringify({ type: "snapshot", state }));
+
+      registerBrowserSocket(socket);
 
       socket.on("close", () => {
         unregisterBrowserSocket(socket);

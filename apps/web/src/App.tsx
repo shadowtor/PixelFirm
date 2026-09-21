@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { AgentStatus } from "event-schema";
 import {
   DEFAULT_COLS,
   DEFAULT_ROWS,
@@ -10,6 +9,7 @@ import {
   handleHandoffEvent,
 } from "pixel-office";
 import { connectOfficeSocket } from "./ws-client";
+import { deriveCharacterUpsertFromStatusEvent } from "./agent-event-mapper";
 
 const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL as string;
 const browserToken = import.meta.env.VITE_BROWSER_ACCESS_TOKEN as string;
@@ -39,13 +39,8 @@ export function App() {
         }
       },
       onEvent: (event) => {
-        if (event.type === "agent.online" || event.type === "session.started") {
-          upsertCharacterFromAgent(
-            event.sourceAgentId!,
-            event.type === "agent.online" ? AgentStatus.IDLE : AgentStatus.CODING,
-            event.type === "agent.online" ? event.payload.name : undefined,
-          );
-        }
+        const upsert = deriveCharacterUpsertFromStatusEvent(event);
+        if (upsert) upsertCharacterFromAgent(upsert.agentId, upsert.status, upsert.name);
         if (event.type === "task.created" && event.taskId) {
           registerTaskTitle(event.taskId, event.payload.title);
         }
