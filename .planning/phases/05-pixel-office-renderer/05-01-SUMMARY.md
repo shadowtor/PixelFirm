@@ -141,7 +141,7 @@ status: complete
 1. **Task 1: Package legitimacy check** — no commit (checkpoint:human-verify gate; approved by the user directly in chat, not via a "verified" resume-signal string, before Task 2 began)
 2. **Task 2: End-to-end tracer** — `5be2437` (feat)
 
-**Plan metadata:** _(pending — this SUMMARY's own commit)_
+**Plan metadata:** `e8caf63` (docs)
 
 ## Files Created/Modified
 
