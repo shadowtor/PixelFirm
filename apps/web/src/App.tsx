@@ -1,6 +1,14 @@
 import { useEffect, useRef } from "react";
 import { AgentStatus } from "event-schema";
-import { DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE, startGameLoop, upsertCharacterFromAgent } from "pixel-office";
+import {
+  DEFAULT_COLS,
+  DEFAULT_ROWS,
+  TILE_SIZE,
+  startGameLoop,
+  upsertCharacterFromAgent,
+  registerTaskTitle,
+  handleHandoffEvent,
+} from "pixel-office";
 import { connectOfficeSocket } from "./ws-client";
 
 const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL as string;
@@ -21,7 +29,13 @@ export function App() {
     const socket = connectOfficeSocket(wsBaseUrl, browserToken, {
       onSnapshot: (state) => {
         for (const [agentId, agent] of Object.entries(state.agents)) {
-          upsertCharacterFromAgent(agentId, agent.status);
+          upsertCharacterFromAgent(agentId, agent.status, agent.name);
+        }
+        // 05-04 (HANDOFF-02): known task titles feed handoff dialogue
+        // interpolation — the plain TaskState.title field only, never
+        // payload/prompt/diff content.
+        for (const [taskId, task] of Object.entries(state.tasks)) {
+          if (task.title) registerTaskTitle(taskId, task.title);
         }
       },
       onEvent: (event) => {
@@ -29,7 +43,17 @@ export function App() {
           upsertCharacterFromAgent(
             event.sourceAgentId!,
             event.type === "agent.online" ? AgentStatus.IDLE : AgentStatus.CODING,
+            event.type === "agent.online" ? event.payload.name : undefined,
           );
+        }
+        if (event.type === "task.created" && event.taskId) {
+          registerTaskTitle(event.taskId, event.payload.title);
+        }
+        // 05-04 (HANDOFF-01): every relayed handoff event now also reaches
+        // the walk/icon/accept/return choreography engine, in addition to
+        // whatever AgentStatus-driven pose the reducer separately derives.
+        if (event.type === "agent.handoff_requested" || event.type === "agent.handoff_completed") {
+          handleHandoffEvent(event);
         }
       },
     });

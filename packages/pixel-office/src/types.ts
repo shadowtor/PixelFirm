@@ -56,7 +56,13 @@ export type BubbleType =
   | "testing"
   | "reviewing"
   | "discussing"
-  | "deploying";
+  | "deploying"
+  // Phase 5 addition (05-04, HANDOFF-01): the transient task-icon overlay
+  // shown above a character mid-handoff. Deliberately NOT reused from any
+  // AgentStatus bubble value above — a handoff-in-progress icon is a
+  // render-only overlay driven by handoff-choreography.ts's FSM, not an
+  // AgentStatus value (per 05-04-PLAN.md Task 1's own instruction).
+  | "handoff-task";
 
 export const Direction = {
   DOWN: 0,
@@ -91,6 +97,13 @@ export interface Character {
   tileCol: number;
   /** Current tile row */
   tileRow: number;
+  /** Home desk tile column — set once at creation (createCharacter), never
+   *  mutated by movement. The return target for 05-04's handoff
+   *  walk-to-desk choreography ("return to own desk" leg) and the walk
+   *  target another agent's handoff aims at ("walk to receiver's desk"). */
+  seatCol: number;
+  /** Home desk tile row — see seatCol. */
+  seatRow: number;
   /** Remaining path steps (tile coords) */
   path: Array<{ col: number; row: number }>;
   /** 0-1 lerp between current tile and next tile */
@@ -117,4 +130,12 @@ export interface Character {
    *  typing animation) — never tint, since hue/palette is already claimed by
    *  per-agent identity colour (RESEARCH.md Pattern 2). Defaults to 1. */
   frameSpeedMultiplier: number;
+  /** Display name, if known (AgentState.name) — used to interpolate handoff
+   *  dialogue (05-04, HANDOFF-02). Falls back to the raw agentId when absent. */
+  name?: string;
+  /** Tooltip/label text attached to the current bubble overlay, if any — set
+   *  by handoff-choreography.ts's deterministic dialogue templates (05-04,
+   *  HANDOFF-02). Carries data only: actual bubble/tooltip *rendering* is
+   *  still unimplemented in engine/renderer.ts (05-02's documented gap). */
+  bubbleText?: string | null;
 }

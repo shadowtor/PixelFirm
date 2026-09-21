@@ -55,6 +55,8 @@ export function createCharacter(id: string, tileCol = 1, tileRow = 1, palette = 
     y: center.y,
     tileCol,
     tileRow,
+    seatCol: tileCol,
+    seatRow: tileRow,
     path: [],
     moveProgress: 0,
     currentTool: null,
