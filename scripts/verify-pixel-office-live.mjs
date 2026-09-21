@@ -181,6 +181,18 @@ function claimDesk(agentId) {
 /** A tile column's x-range in unzoomed canvas px. A glyph is 11 wide and its
  *  owner's sprite 16, so a centred glyph is always inside its own column. */
 const tileColumnRange = (col) => ({ from: col * TILE_SIZE, to: (col + 1) * TILE_SIZE });
+
+// Sprite height comes from the decoded sheet itself, so a re-decode with
+// different frame geometry moves the band assertions with it rather than
+// silently invalidating them.
+const SPRITE_HEIGHT = JSON.parse(readFileSync(path.join(SPRITE_DIR, "character-metrocity.json"), "utf8")).down[0].length;
+
+/** Top edge of a character's sprite box on a given interior row, unzoomed —
+ *  `renderScene`'s bottom-centre anchor: tile centre minus the sprite height.
+ *  (A TYPE-posed character sits CHARACTER_SITTING_OFFSET_PX lower; the bounds
+ *  below deliberately use the un-offset anchor, which is the desk row's own
+ *  geometry rather than one pose's.) */
+const spriteTopY = (row) => row * TILE_SIZE + TILE_SIZE / 2 - SPRITE_HEIGHT;
 const hexToRgb = (hex) => [
   parseInt(hex.slice(1, 3), 16),
   parseInt(hex.slice(3, 5), 16),
@@ -341,6 +353,10 @@ const statusChanged = (agentId, taskId, status) => ({
  * band — without it every count is a claim about EVERY agent on the floor, not
  * about one. Backing-store scaling is normalised in both axes, so a band is
  * always expressed in the engine's own grid coordinates.
+ *
+ * `blockedMinY`/`blockedMaxY` report the vertical extent of the blocked-glyph
+ * pixels found inside the band (null when there are none), which is what turns
+ * "a blocked glyph was painted somewhere" into "it was painted on this agent".
  */
 async function scanCanvas(page, xRange = null) {
   return page.evaluate(
@@ -368,6 +384,8 @@ async function scanCanvas(page, xRange = null) {
       let sprite = 0;
       let blockedHits = 0;
       let handoffHits = 0;
+      let blockedMinPxY = null;
+      let blockedMaxPxY = null;
       for (let y = 0; y < canvas.height; y++) {
         for (let x = fromX; x < toX; x++) {
           const i = (y * canvas.width + x) * 4;
@@ -378,11 +396,25 @@ async function scanCanvas(page, xRange = null) {
           const isFloor = r === floor[0] && g === floor[1] && b === floor[2];
           const isWall = r === wall[0] && g === wall[1] && b === wall[2];
           if (!isFloor && !isWall) sprite++;
-          if (matches(r, g, b, blockedRgb)) blockedHits++;
+          if (matches(r, g, b, blockedRgb)) {
+            blockedHits++;
+            if (blockedMinPxY === null) blockedMinPxY = y;
+            blockedMaxPxY = y;
+          }
           if (matches(r, g, b, handoffRgb)) handoffHits++;
         }
       }
-      return { width: canvas.width, height: canvas.height, scale, sprite, blockedHits, handoffHits };
+      return {
+        width: canvas.width,
+        height: canvas.height,
+        scale,
+        sprite,
+        blockedHits,
+        handoffHits,
+        // Back into the engine's own unzoomed grid coordinates.
+        blockedMinY: blockedMinPxY === null ? null : blockedMinPxY / scale,
+        blockedMaxY: blockedMaxPxY === null ? null : blockedMaxPxY / scale,
+      };
     },
     {
       floor: FLOOR_RGB,
@@ -572,6 +604,71 @@ async function main() {
       `handoff task icon never cleared after agent.handoff_completed (${clearedScan.handoffHits} px still painted)`,
     );
     log(`TRUTH 3 PASS — handoff task icon appeared during the walk and cleared on completion`);
+
+    // ── TRUTH 4 — the blocked glyph belongs to the agent it describes (CR-02).
+    // 05-VERIFICATION.md reproduced this defect in a throwaway vitest against a
+    // recording ctx; this carries the regression guard on the office's own
+    // composited canvas. Against the 05-08 code the first two assertions below
+    // went red: the clamp collapsed every early desk row's glyph onto y=0,
+    // inside the sprite of the agent in front.
+    //
+    // Seat INTERIOR_COLS + 1 agents so the first and last land in the SAME
+    // interior column on two consecutive desk rows. They start at whatever
+    // slot truths 1-3 left free, not at 0, so the column is computed here
+    // rather than assumed.
+    const cohort = Array.from({ length: INTERIOR_COLS + 1 }, (_, n) => `live-proof-seat-${String(n).padStart(2, "0")}`);
+    const cohortDesks = cohort.map((id) => claimDesk(id));
+    for (const agentId of cohort) {
+      await postEvent(token, statusChanged(agentId, `live-proof-task-${agentId}`, "running"));
+    }
+    await sleep(RENDER_SETTLE_MS);
+
+    const firstDesk = cohortDesks[0];
+    const targetDesk = cohortDesks[cohortDesks.length - 1];
+    const targetId = cohort[cohort.length - 1];
+    assert(
+      firstDesk.col === targetDesk.col && targetDesk.row === firstDesk.row + DESK_ROW_PITCH,
+      `the cohort did not straddle two consecutive desk rows in one column: first ${JSON.stringify(firstDesk)}, ` +
+        `last ${JSON.stringify(targetDesk)}`,
+    );
+
+    await postEvent(token, statusChanged(targetId, `live-proof-task-${targetId}`, "blocked"));
+    await sleep(RENDER_SETTLE_MS);
+
+    // Measure inside the target's OWN tile column. scanCanvas over the whole
+    // canvas would also pick up the Truth 2 agent, which is still blocked on
+    // the FIRST desk row — its glyph sits in exactly the band assertion 1
+    // excludes, so a global assertion would fail on every run.
+    const targetBand = tileColumnRange(targetDesk.col);
+    const bandScan = await scanCanvas(page, targetBand);
+    const firstRowSpriteBottom = spriteTopY(firstDesk.row) + SPRITE_HEIGHT;
+    const targetSpriteTop = spriteTopY(targetDesk.row);
+    log(
+      `blocked glyph in col ${targetDesk.col} (x ${targetBand.from}..${targetBand.to}): ` +
+        `${bandScan.blockedHits} px, y ${bandScan.blockedMinY}..${bandScan.blockedMaxY} ` +
+        `(expected band ${firstRowSpriteBottom}..${targetSpriteTop}, exclusive)`,
+    );
+
+    assert(
+      bandScan.blockedHits > 0,
+      `no blocked-glyph pixel in the blocked agent's own column band (col ${targetDesk.col}, x ` +
+        `${targetBand.from}..${targetBand.to}) — the band assertions below would pass vacuously`,
+    );
+    assert(
+      bandScan.blockedMinY > firstRowSpriteBottom,
+      `the blocked glyph reaches up into the desk row in front of its owner: measured y ` +
+        `${bandScan.blockedMinY}..${bandScan.blockedMaxY} in col ${targetDesk.col}, but a desk-row-${firstDesk.row} ` +
+        `sprite ends at y ${firstRowSpriteBottom} — the glyph must sit strictly below it (CR-02)`,
+    );
+    assert(
+      bandScan.blockedMaxY < targetSpriteTop,
+      `the blocked glyph is not above its own sprite: measured y ${bandScan.blockedMinY}..${bandScan.blockedMaxY} ` +
+        `in col ${targetDesk.col}, but the desk-row-${targetDesk.row} sprite starts at y ${targetSpriteTop}`,
+    );
+    log(
+      `TRUTH 4 PASS — ${bandScan.blockedHits} blocked-glyph px at y ${bandScan.blockedMinY}..${bandScan.blockedMaxY}, ` +
+        `inside ${targetId}'s own headroom (${firstRowSpriteBottom} < y < ${targetSpriteTop}) and in no other agent's`,
+    );
   } finally {
     await browser.close();
   }
