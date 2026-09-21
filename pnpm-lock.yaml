@@ -326,6 +326,9 @@ importers:
       event-schema:
         specifier: workspace:*
         version: link:../event-schema
+      orchestration-adapter:
+        specifier: workspace:*
+        version: link:../orchestration-adapter
 
   packages/event-schema:
     dependencies:

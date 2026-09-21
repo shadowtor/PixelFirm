@@ -2,6 +2,7 @@ import type { CompanyEvent } from "event-schema";
 import { AgentStatus } from "event-schema";
 import type { ProjectionState } from "./projections";
 import { emptyState } from "./projections";
+import { deriveAgentStatus } from "./agent-status-derivation";
 
 export { emptyState } from "./projections";
 
@@ -93,6 +94,10 @@ const handlers: {
   // The receiving agent is waiting on the sending agent to complete the
   // handoff — the one honest, reachable derivation path for
   // waiting_for_agent this plan has (05-01 must_haves.truths).
+  // Phase 5 (05-03): payload now also carries fromAgentId, but no behavior
+  // change is needed on the sending agent's own state yet — HANDOFF-01's
+  // walk-away visual is Plan 05-04's frontend concern, driven off the raw
+  // event, not off a new AgentStatus value.
   "agent.handoff_requested": (state, event) => {
     const { taskId, toAgentId } = event.payload;
     const existingTask = state.tasks[taskId];
@@ -182,9 +187,12 @@ const handlers: {
 
   // companyId is a required envelope field (never optional) — this handler
   // always succeeds, replacing any prior observation for the same company.
-  "gsd.phase_observed": (state, event) => ({
-    ...state,
-    gsdObservations: {
+  // Phase 5 (05-03): the company-wide GSD category shift now also refines
+  // every currently-active agent's fine-grained sub-state — the one
+  // company-wide-not-per-agent simplification RESEARCH.md's own
+  // architecture diagram implies (no per-agent GSD signal exists yet).
+  "gsd.phase_observed": (state, event) => {
+    const gsdObservations = {
       ...state.gsdObservations,
       [event.companyId]: {
         companyId: event.companyId,
@@ -194,8 +202,18 @@ const handlers: {
         role: event.payload.role,
         active: event.payload.active,
       },
-    },
-  }),
+    };
+    const agents = { ...state.agents };
+    for (const [agentId, agent] of Object.entries(state.agents)) {
+      if (agent.rawTaskStatus === "starting" || agent.rawTaskStatus === "running") {
+        agents[agentId] = {
+          ...agent,
+          status: deriveAgentStatus({ taskStatus: agent.rawTaskStatus, gsdCategory: event.payload.category }),
+        };
+      }
+    }
+    return { ...state, gsdObservations, agents };
+  },
 
   // worker.heartbeat intentionally has no handler — connection status is
   // derived server-side from socket state + heartbeat receipt timing
@@ -208,13 +226,54 @@ const handlers: {
   // event silently no-op for every real demo run. Upserts unconditionally,
   // mirroring agent.handoff_requested's upsert-if-missing pattern (lines
   // 90-104 above).
+  // Phase 5 addition (05-03): also requires event.sourceAgentId (now
+  // populated per Task 1) to derive and upsert a real AgentStatus on the
+  // owning agent. When sourceAgentId is absent (an older-shaped event, or a
+  // producer that hasn't been updated), falls back to the task-only update
+  // with no agent-status side effect — never throws, never fabricates an
+  // agent update from nothing.
   "task.status_changed": (state, event) => {
     const { taskId, status } = event.payload;
+    const tasks = {
+      ...state.tasks,
+      [taskId]: { ...(state.tasks[taskId] ?? { id: taskId }), status },
+    };
+    const sourceAgentId = event.sourceAgentId;
+    if (!sourceAgentId) {
+      return { ...state, tasks };
+    }
+    const existingAgent = state.agents[sourceAgentId];
+    const gsdCategory = state.gsdObservations[event.companyId]?.category;
     return {
       ...state,
-      tasks: {
-        ...state.tasks,
-        [taskId]: { ...(state.tasks[taskId] ?? { id: taskId }), status },
+      tasks,
+      agents: {
+        ...state.agents,
+        [sourceAgentId]: {
+          ...(existingAgent ?? { id: sourceAgentId }),
+          status: deriveAgentStatus({ taskStatus: status, gsdCategory }),
+          currentTaskId: taskId,
+          rawTaskStatus: status,
+        },
+      },
+    };
+  },
+
+  // Phase 5 addition (HANDOFF-01, 05-03): the receiving agent has now
+  // accepted and is starting real work — refined by the next
+  // task.status_changed for them shortly after. Mirrors
+  // agent.handoff_requested's upsert-if-missing pattern.
+  "agent.handoff_completed": (state, event) => {
+    const { toAgentId } = event.payload;
+    const existing = state.agents[toAgentId];
+    return {
+      ...state,
+      agents: {
+        ...state.agents,
+        [toAgentId]: {
+          ...(existing ?? { id: toAgentId }),
+          status: AgentStatus.CODING,
+        },
       },
     };
   },

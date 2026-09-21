@@ -8,6 +8,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "event-schema": "workspace:*"
+    "event-schema": "workspace:*",
+    "orchestration-adapter": "workspace:*"
   }
 }

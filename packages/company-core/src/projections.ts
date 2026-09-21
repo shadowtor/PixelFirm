@@ -1,9 +1,16 @@
 import type { AgentStatus } from "event-schema";
+import type { AgentTaskStatus } from "orchestration-adapter";
 
 export interface AgentState {
   id: string;
   status: AgentStatus;
   name?: string;
+  // Phase 5 additions (05-03): internal bookkeeping the reducer needs to
+  // re-derive status when gsd.phase_observed's company-wide category
+  // changes later — harmless additive fields for the renderer, which only
+  // ever reads `.status`.
+  currentTaskId?: string;
+  rawTaskStatus?: AgentTaskStatus;
 }
 
 export interface FloorState {
