@@ -1,18 +1,14 @@
 ---
-status: testing
+status: complete
 phase: 04-agentruntime-claudecoderuntime
 source: [04-VERIFICATION.md]
 started: 2026-09-21T10:20:00Z
-updated: 2026-09-21T13:56:00Z
+updated: 2026-09-21T14:05:00Z
 ---
 
 ## Current Test
 
-number: 2
-name: Claude subscription tier confirmation
-expected: |
-  Run `claude auth status` and report the `subscriptionType` field.
-awaiting: user response
+[testing complete]
 
 ## Tests
 
@@ -38,14 +34,21 @@ evidence: |
 ### 2. Claude subscription tier confirmation
 expected: Run `claude auth status` and report the `subscriptionType` field. Expected
   `"max"`, matching the phase goal's literal "Claude MAX subscription auth alone" wording.
-result: [pending]
+result: pass
+reported: "The PRO/MAX is fine, i can see based on usage metrics, its on MAX"
+note: |
+  `claude auth status`'s own `subscriptionType` field reports "pro" on this machine, but the
+  user independently confirmed via their own usage-metrics dashboard that the account is
+  actually on a Max plan — the CLI field and the account's real billing tier disagree here.
+  Not a RUNTIME-02 blocker either way (no ANTHROPIC_API_KEY, subscription-pool billing
+  confirmed in 04-01-SUMMARY.md regardless of exact tier). User confirmed acceptable.
 
 ## Summary
 
 total: 2
-passed: 1
+passed: 2
 issues: 0
-pending: 1
+pending: 0
 skipped: 0
 blocked: 0
 
