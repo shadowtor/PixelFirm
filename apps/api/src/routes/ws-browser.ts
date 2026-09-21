@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { fold } from "company-core";
 import { authenticateBrowser } from "../auth/browser-auth.js";
-import { registerBrowserSocket, unregisterBrowserSocket } from "../ws/browser-connections.js";
+import { flushBrowserSocket, registerBrowserSocket, unregisterBrowserSocket } from "../ws/browser-connections.js";
 import { db } from "../db/client.js";
 import { events } from "../db/schema.js";
 import { rowToCompanyEvent } from "../db/event-row.js";
@@ -25,18 +25,32 @@ export async function registerWsBrowserRoute(fastify: FastifyInstance) {
       // event relay. Real company-core fold() over real stored rows — never
       // a hardcoded/stubbed snapshot (must_haves.truths).
       //
-      // WR-01 (05-REVIEW.md): registerBrowserSocket must run AFTER this send,
-      // never before — otherwise a POST /events broadcast landing in the gap
-      // between registration and the snapshot send could reach this socket
-      // as a live "event" message before its own baseline "snapshot", making
-      // the "first message is always the snapshot" guarantee a race instead
-      // of a guarantee.
-      const rows = await db.select().from(events).orderBy(events.occurredAt);
-      const companyEvents = rows.map(rowToCompanyEvent);
-      const state = fold(companyEvents);
-      socket.send(JSON.stringify({ type: "snapshot", state }));
-
+      // CR-03: register BEFORE the awaited SELECT, not after the send.
+      // Registering first closes the window in which an event committed
+      // mid-SELECT was in neither the snapshot nor the relay, and so lost
+      // for the life of the connection. Buffering rather than direct relay
+      // is what preserves the "first message is always the snapshot"
+      // guarantee the previous ordering was protecting — a registered socket
+      // queues until flushBrowserSocket promotes it, which happens only
+      // after the snapshot has gone out.
       registerBrowserSocket(socket);
+      try {
+        const rows = await db.select().from(events).orderBy(events.occurredAt);
+        const companyEvents = rows.map(rowToCompanyEvent);
+        const state = fold(companyEvents);
+        socket.send(JSON.stringify({ type: "snapshot", state }));
+        flushBrowserSocket(socket);
+      } catch (err) {
+        // Registering first means a thrown SELECT would otherwise leave a
+        // registered socket accumulating a queue no snapshot will ever
+        // precede. Drop the socket instead — deliberately NOT flushing,
+        // since delivering live events to a client with no baseline is the
+        // exact thing the original ordering existed to prevent.
+        fastify.log.error({ err }, "ws/browser: snapshot failed, closing socket");
+        unregisterBrowserSocket(socket);
+        socket.close();
+        return;
+      }
 
       socket.on("close", () => {
         unregisterBrowserSocket(socket);
