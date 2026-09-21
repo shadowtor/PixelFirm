@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-01-PLAN.md
-last_updated: "2026-09-21T02:51:25.940Z"
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-09-21T03:09:02.084Z"
 last_activity: 2026-09-21
 last_activity_desc: Phase 05 execution started
-state_head: 5be2437e3f4590c2b405ee9cf3a5349855b25239
+state_head: ee993c2d507c816d434cc25c8363bd9031d57a18
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 19
-  completed_plans: 16
+  completed_plans: 17
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-09-21 — Phase 05 execution started
 
@@ -76,6 +76,7 @@ Progress: [█████░░░░░] 50%
 | Phase 04 P03 | 35min | 2 tasks | 6 files |
 | Phase 04 P04 | ~9min + checkpoint wait | 3 tasks | 6 files |
 | Phase 05 P01 | 25min | 2 tasks | 46 files |
+| Phase 05 P02 | 55min | 2 tasks | 17 files |
 
 ## Accumulated Context
 
@@ -126,6 +127,8 @@ Recent decisions affecting current work:
 - [Phase 05]: [Phase 05]: [05-01]: Trimmed the forked pixel-agents-hq renderer/types/constants to the IDLE-only render pipeline this plan needs (human-approved at the Task 1 checkpoint), dropping ~10 fork-internal modules (furniture/carpet/area/pet/matrix-effect/editor-overlay, PNG sprite cache) not in this plan's file list
 - [Phase 05]: [Phase 05]: [05-01]: BROWSER_ACCESS_TOKEN is one shared timing-safe-compared token (not a per-client HMAC credential table) — proportionate for this MVP's single trusted browser viewer
 - [Phase 05]: [Phase 05]: [05-01]: No producer of agent.online exists anywhere in this codebase yet — the phase's literal live-browser demo isn't reproducible until a future plan adds an agent-identity event producer
+- [Phase 05]: 05-02: STATUS_MAP is the exhaustive 15-value AgentStatus visual mapping; icon glyphs distinguished by silhouette not colour alone (OFFICE-03)
+- [Phase 05]: 05-02: bubble-permission.json/bubble-waiting.json still unauthored — no bubble rendering exists yet, deferred to a future plan alongside engine/renderer.ts's bubble draw pass
 
 ### Pending Todos
 
@@ -149,6 +152,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-21T02:51:25.761Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-09-21T03:09:01.906Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
