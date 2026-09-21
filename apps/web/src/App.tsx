@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DEFAULT_COLS,
   DEFAULT_ROWS,
@@ -8,14 +8,20 @@ import {
   registerTaskTitle,
   handleHandoffEvent,
 } from "pixel-office";
+import { emptyState } from "company-core";
 import { connectOfficeSocket } from "./ws-client";
-import { deriveCharacterUpsertFromStatusEvent } from "./agent-event-mapper";
+import { applyLiveEvent } from "./agent-event-mapper";
 
 const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL as string;
 const browserToken = import.meta.env.VITE_BROWSER_ACCESS_TOKEN as string;
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // 05-09 (CR-01): the live projection every relayed event is folded into.
+  // A ref, not state — the canvas renderer is imperative, so no React
+  // re-render is wanted per event.
+  const projectionRef = useRef(emptyState());
+  const [disconnected, setDisconnected] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -28,6 +34,10 @@ export function App() {
     // (RESEARCH.md Anti-Pattern 1).
     const socket = connectOfficeSocket(wsBaseUrl, browserToken, {
       onSnapshot: (state) => {
+        // Seed the live baseline BEFORE the upsert loop below: the first live
+        // event must diff against the real connect-time projection, otherwise
+        // every agent in the snapshot is re-upserted on the next event.
+        projectionRef.current = state;
         for (const [agentId, agent] of Object.entries(state.agents)) {
           upsertCharacterFromAgent(agentId, agent.status, agent.name);
         }
@@ -39,22 +49,45 @@ export function App() {
         }
       },
       onEvent: (event) => {
-        const upsert = deriveCharacterUpsertFromStatusEvent(event);
-        if (upsert) upsertCharacterFromAgent(upsert.agentId, upsert.status, upsert.name);
+        // 05-09 (CR-01): run company-core's own reduce over the live
+        // projection and apply whatever agents it actually changed. The live
+        // path and the snapshot fold path are the same code, so they cannot
+        // drift.
+        const { state, upserts } = applyLiveEvent(projectionRef.current, event);
+        projectionRef.current = state;
+        for (const upsert of upserts) {
+          upsertCharacterFromAgent(upsert.agentId, upsert.status, upsert.name);
+        }
+
         if (event.type === "task.created" && event.taskId) {
           registerTaskTitle(event.taskId, event.payload.title);
         }
-        // 05-04 (HANDOFF-01): every relayed handoff event now also reaches
-        // the walk/icon/accept/return choreography engine, in addition to
-        // whatever AgentStatus-driven pose the reducer separately derives.
+        // 05-04 (HANDOFF-01): every relayed handoff event also reaches the
+        // walk/icon/accept/return choreography engine.
+        //
+        // ORDERING IS LOAD-BEARING (05-09): this call MUST stay below the
+        // upsert loop above. handoff-choreography.ts's
+        // `if (!fromChar || !toChar) return;` guard needs both participants
+        // to already have a Character, and for agent.handoff_requested it is
+        // this very event's own projection upsert (the reducer sets the
+        // receiver to WAITING_FOR_AGENT) that creates the receiver's.
+        // Moving this above the loop re-breaks HANDOFF-01 on the live path.
         if (event.type === "agent.handoff_requested" || event.type === "agent.handoff_completed") {
           handleHandoffEvent(event);
         }
       },
     });
 
+    // The office silently freezing is indistinguishable from an idle company —
+    // a dropped socket must say so on screen (05-09 must_haves).
+    const markDisconnected = () => setDisconnected(true);
+    socket.addEventListener("close", markDisconnected);
+    socket.addEventListener("error", markDisconnected);
+
     return () => {
       stopGameLoop();
+      socket.removeEventListener("close", markDisconnected);
+      socket.removeEventListener("error", markDisconnected);
       socket.close();
     };
   }, []);
@@ -67,6 +100,24 @@ export function App() {
         width={DEFAULT_COLS * TILE_SIZE}
         height={DEFAULT_ROWS * TILE_SIZE}
       />
+      {disconnected && (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            padding: "4px 8px",
+            fontSize: "11px",
+            fontFamily: "monospace",
+            color: "#ffffff",
+            background: "rgba(153, 0, 0, 0.85)",
+          }}
+        >
+          Disconnected from the office feed — what you see is the last known state, not live.
+        </div>
+      )}
       {/* OFFICE-02: attribution must be visible in the running app, not only
           recorded in references/ASSET-LICENSES.md — always-on, never gated
           behind a menu/modal. */}
