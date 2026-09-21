@@ -120,7 +120,15 @@ export function App() {
       )}
       {/* OFFICE-02: attribution must be visible in the running app, not only
           recorded in references/ASSET-LICENSES.md — always-on, never gated
-          behind a menu/modal. */}
+          behind a menu/modal.
+
+          05-12 (WR-09): the credit stays; the licence claim does not. The
+          MetroCity PACK is CC0 at its publisher's own itch.io listing (cited
+          in ASSET-LICENSES.md §1), but that the file this renderer actually
+          draws IS that pack's art rests on a credit line in the fork's README,
+          which §4's own rule calls insufficient. A footer is too small to
+          carry that distinction honestly, so it credits and points at the
+          audit rather than asserting a licence over the bytes we ship. */}
       <footer
         style={{
           position: "fixed",
@@ -135,7 +143,7 @@ export function App() {
         }}
       >
         Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character
-        sprites: MetroCity pack (CC0) · full audit: references/ASSET-LICENSES.md
+        sprites: MetroCity pack by JIK-A-4 · full audit: references/ASSET-LICENSES.md
       </footer>
     </>
   );

@@ -96,6 +96,31 @@ None — discussion stayed within phase scope.
 
 </deferred>
 
+<supersessions>
+## Factual Supersessions
+
+Appended after execution. Nothing inside `<decisions>` is edited here — these
+notes record facts a decision's rationale cited in passing that have since
+changed, so a later reader is never left comparing two artifacts that disagree.
+
+> Superseded by 05-12 (WR-09): 2026-09-21. **D-05's decision stands unchanged** —
+> the Phase 5 asset-licence audit remains scoped to the assets this phase
+> actually wires into the renderer, with everything else tracked as explicitly
+> deferred. What moved is a factual premise its rationale cites in passing: the
+> MetroCity character pack's licence tier. At the time D-05 was taken, that
+> premise rested on a credit line in the fork's README, which
+> `references/ASSET-LICENSES.md` §4's own rule holds is never enough to reach a
+> confirmed tier — the over-claim WR-09 flagged. 05-12 re-examined it and split
+> it in two: the PACK's CC0 licence is now cited to the publisher's own itch.io
+> listing (re-fetched 2026-09-21), while the separate question of whether the
+> file this repo actually ships is that pack's art remains open on the fork's
+> credit alone, and is routed to human-verification item 4.
+> `references/ASSET-LICENSES.md` §1 is the authoritative tier and carries both
+> halves. **No decision was revisited**; D-05's scoping call is unaffected by
+> the provenance tier of one of the assets inside its scope.
+
+</supersessions>
+
 ---
 
 *Phase: 5-Pixel Office Renderer*

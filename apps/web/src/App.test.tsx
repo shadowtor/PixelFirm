@@ -14,8 +14,18 @@ import { App } from "./App";
 const markup = renderToStaticMarkup(<App />);
 const footerMarkup = markup.slice(markup.indexOf("<footer"));
 
+// 05-12 (WR-09): the credit is pinned, the sprite licence claim is
+// deliberately absent. ASSET-LICENSES.md §1 confirms the MetroCity PACK as CC0
+// at the publisher's own listing, but that the file this renderer draws is
+// that pack's art rests on the fork's README credit — a distinction a footer
+// cannot carry, so the footer credits and points at the audit instead. The
+// only licence it asserts is the fork's MIT, which is documented in full.
+//
+// Apostrophe-free by construction: renderToStaticMarkup escapes `'` to
+// `&#x27;`, which would make this whole-sentence assertion unmatchable against
+// the rendered markup for a purely cosmetic reason.
 const ATTRIBUTION =
-  "Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character sprites: MetroCity pack (CC0) · full audit: references/ASSET-LICENSES.md";
+  "Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character sprites: MetroCity pack by JIK-A-4 · full audit: references/ASSET-LICENSES.md";
 
 describe("App attribution", () => {
   it("renders the complete attribution sentence, so a silent truncation goes red", () => {
