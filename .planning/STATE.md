@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-07-PLAN.md
-last_updated: "2026-09-21T05:56:38.894Z"
+stopped_at: Completed 05-08-PLAN.md
+last_updated: "2026-09-21T06:12:56.831Z"
 last_activity: 2026-09-21
 last_activity_desc: Phase 05 execution started
-state_head: b24dcc3b6b2bec27daa6987e6889a38ede290c54
+state_head: 3742846cd25525a504c8a9ecfd487f8a68e3c026
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 23
-  completed_plans: 22
+  completed_plans: 23
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 4 of 8
+Plan: 5 of 8
 Status: Ready to execute
 Last activity: 2026-09-21 — Phase 05 execution started
 
@@ -82,6 +82,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P05 | 15min | 3 tasks | 10 files |
 | Phase 05 P06 | 20min | 2 tasks | 7 files |
 | Phase 05 P07 | 12min | 2 tasks | 8 files |
+| Phase 05 P08 | ~35min | 1 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -145,6 +146,9 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-07: bubble-permission.json is a question mark not three-dots-in-a-bubble — badge-discussing.json already owns the bubble-with-dots silhouette
 - [Phase 05]: 05-07: the bubble overlay draws inside the character's own {zY, draw} closure, never as a separate z-sort entry, so an icon can't sort behind a character in front of it
 - [Phase 05]: 05-07: renderer draw-proof pattern — a plain object recording fillRect + the fillStyle in effect, cast to CanvasRenderingContext2D at the call site; bubble-vs-base partitioning uses a control render (bubbleType null), not colour, since bubble-blocked shares #000000/#ffffff with the character sprite
+- [Phase 05]: 05-08: live proof posts only event types WORKER_ALLOWED_EVENT_TYPES actually admits (task.status_changed + the handoff pair) — widening the allow-list for agent.online to make the demo pass would have faked the proof
+- [Phase 05]: 05-08: renderScene's bubbleY is clamped to Math.max(0, ...) — row-1 desks gave drawY = -8, so the overlay painted entirely off-canvas and the bubble feature was non-functional for the first 18 agents
+- [Phase 05]: 05-08: the live script uses fixed synthetic agent ids and asserts a clean pre-event baseline, so an append-only events table can't let a later run pass on leftover pixels
 
 ### Pending Todos
 
@@ -157,6 +161,8 @@ None yet.
 - Phase 5 planning: full asset-licence audit of the Pixel Agents fork beyond the credited CC0 character pack is still outstanding.
 - Phase 8 planning: verify current Twitch EventSub reconnect/signature details against live docs; budget subscription total_cost before choosing event types.
 - Phase 5 (05-01): pre-existing repo-wide TS module-resolution gap — event-schema/index.ts and company-core/index.ts re-export without .js extensions, which tsc --noEmit flags under moduleResolution NodeNext (pnpm --filter api typecheck already failed on this before 05-01). Doesn't block any required verify command for 05-01 through 05-04 but worth a dedicated fix pass. See deferred-items.md.
+- Phase 5 (05-08): still no producer of agent.online anywhere in the codebase — the literal 'agent walks into the office when it comes online' demo remains unreproducible. The live proof demonstrates the rendering truths via task.status_changed (what ClaudeCodeRuntime actually emits) and deliberately does NOT close this gap.
+- Phase 5 (05-08): an already-connected browser client never re-derives AgentStatus from task.status_changed / gsd.phase_observed / agent.handoff_completed — only a fresh snapshot reflects them. Phase 6's CEO dashboard has the identical need; proper fix is a live-projection-diff broadcast.
 
 ## Deferred Items
 
@@ -168,6 +174,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-21T05:56:19.584Z
-Stopped at: Completed 05-07-PLAN.md
+Last session: 2026-09-21T06:12:35.541Z
+Stopped at: Completed 05-08-PLAN.md
 Resume file: None

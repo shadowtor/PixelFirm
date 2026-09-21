@@ -167,7 +167,7 @@ Plans:
   3. When one agent hands off work to another, the office shows the first agent walking over, a task icon appearing, and the second agent accepting it and moving to work — using deterministic, template-based dialogue, never LLM-generated at render time.
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
 
-**Plans:** 7/8 plans executed (4 executed, gaps found; 4 gap-closure plans added 2026-09-21 per --gaps re-plan)
+**Plans:** 8/8 plans executed (4 executed, gaps found; 4 gap-closure plans added 2026-09-21 per --gaps re-plan)
 
 Plans:
 
@@ -178,7 +178,7 @@ Plans:
 - [x] 05-05-PLAN.md — Gap closure: wire-path integrity fixes (CR-01/CR-02/WR-01/WR-02) + REQUIREMENTS.md doc-sync
 - [x] 05-06-PLAN.md — Gap closure: real MetroCity sprite pixel data (closes invisible-sprite gap)
 - [x] 05-07-PLAN.md — Gap closure: bubble/badge overlay render pass + 3 missing icon assets
-- [ ] 05-08-PLAN.md — Gap closure: live end-to-end proof (real dev servers + Playwright canvas sampling)
+- [x] 05-08-PLAN.md — Gap closure: live end-to-end proof (real dev servers + Playwright canvas sampling)
 
 **Wave 1**
 
@@ -197,7 +197,7 @@ Plans:
 
 - [x] 05-05-PLAN.md — Wire-path integrity fixes (CR-01/CR-02/WR-01/WR-02) + REQUIREMENTS.md doc-sync
 - [x] 05-06-PLAN.md — Real MetroCity sprite pixel data
-- [ ] 05-07-PLAN.md — Bubble/badge overlay render pass + 3 missing icon assets
+- [x] 05-07-PLAN.md — Bubble/badge overlay render pass + 3 missing icon assets
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -260,7 +260,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 7/8 | In Progress|  |
+| 5. Pixel Office Renderer | 8/8 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
