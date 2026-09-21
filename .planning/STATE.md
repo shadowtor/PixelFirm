@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-10-PLAN.md
-last_updated: "2026-09-21T09:10:50.363Z"
+stopped_at: Completed 05-09-PLAN.md
+last_updated: "2026-09-21T09:36:35.539Z"
 last_activity: 2026-09-21
 last_activity_desc: Phase 05 execution started
-state_head: 7267d66f16a0b227ad6ac456e727674a3387fc35
+state_head: cfebf15960211a503640db33168bd1b836170db2
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 27
-  completed_plans: 24
+  completed_plans: 25
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 2 of 12
+Plan: 3 of 12
 Status: Ready to execute
 Last activity: 2026-09-21 — Phase 05 execution started
 
@@ -84,6 +84,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P07 | 12min | 2 tasks | 8 files |
 | Phase 05 P08 | ~35min | 1 tasks | 3 files |
 | Phase 05 P10 | 20 min | 2 tasks | 9 files |
+| Phase 05 P09 | 20 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -155,6 +156,11 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-10: declined 05-VERIFICATION.md's horizontal bubbleX clamp ask — an 11-wide glyph centred on a 16-wide sprite is always a subset of its owner's extent, so the clamp is unreachable code; a containment test is the guard instead
 - [Phase 05]: 05-10: getCharacterSprites' palette index was deleted rather than given a meaning — exactly one character template exists in the repo, so the parameter had nothing to select (WR-08)
 - [Phase 05]: 05-10: per-agent identity hue is a pure FNV-1a fold of the agentId onto 12 x 30deg buckets — identity only, no AgentStatus value may influence it (05-UI-SPEC.md's locked Color separation)
+- [Phase 05]: 05-09: apps/web now holds a live ProjectionState and runs company-core's own reduce() per relayed event — the live path and the snapshot fold path are literally the same code, so drift is structurally impossible rather than merely tested for
+- [Phase 05]: 05-09: declined 05-VERIFICATION.md's stateless task.status_changed mapper — deriveAgentStatus needs gsdCategory, which lives in ProjectionState.gsdObservations and never on the event, so a stateless shape would drift on 6 of 15 AgentStatus values
+- [Phase 05]: 05-09: deriveCharacterUpsertFromStatusEvent deleted, not extended — it mapped only agent.online/session.started, which no producer emits and WORKER_ALLOWED_EVENT_TYPES does not admit (the CR-01 fix itself)
+- [Phase 05]: 05-09: App.tsx's upserts-before-handleHandoffEvent ordering is pinned by a source-order test proven red by inverting the code — the onEvent closure is not exported and its effect never runs under static rendering, so source order is the invariant's only observable form
+- [Phase 05]: 05-09: vite's ?raw replaces node:fs for filesystem reads in apps/web tests — the package has no @types/node and Task 3 forbids adding a dependency
 
 ### Pending Todos
 
@@ -180,6 +186,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-21T09:10:27.960Z
-Stopped at: Completed 05-10-PLAN.md
+Last session: 2026-09-21T09:36:15.091Z
+Stopped at: Completed 05-09-PLAN.md
 Resume file: None
