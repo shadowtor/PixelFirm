@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { AgentStatus } from "event-schema";
 import { upsertCharacterFromAgent, getCharacter, _resetForTests } from "./index";
 import { CharacterState } from "./types";
@@ -17,12 +17,39 @@ describe("upsertCharacterFromAgent", () => {
     expect(ch?.state).toBe(CharacterState.IDLE);
   });
 
-  it("no-ops (with a console.warn) for any AgentStatus other than IDLE — the exhaustive mapping is 05-02's job", () => {
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("resolves every AgentStatus via status-mapping's exhaustive STATUS_MAP — CODING now creates a TYPE-pose character (05-02, not 05-01's IDLE-only stub)", () => {
     upsertCharacterFromAgent("agent-2", AgentStatus.CODING);
-    expect(getCharacter("agent-2")).toBeUndefined();
-    expect(warnSpy).toHaveBeenCalled();
-    warnSpy.mockRestore();
+    const ch = getCharacter("agent-2");
+    expect(ch).toBeDefined();
+    expect(ch?.state).toBe(CharacterState.TYPE);
+  });
+
+  it("freezes and applies a distinct bubble for blocked/waiting_for_agent/waiting_for_ceo (D-03)", () => {
+    upsertCharacterFromAgent("agent-3", AgentStatus.BLOCKED);
+    upsertCharacterFromAgent("agent-4", AgentStatus.WAITING_FOR_AGENT);
+    upsertCharacterFromAgent("agent-5", AgentStatus.WAITING_FOR_CEO);
+
+    const blocked = getCharacter("agent-3");
+    const waitingAgent = getCharacter("agent-4");
+    const waitingCeo = getCharacter("agent-5");
+
+    expect(blocked?.frozen).toBe(true);
+    expect(waitingAgent?.frozen).toBe(true);
+    expect(waitingCeo?.frozen).toBe(true);
+    expect(waitingAgent?.bubbleType).not.toBe(waitingCeo?.bubbleType);
+  });
+
+  it("despawns (removes) the character for AgentStatus.OFFLINE — the offline sentinel is never rendered", () => {
+    upsertCharacterFromAgent("agent-6", AgentStatus.IDLE);
+    expect(getCharacter("agent-6")).toBeDefined();
+
+    upsertCharacterFromAgent("agent-6", AgentStatus.OFFLINE);
+    expect(getCharacter("agent-6")).toBeUndefined();
+  });
+
+  it("applies deploying's 1.5x frameSpeedMultiplier — the one legitimate procedural-variation state signal", () => {
+    upsertCharacterFromAgent("agent-7", AgentStatus.DEPLOYING);
+    expect(getCharacter("agent-7")?.frameSpeedMultiplier).toBe(1.5);
   });
 });
 

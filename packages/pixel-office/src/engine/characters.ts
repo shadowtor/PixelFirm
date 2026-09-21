@@ -63,11 +63,22 @@ export function createCharacter(id: string, tileCol = 1, tileRow = 1, palette = 
     frame: 0,
     frameTimer: 0,
     bubbleType: null,
+    frozen: false,
+    frameSpeedMultiplier: 1,
   };
 }
 
 export function updateCharacter(ch: Character, dt: number): void {
-  ch.frameTimer += dt;
+  // D-03: frozen statuses (blocked/waiting_for_agent/waiting_for_ceo) never
+  // advance their animation frame, regardless of pose — a stuck agent must
+  // never read as still actively working (05-02, status-mapping.ts).
+  if (ch.frozen) {
+    ch.frame = 0;
+    ch.frameTimer = 0;
+    return;
+  }
+
+  ch.frameTimer += dt * ch.frameSpeedMultiplier;
 
   switch (ch.state) {
     case CharacterState.TYPE: {

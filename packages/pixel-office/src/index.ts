@@ -11,8 +11,9 @@ export { DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE };
 import { createCharacter, updateCharacter } from "./engine/characters.js";
 import { startGameLoop as startForkGameLoop } from "./engine/gameLoop.js";
 import { renderFrame } from "./engine/renderer.js";
+import { resolveStatusVisual } from "./status/status-mapping.js";
 import type { Character } from "./types.js";
-import { CharacterState, TileType } from "./types.js";
+import { TileType } from "./types.js";
 
 // Simple default office floor: a wall border around an open floor interior.
 // No furniture/desks this plan (05-01) — agents are placed at sequential
@@ -44,18 +45,21 @@ function nextDeskPosition(): { col: number; row: number } {
 }
 
 /**
- * Maps a real agent's real AgentStatus onto the forked Character FSM.
- *
- * This plan (05-01) only wires up ONE value end-to-end — AgentStatus.IDLE →
- * CharacterState.IDLE — to prove the real event → render pipeline works.
- * The exhaustive 15-value mapping table is 05-02's job; any other status
- * passed here is a documented no-op (never a fabricated/guessed pose).
+ * Maps a real agent's real AgentStatus onto the forked Character FSM via
+ * status/status-mapping.ts's exhaustive STATUS_MAP (05-02, OFFICE-01/
+ * OFFICE-03) — every one of the 15 AgentStatus values now resolves to a
+ * real pose/bubble/frozen/frameSpeedMultiplier combination, never a
+ * fabricated/guessed one (STATUS_MAP has no fallback branch).
  */
 export function upsertCharacterFromAgent(agentId: string, status: AgentStatus): void {
-  if (status !== AgentStatus.IDLE) {
-    console.warn(
-      `pixel-office: no visual mapping yet for AgentStatus "${status}" (agent ${agentId}) — 05-02 adds the full 15-value mapping table`,
-    );
+  const visual = resolveStatusVisual(status);
+
+  if (visual.pose === null) {
+    // offline sentinel — not rendered. The fork's own matrixEffect despawn
+    // transition was dropped from this repo's trimmed types.ts (05-01); no
+    // equivalent one-shot effect exists here to reuse, so despawning is a
+    // direct removal from the floor (documented in status-mapping.ts).
+    characters.delete(agentId);
     return;
   }
 
@@ -65,7 +69,10 @@ export function upsertCharacterFromAgent(agentId: string, status: AgentStatus): 
     ch = createCharacter(agentId, col, row);
     characters.set(agentId, ch);
   }
-  ch.state = CharacterState.IDLE;
+  ch.state = visual.pose;
+  ch.bubbleType = visual.bubble ?? null;
+  ch.frozen = visual.frozen ?? false;
+  ch.frameSpeedMultiplier = visual.frameSpeedMultiplier ?? 1;
 }
 
 /** Read-only accessor for the current Character behind an agentId, if any. */

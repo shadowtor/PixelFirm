@@ -35,6 +35,29 @@ export const CharacterState = {
 } as const;
 export type CharacterState = (typeof CharacterState)[keyof typeof CharacterState];
 
+/**
+ * Speech-bubble overlay glyph key, resolved by status/status-mapping.ts
+ * (D-03 OFFICE-03 icon overlay). "permission"/"waiting" are the fork's own
+ * near-verbatim-reused bubble concepts (waiting_for_ceo/waiting_for_agent);
+ * the rest are new small icon glyphs authored this phase in the same
+ * palette+pixels JSON shape (packages/pixel-office/src/sprites/bubble-*.json,
+ * badge-*.json). Resolving the key to an actual asset/JSON is a rendering
+ * concern deferred past this phase's scope (see engine/renderer.ts header) —
+ * this field only carries which glyph a character's current status implies.
+ */
+export type BubbleType =
+  | "permission"
+  | "waiting"
+  | "blocked"
+  | "failed"
+  | "completed"
+  | "planning"
+  | "researching"
+  | "testing"
+  | "reviewing"
+  | "discussing"
+  | "deploying";
+
 export const Direction = {
   DOWN: 0,
   LEFT: 1,
@@ -82,6 +105,16 @@ export interface Character {
   frame: number;
   /** Time accumulator for animation */
   frameTimer: number;
-  /** Active speech bubble type, or null if none showing. Wired up in 05-02 (D-03 icon overlay). */
-  bubbleType: "permission" | "waiting" | null;
+  /** Active speech bubble type, or null if none showing (D-03 icon overlay, wired up 05-02). */
+  bubbleType: BubbleType | null;
+  /** True while status/status-mapping.ts's STATUS_MAP marks this status frozen
+   *  (blocked/waiting_for_agent/waiting_for_ceo, D-03) — suppresses animation
+   *  frame advance in engine/characters.ts's updateCharacter regardless of
+   *  pose, so a stuck agent never reads as still actively working. */
+  frozen: boolean;
+  /** Multiplies dt for animation frame-timer accumulation. The one legitimate
+   *  procedural-variation state signal this project uses (deploying's sped-up
+   *  typing animation) — never tint, since hue/palette is already claimed by
+   *  per-agent identity colour (RESEARCH.md Pattern 2). Defaults to 1. */
+  frameSpeedMultiplier: number;
 }
