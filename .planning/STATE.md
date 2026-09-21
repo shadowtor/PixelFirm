@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-08-PLAN.md
-last_updated: "2026-09-21T07:47:15.573Z"
+stopped_at: Completed 05-10-PLAN.md
+last_updated: "2026-09-21T09:10:50.363Z"
 last_activity: 2026-09-21
 last_activity_desc: Phase 05 execution started
-state_head: 0890fec5eddf524505fd548586011168a5d7b21d
+state_head: 7267d66f16a0b227ad6ac456e727674a3387fc35
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 27
-  completed_plans: 23
+  completed_plans: 24
   percent: 50
 ---
 
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 
 ## Current Position
 
-Phase: 05 (Pixel Office Renderer) — READY TO EXECUTE
-Plan: 5 of 8
+Phase: 05 (Pixel Office Renderer) — EXECUTING
+Plan: 2 of 12
 Status: Ready to execute
 Last activity: 2026-09-21 — Phase 05 execution started
 
@@ -83,6 +83,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P06 | 20min | 2 tasks | 7 files |
 | Phase 05 P07 | 12min | 2 tasks | 8 files |
 | Phase 05 P08 | ~35min | 1 tasks | 3 files |
+| Phase 05 P10 | 20 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -149,6 +150,11 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-08: live proof posts only event types WORKER_ALLOWED_EVENT_TYPES actually admits (task.status_changed + the handoff pair) — widening the allow-list for agent.online to make the demo pass would have faked the proof
 - [Phase 05]: 05-08: renderScene's bubbleY is clamped to Math.max(0, ...) — row-1 desks gave drawY = -8, so the overlay painted entirely off-canvas and the bubble feature was non-functional for the first 18 agents
 - [Phase 05]: 05-08: the live script uses fixed synthetic agent ids and asserts a clean pre-event baseline, so an append-only events table can't let a later run pass on leftover pixels
+- [Phase 05]: 05-10: desk rows moved to 3/6/9 (start 3, pitch 3) rather than 05-VERIFICATION.md's single top gutter row — a gutter alone leaves the first desk on row 2 where the glyph position is still negative and the clamp still fires, so the defect would have survived
+- [Phase 05]: 05-10: the state glyph is bound to its OWNER's sprite box, not floored against the canvas — being clipped at the canvas edge is strictly better than being attributed to a neighbouring agent (CR-02)
+- [Phase 05]: 05-10: declined 05-VERIFICATION.md's horizontal bubbleX clamp ask — an 11-wide glyph centred on a 16-wide sprite is always a subset of its owner's extent, so the clamp is unreachable code; a containment test is the guard instead
+- [Phase 05]: 05-10: getCharacterSprites' palette index was deleted rather than given a meaning — exactly one character template exists in the repo, so the parameter had nothing to select (WR-08)
+- [Phase 05]: 05-10: per-agent identity hue is a pure FNV-1a fold of the agentId onto 12 x 30deg buckets — identity only, no AgentStatus value may influence it (05-UI-SPEC.md's locked Color separation)
 
 ### Pending Todos
 
@@ -174,6 +180,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-21T06:12:35.541Z
-Stopped at: Completed 05-08-PLAN.md
+Last session: 2026-09-21T09:10:27.960Z
+Stopped at: Completed 05-10-PLAN.md
 Resume file: None

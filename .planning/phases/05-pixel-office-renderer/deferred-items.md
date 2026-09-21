@@ -44,3 +44,33 @@ whoever picks it up, not an auto-fix.
 found". Untouched by 05-01 (no file in that package was read or modified this
 plan). Flagged here since it surfaced while checking Phase 05 didn't regress
 other packages.
+
+## Pre-existing (05-10): two TS18046 errors in `status-mapping.test.ts`
+
+`npx tsc --noEmit -p packages/pixel-office` reports, besides the TS2835
+extensionless-import gap already documented above:
+
+```
+packages/pixel-office/src/status/status-mapping.test.ts(48,16): error TS18046: 'visual' is of type 'unknown'.
+packages/pixel-office/src/status/status-mapping.test.ts(50,16): error TS18046: 'visual' is of type 'unknown'.
+```
+
+`Object.entries(STATUS_MAP)` widens the value to `unknown` under this
+tsconfig. Introduced by 05-02 (`39fc0b0`) and untouched by 05-10 — no file
+under `src/status/` was modified by this plan. Filtering out TS2835, 05-10
+introduced zero new type errors. Fix when someone touches that file: annotate
+the loop (`for (const [status, visual] of Object.entries(STATUS_MAP) as
+Array<[AgentStatus, StatusVisual]>)`) rather than loosening the tsconfig.
+
+## Accepted ceilings (05-10), flagged in-code
+
+Both are working code with a documented limit, not stubs. `ponytail:` comments
+at each site name the ceiling and the upgrade path.
+
+| Ceiling | Site | Upgrade path |
+|---|---|---|
+| Twelve identity hue buckets — two agents collide on a colour past 12 seated | `packages/pixel-office/src/index.ts` (`hueForAgentId`) | On-canvas name labels; 05-UI-SPEC.md's Typography section already reserves the monospace/11px scale |
+| 54 desks on the default 20x11 grid (rows 3/6/9 x 18 cols, down from 162); overflow stacks on the last valid row | `packages/pixel-office/src/index.ts` (`nextDeskPosition`) | A larger grid or a scrolling camera |
+
+The desk-count reduction is the direct cost of the row pitch CR-02 required —
+a glyph only clears the sprite box of the desk row behind it at pitch >= 3.
