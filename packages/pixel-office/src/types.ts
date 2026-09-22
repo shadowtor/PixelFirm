@@ -110,8 +110,8 @@ export interface Character {
   moveProgress: number;
   /** Current tool name for typing vs reading animation, or null */
   currentTool: string | null;
-  /** Per-agent identity hue in degrees, derived from the agentId (index.ts's
-   *  hueForAgentId). IDENTITY only — never a state signal (D-01, OFFICE-03).
+  /** Per-agent identity hue in degrees, derived from the agentId and seated hues (index.ts's
+   *  identityHueFor). IDENTITY only — never a state signal (D-01, OFFICE-03).
    *  The former `palette` index that sat alongside this was removed in 05-10:
    *  nothing ever read it, so every agent rendered identical pixels (WR-08). */
   hueShift: number;

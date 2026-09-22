@@ -79,27 +79,39 @@ const DESK_ROW_PITCH = 3;
 const HUE_BUCKETS = 12;
 
 /**
- * Per-agent IDENTITY colour, derived from the agentId alone (WR-08).
+ * Per-agent IDENTITY colour for a character about to be created (WR-08).
  *
  * This is identity, NEVER state: 05-UI-SPEC.md's `## Color` section locks that
- * separation and OFFICE-03 forbids colour being the only state signal, so no
- * AgentStatus value may ever influence this value. Pure by design (no
- * Math.random, no Date.now) matching this package's determinism rule — the
- * same agent gets the same colour across reloads and across a replay of the
- * same event log, so a recorded stream and a live view agree about who is who.
+ * separation (D-03) and OFFICE-03 forbids colour being the only state signal,
+ * so no AgentStatus value may ever influence this value. The agentId's FNV-1a
+ * bucket is the preference; if a seated character already holds it, probe
+ * forward (wrapping) to the first bucket nobody holds. Pure — no Math.random,
+ * no Date.now. Called before the new character is inserted, so it never sees
+ * itself.
  *
- * ponytail: twelve buckets means two agents collide on a hue once more than
- * twelve are seated. Upgrade path: on-canvas name labels, for which
- * 05-UI-SPEC.md's Typography section already reserves the monospace/11px scale.
+ * ponytail: two concurrently seated characters share a hue only if one was
+ * seated while all twelve buckets were held, i.e. from the thirteenth
+ * concurrently seated agent. A character keeps its hue for its lifetime even
+ * if the collider leaves. Hues are stable across reloads except where a
+ * collision was resolved in a different seating order. Upgrade path for more
+ * than twelve: on-canvas name labels (05-UI-SPEC.md Typography reserves the
+ * monospace/11px scale).
  */
-function hueForAgentId(agentId: string): number {
+function identityHueFor(agentId: string): number {
   // FNV-1a, 32-bit.
   let hash = 0x811c9dc5;
   for (let i = 0; i < agentId.length; i++) {
     hash ^= agentId.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
-  return (hash % HUE_BUCKETS) * (360 / HUE_BUCKETS);
+  const step = 360 / HUE_BUCKETS;
+  const preferred = hash % HUE_BUCKETS;
+  const held = new Set([...characters.values()].map((ch) => ch.hueShift));
+  for (let i = 0; i < HUE_BUCKETS; i++) {
+    const hue = ((preferred + i) % HUE_BUCKETS) * step;
+    if (!held.has(hue)) return hue;
+  }
+  return preferred * step;
 }
 
 function deskForSlot(slot: number): { col: number; row: number } {
@@ -153,7 +165,7 @@ export function upsertCharacterFromAgent(agentId: string, status: AgentStatus, n
   let ch = characters.get(agentId);
   if (!ch) {
     const { col, row } = nextDeskPosition();
-    ch = createCharacter(agentId, col, row, hueForAgentId(agentId));
+    ch = createCharacter(agentId, col, row, identityHueFor(agentId));
     characters.set(agentId, ch);
   }
   ch.state = visual.pose;
