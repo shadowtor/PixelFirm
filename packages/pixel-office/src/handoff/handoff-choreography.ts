@@ -25,6 +25,8 @@ interface HandoffRecord {
   fromAgentId: string;
   toAgentId: string;
   phase: HandoffPhase;
+  /** The receiver's accepted line, set at completion; null before (05-13). */
+  acceptedText: string | null;
 }
 
 // No blocked-tile tracking exists anywhere in this repo yet (no furniture —
@@ -33,12 +35,21 @@ const NO_BLOCKED_TILES = new Set<string>();
 
 const handoffs = new Map<string, HandoffRecord>();
 
+// Request event ids this FSM has already acted on — the FSM is the only
+// non-idempotent consumer of relayed events, so a re-delivered request must
+// never re-drive the walk (05-13, review CR-01).
+// ponytail: grows by one id per handoff request for the tab's lifetime
+// (handoffs are rare; no in-repo producer exists yet). Bound it with an LRU
+// if handoffs ever become high-frequency.
+const handledHandoffRequestIds = new Set<string>();
+
 /**
  * Entry point wired from apps/web's onEvent handler for both halves of a
  * real handoff pair. Every other event type is ignored (no-op).
  */
 export function handleHandoffEvent(event: CompanyEvent): void {
   if (event.type === "agent.handoff_requested") {
+    if (handledHandoffRequestIds.has(event.id)) return;
     const { taskId, fromAgentId, toAgentId } = event.payload;
     const fromChar = getCharacter(fromAgentId);
     const toChar = getCharacter(toAgentId);
@@ -47,8 +58,11 @@ export function handleHandoffEvent(event: CompanyEvent): void {
     // event). Never fabricate a walk sequence for an unknown character.
     if (!fromChar || !toChar) return;
 
+    // Marked only once acted on: a request that arrived before its
+    // participants existed was never acted on, so it is not marked.
+    handledHandoffRequestIds.add(event.id);
     walkCharacterTo(fromChar, toChar.seatCol, toChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
-    handoffs.set(taskId, { taskId, fromAgentId, toAgentId, phase: "WALKING_TO_RECEIVER" });
+    handoffs.set(taskId, { taskId, fromAgentId, toAgentId, phase: "WALKING_TO_RECEIVER", acceptedText: null });
     return;
   }
 
@@ -74,7 +88,8 @@ export function handleHandoffEvent(event: CompanyEvent): void {
       toChar.state = CharacterState.TYPE;
       const taskTitle = getTaskTitle(taskId) ?? taskId;
       const toAgentName = toChar.name ?? record.toAgentId;
-      toChar.bubbleText = resolveHandoffDialogue("accepted", taskTitle, toAgentName);
+      record.acceptedText = resolveHandoffDialogue("accepted", taskTitle, toAgentName);
+      toChar.bubbleText = record.acceptedText;
     }
 
     record.phase = "RETURNING_TO_DESK";
@@ -109,6 +124,11 @@ export function checkHandoffArrivals(): void {
       const fromChar = getCharacter(record.fromAgentId);
       if (!fromChar || fromChar.state !== CharacterState.IDLE || fromChar.path.length !== 0) continue;
 
+      // D-04's sequence ends when the sender is home: a line left painted
+      // after that is a stale claim (Pitfall 2). Only clear it if it is still
+      // ours, so a newer line from another handoff is never clobbered.
+      const toChar = getCharacter(record.toAgentId);
+      if (toChar && toChar.bubbleText === record.acceptedText) toChar.bubbleText = null;
       handoffs.delete(record.taskId);
     }
   }
@@ -117,4 +137,5 @@ export function checkHandoffArrivals(): void {
 /** Test-only reset — mirrors index.ts's _resetForTests. */
 export function _resetHandoffsForTests(): void {
   handoffs.clear();
+  handledHandoffRequestIds.clear();
 }
