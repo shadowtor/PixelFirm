@@ -168,7 +168,7 @@ Plans:
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
   5. The office floor is furnished — MetroCity floor and wall tiles, desks with monitors grouped in pods with walking lanes — agents sit at desk seats and never walk through furniture or another seated agent.
 
-**Plans:** 30/35 plans executed (UAT round 2 2026-09-22 diagnosed 6 polish gaps G-05-P1..P6 — 5 gap-closure plans 05-31..05-35 added)
+**Plans:** 31/35 plans executed (UAT round 2 2026-09-22 diagnosed 6 polish gaps G-05-P1..P6 — 5 gap-closure plans 05-31..05-35 added)
 
 Plans:
 
@@ -202,7 +202,7 @@ Plans:
 - [x] 05-28-PLAN.md — UAT gap closure: compact tailed speech bubble under the speaker spanning sender to receiver, floor-clamped, layout-data guard, live TRUTH 5 (G-05-4, G-05-1b)
 - [x] 05-29-PLAN.md — UAT gap closure: short deterministic handoff templates + caps, UI-SPEC typography/colour/copy (G-05-1b)
 - [x] 05-30-PLAN.md — UAT gap closure: status glyphs anchored 1 px above the owner's visible head, on the floor, live TRUTH 4 (G-05-1c)
-- [ ] 05-31-PLAN.md — UAT polish: office sized from the full viewport (1280x720 -> 4x, 1920x1080 -> 6x), WALL_COLOR surround, footer overlaid on the bottom wall, live no-black TRUTH 0 (G-05-P6)
+- [x] 05-31-PLAN.md — UAT polish: office sized from the full viewport (1280x720 -> 4x, 1920x1080 -> 6x), WALL_COLOR surround, footer overlaid on the bottom wall, live no-black TRUTH 0 (G-05-P6)
 - [ ] 05-32-PLAN.md — UAT polish: every agent resting on its own seat drawn seated, only off-seat agents stand; true-hourglass waiting glyph with 1x silhouette test (G-05-P3, G-05-P5)
 - [ ] 05-33-PLAN.md — UAT polish: speech bubble picks the safest of four candidates (never over a glyph or off the floor, desks only when unavoidable), tail to the speaker, live TRUTH 5 (G-05-P1)
 - [ ] 05-34-PLAN.md — UAT polish: fixed handoff interaction slots on the central aisle from layout data, no shoulder-to-shoulder, ink-separation sweep (G-05-P2)
@@ -296,7 +296,7 @@ Plans:
 
 **Wave 20** *(blocked on 05-29)*
 
-- [ ] 05-30-PLAN.md — Head-anchored status glyphs (G-05-1c)
+- [x] 05-30-PLAN.md — Head-anchored status glyphs (G-05-1c)
 
 **Wave 21** *(UAT round 2 polish — each wave touches the live harness and UI-SPEC, so the chain is sequential)*
 
@@ -375,7 +375,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 30/35 | In Progress|  |
+| 5. Pixel Office Renderer | 31/35 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |

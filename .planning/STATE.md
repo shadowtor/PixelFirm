@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-30-PLAN.md
-last_updated: "2026-09-22T12:05:17.506Z"
-last_activity: 2026-09-22
+stopped_at: Completed 05-31-PLAN.md
+last_updated: "2026-09-22T22:42:57.076Z"
+last_activity: 2026-09-23
 last_activity_desc: Phase 05 execution started
-state_head: 0446d976be2059c89316482104001a2915289fc0
+state_head: 8594605f6f9d8e11c54e6e9e097a3225461b9c36
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 45
-  completed_plans: 45
+  total_plans: 50
+  completed_plans: 46
   percent: 50
 ---
 
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 30 of 30
-Status: All 30 plans complete; phase awaiting verification
-Last activity: 2026-09-22 — Completed 05-30 (glyphs anchored 1 px above the owner's head; G-05-1c closed)
+Plan: 2 of 35
+Status: Ready to execute
+Last activity: 2026-09-23 — Phase 05 execution started
 
 Progress: [█████░░░░░] 50%
 
@@ -105,6 +105,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P28 | 9min | 2 tasks | 6 files |
 | Phase 05 P29 | 6min | 2 tasks | 4 files |
 | Phase 05 P30 | 9min | 2 tasks | 5 files |
+| Phase 05 P31 | 9 min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -213,6 +214,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-28: handoff line is a speech bubble under the speaker's feet, spanning the pair, clamped only to the floor interior; layout guard test proves speaker bands clear
 - [Phase 05]: 05-29: handoff dialogue is a short label ('<title> → <name>', '<name> accepts <title>'), caps 12/10 code points; UI-SPEC supersedes the 11px canvas dialogue scale
 - [Phase 05]: 05-30: state glyphs anchor on the owner's visible head (lowest ink row 1 px above the frame's first opaque row, per frame; G-05-1c)
+- [Phase 05]: 05-31: the office is sized from the FULL viewport (no footer allowance) and centred on a WALL_COLOR surround; the attribution footer is transparent and overlays the office's own bottom wall row
+- [Phase 05]: 05-31: the no-black guarantee is asserted on a pngjs-decoded full-viewport screenshot, not canvas getImageData — the defect lived in host-page background the canvas cannot see
 
 ### Pending Todos
 
@@ -241,6 +244,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T12:05:17.365Z
-Stopped at: Completed 05-30-PLAN.md
+Last session: 2026-09-22T22:42:56.914Z
+Stopped at: Completed 05-31-PLAN.md
 Resume file: None
