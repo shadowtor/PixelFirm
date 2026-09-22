@@ -13,7 +13,7 @@ import {
   checkHandoffArrivals,
   _resetForTests,
 } from "../index.js";
-import type { Character } from "../types.js";
+import type { Character, SpriteData } from "../types.js";
 import { CharacterState } from "../types.js";
 
 interface RecordedRect {
@@ -420,5 +420,102 @@ describe("renderScene dialogue pass — handoff text reaches the canvas, owner-b
     expect(resolveDialogueBox(100, 24, 50, 1, 320)).toEqual({ x: 73, y: 0, w: 54, h: 13 });
     // Row-6 owner: glyph slot at 57, box at 42.
     expect(resolveDialogueBox(100, 72, 50, 1, 320).y).toBe(42);
+  });
+});
+
+describe("renderScene pass order — state glyphs are the top layer (05-13)", () => {
+  beforeEach(() => {
+    _resetForTests();
+  });
+
+  const lastIndex = (ops: RecordedOp[], pred: (op: RecordedOp) => boolean): number => {
+    for (let i = ops.length - 1; i >= 0; i--) if (pred(ops[i])) return i;
+    return -1;
+  };
+
+  it("paints a neighbour's blocked glyph after a dialogue box that crosses its column", async () => {
+    const { DIALOGUE_BOX_COLOR } = await import("../constants.js");
+    const chars = seatReal(3);
+    const [first, middle] = chars;
+    expect(first.seatRow).toBe(middle.seatRow);
+    upsertCharacterFromAgent(middle.id, AgentStatus.BLOCKED);
+    expect(middle.bubbleType).toBe("blocked");
+    first.bubbleText = "Handing off \"Fix login bug\" to agent-2";
+
+    const { ctx, ops } = mockCtx();
+    renderScene(ctx, chars, 0, 0, 1);
+
+    const isBox = (op: RecordedOp): boolean => op.kind === "rect" && op.color.toLowerCase() === DIALOGUE_BOX_COLOR.toLowerCase();
+    const box = ops.find(isBox) as RecordedRect | undefined;
+    expect(box).toBeDefined();
+    // Non-vacuity: the box genuinely spans the blocked agent's glyph column.
+    expect(box!.x).toBeLessThanOrEqual(middle.x - 6);
+    expect(box!.x + box!.w).toBeGreaterThanOrEqual(middle.x + 6);
+
+    const glyphColors = bubbleOnlyColors(middle);
+    const glyphIdx = ops.map((op, i) => (op.kind === "rect" && glyphColors.has(op.color.toLowerCase()) ? i : -1)).filter((i) => i >= 0);
+    expect(glyphIdx.length).toBeGreaterThan(0);
+    const lastBox = lastIndex(ops, isBox);
+    const lastText = lastIndex(ops, (op) => op.kind === "text");
+    expect(lastText).toBeGreaterThanOrEqual(0);
+    expect(Math.min(...glyphIdx), "a glyph rect was painted before the dialogue box/text").toBeGreaterThan(Math.max(lastBox, lastText));
+  });
+
+  it("paints the owner's own handoff-task glyph after its own dialogue box", async () => {
+    const { DIALOGUE_BOX_COLOR } = await import("../constants.js");
+    upsertCharacterFromAgent("sender", AgentStatus.IDLE);
+    upsertCharacterFromAgent("receiver", AgentStatus.IDLE);
+    const sender = getCharacter("sender")!;
+    const receiver = getCharacter("receiver")!;
+    registerTaskTitle("task-1", "Fix login bug");
+    handleHandoffEvent(handoffRequested("6fa85f64-5717-4562-b3fc-2c963f66afa6", "task-1", "sender", "receiver"));
+    for (let i = 0; i < 200 && !(sender.path.length === 0 && sender.state === CharacterState.IDLE); i++) updateCharacter(sender, 0.05);
+    checkHandoffArrivals();
+    expect(sender.bubbleType).toBe("handoff-task");
+    expect(sender.bubbleText).toBeTruthy();
+
+    const { ctx, ops } = mockCtx();
+    renderScene(ctx, [sender, receiver], 0, 0, 1);
+
+    const glyphColors = bubbleOnlyColors(sender);
+    const firstGlyph = ops.findIndex((op) => op.kind === "rect" && glyphColors.has(op.color.toLowerCase()));
+    const lastBox = lastIndex(ops, (op) => op.kind === "rect" && op.color.toLowerCase() === DIALOGUE_BOX_COLOR.toLowerCase());
+    expect(firstGlyph).toBeGreaterThanOrEqual(0);
+    expect(lastBox).toBeGreaterThanOrEqual(0);
+    expect(firstGlyph).toBeGreaterThan(lastBox);
+  });
+});
+
+describe("dialogue colours are unambiguous (05-13 guard)", () => {
+  const rgb = (hex: string): [number, number, number] => {
+    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)!;
+    return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+  };
+
+  /** Every colour any character (any identity hue) or state glyph can paint. */
+  function paletteColors(): Set<string> {
+    const all = new Set<string>();
+    const add = (sprite: SpriteData): void => {
+      for (const row of sprite) for (const cell of row) if (cell) all.add(cell.toLowerCase());
+    };
+    for (let h = 0; h < 360; h += 30) {
+      const s = getCharacterSprites(h);
+      for (const set of [s.walk, s.typing, s.reading]) for (const dir of Object.values(set)) for (const frame of dir) add(frame);
+    }
+    for (const sprite of Object.values(BUBBLE_SPRITES)) add(sprite);
+    return all;
+  }
+
+  it("uses achromatic colours absent from every sprite/glyph palette, floor and wall", async () => {
+    const { DIALOGUE_BOX_COLOR, DIALOGUE_TEXT_COLOR, FALLBACK_FLOOR_COLOR, WALL_COLOR } = await import("../constants.js");
+    const palette = paletteColors();
+    expect(palette.size).toBeGreaterThan(10);
+    for (const c of [DIALOGUE_BOX_COLOR, DIALOGUE_TEXT_COLOR]) {
+      const [r, g, b] = rgb(c);
+      expect(r === g && g === b, `${c} is not achromatic`).toBe(true);
+      expect(palette.has(c.toLowerCase()), `${c} is also painted by a character or glyph`).toBe(false);
+      expect(c.toLowerCase()).not.toBe(FALLBACK_FLOOR_COLOR.toLowerCase());
+      expect(c.toLowerCase()).not.toBe(WALL_COLOR.toLowerCase());
+    }
   });
 });
