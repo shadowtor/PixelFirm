@@ -644,4 +644,102 @@ describe("ClaudeCodeRuntime superseded invocations (one live query() per task)",
     expect(rec.liveAtStart).toEqual([0, 0, 0]);
     expect(rec.abortedAtStart[2]).toEqual([true, true]);
   });
+
+  // Yields init, then one message every 10 s forever (ignores abort) — keeps
+  // its own invocation's watchdog reset.
+  function chattyQuery(initMsg: unknown) {
+    async function* gen() {
+      yield initMsg;
+      for (;;) {
+        await new Promise((resolve) => setTimeout(resolve, 10_000));
+        yield { type: "assistant" };
+      }
+    }
+    const iter = gen() as AsyncGenerator<unknown, void> & { interrupt: Mock };
+    iter.interrupt = vi.fn(async () => undefined);
+    return iter;
+  }
+
+  function statusesPosted(): string[] {
+    return (postEvent as unknown as Mock).mock.calls
+      .filter((call) => call[2].type === "task.status_changed")
+      .map((call) => call[2].payload.status);
+  }
+
+  // startTask on `first`, then supersede it with sendMessage; returns once the
+  // second query() exists.
+  async function supersede(runtime: ReturnType<typeof createClaudeCodeRuntime>) {
+    void runtime.startTask(startInput);
+    await vi.advanceTimersByTimeAsync(0);
+    void runtime.sendMessage("task-1", "second");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+  }
+
+  it("Test B: a superseded invocation's watchdog never interrupts, blocks or emits for its successor", async () => {
+    const second = chattyQuery(initMessage("session-1"));
+    (query as unknown as Mock)
+      .mockImplementationOnce(() => hangingQuery(initMessage("session-0")))
+      .mockImplementationOnce(() => second);
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    await supersede(runtime);
+    await vi.advanceTimersByTimeAsync(DEFAULT_WATCHDOG_TIMEOUT_MS + GRACEFUL_TIMEOUT_MS);
+
+    expect(await runtime.getStatus("task-1")).toBe("running");
+    expect(statusesPosted()).not.toContain("blocked");
+    expect(second.interrupt).not.toHaveBeenCalled();
+  });
+
+  it("Test C: a superseded stream's late result never writes or emits a terminal status", async () => {
+    (query as unknown as Mock)
+      .mockImplementationOnce(
+        ({ options }: { options: { abortController: AbortController } }) =>
+          abortableQuery(options.abortController.signal, initMessage("session-0"), () => [resultMessage("error")]).iter,
+      )
+      .mockImplementationOnce(() => hangingQuery(initMessage("session-1")));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    await supersede(runtime);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(statusesPosted()).not.toContain("failed");
+    expect(await runtime.getStatus("task-1")).toBe("running");
+  });
+
+  it("Test D: a superseded invocation's role poll stops itself at its next tick", async () => {
+    (query as unknown as Mock)
+      .mockImplementationOnce(() => hangingQuery(initMessage("session-0")))
+      .mockImplementationOnce(() => chattyQuery(initMessage("session-1")));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    await supersede(runtime);
+    (observeGsdState as unknown as Mock).mockClear();
+    await vi.advanceTimersByTimeAsync(3 * ROLE_POLL_INTERVAL_MS);
+
+    expect((observeGsdState as unknown as Mock).mock.calls.length).toBeLessThanOrEqual(3);
+  });
+
+  it("Test E: a superseded invocation's canUseTool and Notification hook never flag review or request CEO approval", async () => {
+    (query as unknown as Mock)
+      .mockImplementationOnce(() => hangingQuery(initMessage("session-0")))
+      .mockImplementationOnce(() => hangingQuery(initMessage("session-1")));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    await supersede(runtime);
+    await vi.advanceTimersByTimeAsync(0);
+    (postEvent as unknown as Mock).mockClear();
+
+    const firstOptions = (query as unknown as Mock).mock.calls[0][0].options;
+    const decision = await firstOptions.canUseTool("AskUserQuestion", { questions: [] }, {});
+    await firstOptions.hooks.Notification[0].hooks[0](
+      { hook_event_name: "Notification", message: "waiting for approval", notification_type: "permission_prompt" },
+      "tool-use-1",
+      { signal: new AbortController().signal },
+    );
+
+    expect(decision.behavior).toBe("deny");
+    expect(await runtime.getStatus("task-1")).toBe("running");
+    const posted = (postEvent as unknown as Mock).mock.calls.map((call) => call[2].type);
+    expect(posted.filter((t) => t === "task.status_changed" || t === "ceo.approval_requested")).toHaveLength(0);
+  });
 });
