@@ -50,6 +50,15 @@ function hasArrived(ch: Character): boolean {
   return ch.state !== CharacterState.WALK && ch.path.length === 0;
 }
 
+/**
+ * 05-19's WR-03 identity rule, applied in every phase and at every sender
+ * action (05-20, review WR-01). A vanished sender and a re-seated one (a new
+ * object under the same agentId) both fail it.
+ */
+function senderIsCurrent(record: HandoffRecord): boolean {
+  return getCharacter(record.fromAgentId) === record.fromChar;
+}
+
 // Request event ids this FSM has already acted on — the FSM is the only
 // non-idempotent consumer of relayed events, so a re-delivered request must
 // never re-drive the walk (05-13, review CR-01).
@@ -71,8 +80,8 @@ function retireHandoff(record: HandoffRecord, sendSenderHome: boolean): void {
   if (toChar && record.acceptedText !== null && toChar.bubbleText === record.acceptedText) {
     toChar.bubbleText = null;
   }
-  const fromChar = getCharacter(record.fromAgentId);
-  if (fromChar) {
+  if (senderIsCurrent(record)) {
+    const fromChar = record.fromChar;
     if (record.requestedText !== null && fromChar.bubbleText === record.requestedText) fromChar.bubbleText = null;
     applyBubble(fromChar);
     const last = fromChar.path[fromChar.path.length - 1];
@@ -132,17 +141,22 @@ export function handleHandoffEvent(event: CompanyEvent): void {
     // matching ICON_VISIBLE handoff is either a duplicate delivery or a
     // race — never fabricate a walk/accept sequence retroactively.
     if (!record || record.phase !== "ICON_VISIBLE") return;
+    // A completion for a sequence whose walker is gone or re-seated is a
+    // no-op: no TYPE, no accepted line (05-20, review WR-01). The receiver's
+    // real status still arrives through its own upsert.
+    if (!senderIsCurrent(record)) {
+      retireHandoff(record, false);
+      return;
+    }
 
-    const fromChar = getCharacter(record.fromAgentId);
+    const fromChar = record.fromChar;
     const toChar = getCharacter(record.toAgentId);
     record.phase = "RETURNING_TO_DESK";
 
-    if (fromChar) {
-      // The sender's own status glyph comes back (05-20, review CR-01).
-      applyBubble(fromChar);
-      if (fromChar.bubbleText === record.requestedText) fromChar.bubbleText = null;
-      walkCharacterTo(fromChar, fromChar.seatCol, fromChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
-    }
+    // The sender's own status glyph comes back (05-20, review CR-01).
+    applyBubble(fromChar);
+    if (fromChar.bubbleText === record.requestedText) fromChar.bubbleText = null;
+    walkCharacterTo(fromChar, fromChar.seatCol, fromChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
     if (toChar) {
       // The receiver "accepts and moves to work" at their existing desk —
       // per HANDOFF-01's exact wording, no second walk leg for them.
@@ -169,14 +183,17 @@ export function handleHandoffEvent(event: CompanyEvent): void {
  */
 export function checkHandoffArrivals(): void {
   for (const record of handoffs.values()) {
+    // A vanished or re-seated sender ends the sequence: a re-seated sender
+    // is a new character and must never inherit a stale arrival (WR-03).
+    // This covers ICON_VISIBLE too, where a sender that vanished while
+    // waiting would otherwise leave its record live for good (05-20, WR-01).
+    if (!senderIsCurrent(record)) {
+      retireHandoff(record, false);
+      continue;
+    }
+    const fromChar = record.fromChar;
+
     if (record.phase === "WALKING_TO_RECEIVER") {
-      const fromChar = getCharacter(record.fromAgentId);
-      // A vanished or re-seated sender ends the sequence: a re-seated sender
-      // is a new character and must never inherit a stale arrival (WR-03).
-      if (fromChar !== record.fromChar) {
-        retireHandoff(record, false);
-        continue;
-      }
       if (!hasArrived(fromChar)) continue;
 
       const taskTitle = getTaskTitle(record.taskId) ?? record.taskId;
@@ -190,10 +207,9 @@ export function checkHandoffArrivals(): void {
     }
 
     if (record.phase === "RETURNING_TO_DESK") {
-      const fromChar = getCharacter(record.fromAgentId);
-      if (fromChar === record.fromChar && !hasArrived(fromChar)) continue;
+      if (!hasArrived(fromChar)) continue;
 
-      // D-04's sequence ends when the sender is home (or gone): a line left
+      // D-04's sequence ends when the sender is home: a line left
       // painted after that is a stale claim (Pitfall 2).
       retireHandoff(record, false);
     }
