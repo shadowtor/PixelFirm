@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 05
-current_phase_name: pixel-office-renderer
+current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-19-PLAN.md
-last_updated: "2026-09-22T06:53:52.081Z"
+stopped_at: Completed 05-20-PLAN.md
+last_updated: "2026-09-22T07:05:07.753Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 05 execution started
-state_head: ba5d203b8e0775c14fc8f5316f0cb620b171f163
+state_head: 0d9db78995123dc5d0926561c0e42480762561ff
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 35
-  completed_plans: 34
+  completed_plans: 35
   percent: 50
 ---
 
@@ -27,10 +27,10 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 
 ## Current Position
 
-Phase: 05 (pixel-office-renderer) — READY TO EXECUTE
-Plan: 18 of 18
-Status: Ready to execute
-Last activity: 2026-09-22 — Phase 05 execution started
+Phase: 05 (Pixel Office Renderer) — EXECUTING
+Plan: 20 of 20
+Status: All plans complete — ready for re-verification
+Last activity: 2026-09-22 — Completed 05-20 (CR-01 status glyph, WR-01 sender identity)
 
 Progress: [█████░░░░░] 50%
 
@@ -94,6 +94,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P17 | 6min | 3 tasks | 5 files |
 | Phase 05 P18 | 5min | 2 tasks | 2 files |
 | Phase 05 P19 | 5min | 2 tasks | 6 files |
+| Phase 05 P20 | 15 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -186,6 +187,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-18: pauseTask/cancelTask claim a fresh token before graceful stop so a pending preemption cannot undo a human stop
 - [Phase 05]: 05-19: arrival = not WALK and empty path (hasArrived); setRestPose is the only pose writer and never interrupts WALK; walks end in restPose (IN-03)
 - [Phase 05]: 05-19: a new handoff request retires every record of the same taskId or sender (WR-01); records compare the sender by Character identity (WR-03); handoff-task icon survives glyph-less statuses (WR-02)
+- [Phase 05]: 05-20: glyph precedence is frozen glyph > handoff-task icon while waiting > status glyph; applyBubble is the only bubbleType writer, statusBubble written only by the status upsert
+- [Phase 05]: 05-20: a handoff completion whose sender is gone or re-seated retires the record with no receiver TYPE or accepted line (senderIsCurrent in every phase)
 
 ### Pending Todos
 
@@ -214,6 +217,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T05:59:10.103Z
-Stopped at: Completed 05-19-PLAN.md
+Last session: 2026-09-22T07:05:07.634Z
+Stopped at: Completed 05-20-PLAN.md
 Resume file: None

@@ -167,7 +167,7 @@ Plans:
   3. When one agent hands off work to another, the office shows the first agent walking over, a task icon appearing, and the second agent accepting it and moving to work — using deterministic, template-based dialogue, never LLM-generated at render time.
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
 
-**Plans:** 19/20 plans executed (gaps found a sixth time — 1 further gap-closure plan added 2026-09-22 per sixth --gaps re-plan)
+**Plans:** 20/20 plans executed (gaps found a sixth time — 1 further gap-closure plan added 2026-09-22 per sixth --gaps re-plan)
 
 Plans:
 
@@ -190,7 +190,7 @@ Plans:
 - [x] 05-17-PLAN.md — Gap closure 4: handoff robustness — status updates never stop a walk, every record exit retires its lines, real-loop tests + positive accepted-line live assertion (gap 1 / WR-02, WR-10)
 - [x] 05-18-PLAN.md — Gap closure 4: runQuery claims its token before the preemption await; pause/cancel claim a fresh token (gap 2 / CR-01)
 - [x] 05-19-PLAN.md — Gap closure 5: arrival = not walking, single rest-pose writer that never interrupts WALK, at-target walk (review CR-01 paths a/b/c, IN-03) + one record per sender, sender identity, icon across glyph-less statuses (WR-01/WR-03/WR-02)
-- [ ] 05-20-PLAN.md — Gap closure 6: stored status glyph (statusBubble) + single display writer applyBubble (frozen glyph > task icon while waiting > status glyph), restored on completion/retire (review CR-01) + sender identity in every phase incl. ICON_VISIBLE and completion (WR-01)
+- [x] 05-20-PLAN.md — Gap closure 6: stored status glyph (statusBubble) + single display writer applyBubble (frozen glyph > task icon while waiting > status glyph), restored on completion/retire (review CR-01) + sender identity in every phase incl. ICON_VISIBLE and completion (WR-01)
 
 **Wave 1**
 
@@ -242,7 +242,7 @@ Plans:
 
 **Wave 11** *(fifth gap-closure round — blocked on 05-17)*
 
-- [ ] 05-19-PLAN.md — Handoff FSM: no stranding through any writer, one record per sender (CR-01, IN-03, WR-01/02/03)
+- [x] 05-19-PLAN.md — Handoff FSM: no stranding through any writer, one record per sender (CR-01, IN-03, WR-01/02/03)
 
 **Wave 12** *(sixth gap-closure round — blocked on 05-19)*
 
@@ -305,7 +305,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 19/19 | In Progress|  |
+| 5. Pixel Office Renderer | 20/20 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
