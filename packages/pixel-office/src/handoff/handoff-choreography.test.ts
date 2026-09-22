@@ -2,9 +2,11 @@ import { describe, it, expect, beforeEach } from "vitest";
 import type { CompanyEvent } from "event-schema";
 import { AgentStatus } from "event-schema";
 import { upsertCharacterFromAgent, getCharacter, getTileMap, stepOffice, _resetForTests } from "../index";
-import { CharacterState } from "../types";
+import { CharacterState, Direction } from "../types";
 import type { Character } from "../types";
 import { findPath } from "../layout/tileMap";
+import { FURNITURE_BLOCKED_TILES, SEATS, STANDING_SPOTS } from "../layout/officeLayout";
+import { renderScene } from "../engine/renderer";
 import { handleHandoffEvent, checkHandoffArrivals, isWaitingHandoffSender } from "./handoff-choreography";
 
 function requestedEvent(
@@ -676,6 +678,159 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       expectHomeIdle(a2);
       expect(a2.bubbleType).not.toBe("handoff-task");
       expect(a2.bubbleText ?? null).toBeNull();
+    });
+  });
+
+  describe("interaction tile (05-27, G-05-1d): real update loop", () => {
+    const key = (col: number, row: number): string => `${col},${row}`;
+
+    /** Tiles and seats of every present character other than `walker`. */
+    function othersTiles(walker: Character): Set<string> {
+      const ids = ["agent-a", "filler-1", "filler-2", "filler-3", "agent-b", "agent-c"];
+      const out = new Set<string>();
+      for (const id of ids) {
+        const ch = getCharacter(id);
+        if (!ch || ch === walker) continue;
+        out.add(key(ch.seatCol, ch.seatRow));
+        out.add(key(ch.tileCol, ch.tileRow));
+      }
+      return out;
+    }
+
+    function expectPathClear(walker: Character): void {
+      const occupied = othersTiles(walker);
+      for (const step of walker.path) {
+        expect(FURNITURE_BLOCKED_TILES.has(key(step.col, step.row)), `furniture at ${key(step.col, step.row)}`).toBe(false);
+        expect(occupied.has(key(step.col, step.row)), `agent at ${key(step.col, step.row)}`).toBe(false);
+      }
+    }
+
+    const adjacent = (p: Character, q: Character): boolean =>
+      Math.abs(p.tileCol - q.tileCol) + Math.abs(p.tileRow - q.tileRow) === 1;
+
+    it("the sender stops beside the receiver, never on it", () => {
+      const { a, b } = toIconVisible();
+      expect(adjacent(a, b)).toBe(true);
+      expect(onSeatOf(a, b)).toBe(false);
+      expect({ col: a.tileCol, row: a.tileRow }).toEqual({ col: 8, row: 4 });
+    });
+
+    it("the walk never enters furniture or another agent's tile", () => {
+      seatAll();
+      const a = getCharacter("agent-a")!;
+      handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+      expect(a.path.length).toBeGreaterThan(0);
+      expectPathClear(a);
+      expect(a.path[a.path.length - 1]).toEqual({ col: 8, row: 4 });
+    });
+
+    it("both stay visible", () => {
+      const { a, b } = toIconVisible();
+      expect(b.x - a.x).toBe(16);
+      /** Cells ("x,y" -> colour) of `ch`'s body sprite alone (no bubble, no line). */
+      const cells = (chars: Character[]): Map<string, string> => {
+        const out = new Map<string, string>();
+        const ctx = {
+          fillStyle: "",
+          font: "",
+          textBaseline: "alphabetic",
+          fillRect(x: number, y: number) {
+            out.set(key(x, y), String(this.fillStyle));
+          },
+          fillText() {},
+          measureText: (t: string) => ({ width: t.length * 6 }),
+          drawImage() {},
+        } as unknown as CanvasRenderingContext2D;
+        renderScene(ctx, chars.map((ch) => ({ ...ch, bubbleType: null, bubbleText: null })), 0, 0, 1);
+        return out;
+      };
+      const both = cells([a, b]);
+      for (const ch of [a, b]) {
+        const solo = cells([ch]);
+        expect(solo.size).toBeGreaterThan(0);
+        const survived = [...solo].filter(([k, c]) => both.get(k) === c).length;
+        expect(survived, `${ch.id}: ${survived}/${solo.size} px visible`).toBe(solo.size);
+      }
+    });
+
+    it("the sender faces the receiver on arrival", () => {
+      const { a, b } = toIconVisible();
+      expect({ col: a.tileCol, row: a.tileRow }).toEqual({ col: 8, row: 4 });
+      expect({ col: b.tileCol, row: b.tileRow }).toEqual({ col: 9, row: 4 });
+      expect(a.dir).toBe(Direction.RIGHT);
+    });
+
+    it("two concurrent senders get two tiles", () => {
+      const { a, b } = toIconVisible();
+      const c = getCharacter("agent-c")!;
+      handleHandoffEvent(requestedEvent("task-2", "agent-c", "agent-b", NEW_REQUEST_ID));
+      run(2);
+      expect(c.bubbleType).toBe("handoff-task");
+      expect({ col: c.tileCol, row: c.tileRow }).toEqual({ col: 10, row: 4 });
+      expect(adjacent(c, b)).toBe(true);
+      expect({ col: a.tileCol, row: a.tileRow }).toEqual({ col: 8, row: 4 });
+      expect(a.bubbleType).toBe("handoff-task");
+    });
+
+    it("the walk home avoids agents too", () => {
+      const { a } = toIconVisible();
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      expect(a.path[a.path.length - 1]).toEqual({ col: a.seatCol, row: a.seatRow });
+      expectPathClear(a);
+      run(5);
+      expectHomeIdle(a);
+      expect(a.dir).toBe(Direction.DOWN);
+    });
+
+    it("search order stays on the seat row", () => {
+      seatAll();
+      const a = getCharacter("agent-a")!;
+      const c = getCharacter("agent-c")!;
+      const f2 = getCharacter("filler-2")!;
+      expect({ col: f2.seatCol, row: f2.seatRow }).toEqual({ col: 5, row: 4 });
+      handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+      handleHandoffEvent(requestedEvent("task-2", "agent-c", "agent-b", NEW_REQUEST_ID));
+      handleHandoffEvent(requestedEvent("task-3", "filler-2", "agent-b", "9fa85f64-5717-4562-b3fc-2c963f66afa6"));
+      run(6);
+      expect({ col: a.tileCol, row: a.tileRow }).toEqual({ col: 8, row: 4 });
+      expect({ col: c.tileCol, row: c.tileRow }).toEqual({ col: 10, row: 4 });
+      expect({ col: f2.tileCol, row: f2.tileRow }).toEqual({ col: 6, row: 4 });
+      for (const ch of [a, c, f2]) expect(ch.bubbleType).toBe("handoff-task");
+    });
+
+    it("the interaction tile is always on the receiver's seat row", () => {
+      const homes = [...SEATS, ...STANDING_SPOTS];
+      expect(homes.length).toBe(20);
+      for (let r = 0; r < homes.length; r++) {
+        _resetForTests();
+        for (let i = 0; i < homes.length; i++) upsertCharacterFromAgent(`agent-${i}`, AgentStatus.IDLE);
+        const receiver = getCharacter(`agent-${r}`)!;
+        const s = homes.findIndex((h) => h.row !== receiver.seatRow);
+        const sender = getCharacter(`agent-${s}`)!;
+        expect(sender.seatRow).not.toBe(receiver.seatRow);
+        handleHandoffEvent(requestedEvent(`task-${r}`, sender.id, receiver.id));
+        run(12);
+        expect(sender.bubbleType, `receiver ${r}`).toBe("handoff-task");
+        expect(sender.tileRow, `receiver ${r}`).toBe(receiver.seatRow);
+        expect(Math.abs(sender.tileCol - receiver.seatCol), `receiver ${r}`).toBeGreaterThan(0);
+      }
+
+      // Receiver mid-walk at request time: the target is still on its seat row.
+      _resetForTests();
+      seatAll();
+      for (let i = 0; i < 10; i++) upsertCharacterFromAgent(`more-${i}`, AgentStatus.IDLE);
+      const a = getCharacter("agent-a")!;
+      const b = getCharacter("agent-b")!;
+      expect(getCharacter("more-5")!.seatRow).toBe(8);
+      handleHandoffEvent(requestedEvent("task-x", "agent-b", "more-5", NEW_REQUEST_ID));
+      run(0.5);
+      expect(b.state).toBe(CharacterState.WALK);
+      expect(onSeatOf(b, b)).toBe(false);
+      handleHandoffEvent(requestedEvent("task-y", "agent-a", "agent-b"));
+      expect(a.path[a.path.length - 1].row).toBe(b.seatRow);
+      run(8);
+      expect(a.bubbleType).toBe("handoff-task");
+      expect(a.tileRow).toBe(b.seatRow);
     });
   });
 });
