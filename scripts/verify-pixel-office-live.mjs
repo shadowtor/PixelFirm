@@ -30,6 +30,16 @@
 // a real pair on the live relay drives reducer -> character upsert ->
 // choreography -> painted canvas.
 //
+// Truths: (1) a live agent paints a sprite; (2) a live blocked status paints
+// its glyph; (3) a handoff pair paints the task icon, then clears it; (4) the
+// blocked glyph is owner-bound; (5) the handoff dialogue line is painted
+// owner-bound above the waiting sender and nothing is left once the sequence
+// ends. Dialogue is shown for its sequence only (requested line while the
+// sender waits; accepted line until the sender is home).
+//
+// The harness refuses to run while the API or web port is taken and never
+// reuses a server it did not start (WR-06).
+//
 // T-05-26 (accepted, low): this script reads secrets from the local, already
 // gitignored apps/api/.env and sends them only to the localhost dev server it
 // just started. No secret is ever printed to stdout.
@@ -38,6 +48,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "@playwright/test";
@@ -250,6 +261,15 @@ const charColors = characterColors();
 const BLOCKED_COLORS = distinctiveBubbleColors("bubble-blocked.json", charColors);
 const HANDOFF_COLORS = distinctiveBubbleColors("bubble-handoff-task.json", charColors);
 
+// Handoff dialogue geometry/colour (05-13), read from the engine source. A
+// pixel count of DIALOGUE_BOX_COLOR is unambiguous because 05-13's renderer
+// colour-guard test proves no character (at any of the twelve identity hues)
+// or glyph can paint it. The raw-palette partition behind BLOCKED_COLORS /
+// HANDOFF_COLORS above does not model hue shifts (review WR-04, out of scope).
+const DIALOGUE_BOX_COLOR = readColorConst("DIALOGUE_BOX_COLOR");
+const BUBBLE_ICON_GAP_PX = readNumberConst(constantsSrc, "constants.ts", "BUBBLE_ICON_GAP_PX");
+const BUBBLE_ICON_HEIGHT_PX = readNumberConst(constantsSrc, "constants.ts", "BUBBLE_ICON_HEIGHT_PX");
+
 // ── process helpers ──────────────────────────────────────────────────────────
 
 const children = [];
@@ -310,12 +330,26 @@ async function waitFor(url, label, timeoutMs = 90_000) {
   throw new Error(`${label} never became reachable at ${url} within ${timeoutMs}ms`);
 }
 
-/** Starts a dev server only if one isn't already serving that URL. */
-async function ensureServer(url, label, start) {
-  if (await reachable(url)) {
-    log(`${label} already running at ${url} — reusing it`);
-    return;
-  }
+/** True when anything accepts a TCP connection on `port` (IPv4 or IPv6
+ *  loopback). TCP rather than reachable(): an HTTP probe misses a listener that
+ *  answers 5xx, speaks something else, or is slow to answer. */
+function portTaken(port) {
+  const probe = (host) =>
+    new Promise((resolve) => {
+      const sock = net.connect({ host, port });
+      const done = (taken) => {
+        sock.destroy();
+        resolve(taken);
+      };
+      sock.setTimeout(1000, () => done(false));
+      sock.once("connect", () => done(true));
+      sock.once("error", () => done(false));
+    });
+  return Promise.all([probe("127.0.0.1"), probe("::1")]).then((r) => r.some(Boolean));
+}
+
+/** Always starts the server — main()'s port preflight guaranteed the port was free. */
+async function startServer(url, label, start) {
   log(`starting ${label}...`);
   start();
   await waitFor(url, label);
@@ -368,9 +402,9 @@ const statusChanged = (agentId, taskId, status) => ({
  * pixels found inside the band (null when there are none), which is what turns
  * "a blocked glyph was painted somewhere" into "it was painted on this agent".
  */
-async function scanCanvas(page, xRange = null) {
+async function scanCanvas(page, xRange = null, textAboveY = null) {
   return page.evaluate(
-    ({ floor, wall, blocked, handoff, mapW, mapH, band }) => {
+    ({ floor, wall, blocked, handoff, dialogueBox, mapW, mapH, band, textAbove }) => {
       const canvas = document.getElementById("office-canvas");
       if (!canvas) throw new Error("#office-canvas is not in the DOM");
       const ctx = canvas.getContext("2d");
@@ -386,6 +420,8 @@ async function scanCanvas(page, xRange = null) {
       ];
       const blockedRgb = blocked.map(toRgb);
       const handoffRgb = handoff.map(toRgb);
+      const dlg = toRgb(dialogueBox);
+      const isDlg = (i) => data[i + 3] !== 0 && data[i] === dlg[0] && data[i + 1] === dlg[1] && data[i + 2] === dlg[2];
       const matches = (r, g, b, list) => list.some((c) => c[0] === r && c[1] === g && c[2] === b);
 
       const fromX = band ? Math.round(band.from * scale) : 0;
@@ -396,6 +432,11 @@ async function scanCanvas(page, xRange = null) {
       let handoffHits = 0;
       let blockedMinPxY = null;
       let blockedMaxPxY = null;
+      let dialogueHits = 0;
+      let dMinX = null;
+      let dMaxX = null;
+      let dMinY = null;
+      let dMaxY = null;
       for (let y = 0; y < canvas.height; y++) {
         for (let x = fromX; x < toX; x++) {
           const i = (y * canvas.width + x) * 4;
@@ -412,6 +453,24 @@ async function scanCanvas(page, xRange = null) {
             blockedMaxPxY = y;
           }
           if (matches(r, g, b, handoffRgb)) handoffHits++;
+          if (isDlg(i)) {
+            dialogueHits++;
+            if (dMinX === null || x < dMinX) dMinX = x;
+            if (dMaxX === null || x > dMaxX) dMaxX = x;
+            if (dMinY === null) dMinY = y;
+            dMaxY = y;
+          }
+        }
+      }
+      // Painted text: non-box pixels inside the box's bounding box, from its top
+      // row down to (excluding) textAbove — state glyphs are drawn on top below it.
+      let dialogueTextPx = 0;
+      if (dMinY !== null) {
+        const stopY = textAbove === null ? dMaxY + 1 : Math.min(dMaxY + 1, Math.round(textAbove * scale));
+        for (let y = dMinY; y < stopY; y++) {
+          for (let x = dMinX; x <= dMaxX; x++) {
+            if (!isDlg((y * canvas.width + x) * 4)) dialogueTextPx++;
+          }
         }
       }
       return {
@@ -424,6 +483,12 @@ async function scanCanvas(page, xRange = null) {
         // Back into the engine's own unzoomed grid coordinates.
         blockedMinY: blockedMinPxY === null ? null : blockedMinPxY / scale,
         blockedMaxY: blockedMaxPxY === null ? null : blockedMaxPxY / scale,
+        dialogueHits,
+        dialogueMinX: dMinX === null ? null : dMinX / scale,
+        dialogueMaxX: dMaxX === null ? null : dMaxX / scale,
+        dialogueMinY: dMinY === null ? null : dMinY / scale,
+        dialogueMaxY: dMaxY === null ? null : dMaxY / scale,
+        dialogueTextPx,
       };
     },
     {
@@ -431,9 +496,11 @@ async function scanCanvas(page, xRange = null) {
       wall: WALL_RGB,
       blocked: BLOCKED_COLORS,
       handoff: HANDOFF_COLORS,
+      dialogueBox: DIALOGUE_BOX_COLOR,
       mapW: MAP_W,
       mapH: MAP_H,
       band: xRange,
+      textAbove: textAboveY,
     },
   );
 }
@@ -456,6 +523,19 @@ function assert(condition, message) {
 
 async function main() {
   assertHarnessOwnedTarget();
+
+  // WR-06: never talk to a server this harness did not start — a reused dev
+  // server may be wired to a developer's own append-only database.
+  // ponytail: a listener appearing between this probe and the spawn (seconds) is not detected; fine for a manually run local harness.
+  const taken = [];
+  for (const port of [API_PORT, WEB_PORT]) if (await portTaken(port)) taken.push(port);
+  if (taken.length > 0) {
+    throw new Error(
+      `refusing to reuse a server this harness did not start — port(s) ${taken.join(", ")} already accept connections.\n` +
+        `A reused server may be connected to a developer's own append-only database (WR-06).\n` +
+        `Nothing has been reset, started or written. Stop whatever holds the port(s) and re-run.`,
+    );
+  }
 
   // A clean store per run, with no destructive SQL anywhere in this harness:
   // `db:test:down` is the repo's own `docker compose down -v`, i.e. removal of
@@ -489,13 +569,13 @@ async function main() {
 
   // The dev server gets the SAME overridden URL the reset above operated on —
   // resetting one database and asserting against another would prove nothing.
-  // (If a dev server is ALREADY serving this port, ensureServer reuses it; a
-  // reused server pointed at some other database shows up immediately as a
-  // non-empty office at the empty-canvas assertion below, not as a silent pass.)
-  await ensureServer(`${API_URL}/health`, "apps/api dev server", () =>
+  // The harness only ever talks to servers it started, enforced by the port
+  // preflight at the top of main(); the empty-canvas assertion below stays as
+  // a second line of defence.
+  await startServer(`${API_URL}/health`, "apps/api dev server", () =>
     spawnBackground("pnpm", ["--filter", "api", "dev"], { ...apiEnv, DATABASE_URL: TEST_DATABASE_URL }),
   );
-  await ensureServer(WEB_URL, "apps/web dev server", () =>
+  await startServer(WEB_URL, "apps/web dev server", () =>
     spawnBackground("pnpm", ["--filter", "web", "exec", "vite", "--port", String(WEB_PORT), "--strictPort"], {}),
   );
 
@@ -539,7 +619,7 @@ async function main() {
     await sleep(RENDER_SETTLE_MS);
 
     const baseline = await scanCanvas(page);
-    log(`baseline canvas ${baseline.width}x${baseline.height}: sprite=${baseline.sprite} blocked=${baseline.blockedHits} handoff=${baseline.handoffHits}`);
+    log(`baseline canvas ${baseline.width}x${baseline.height}: sprite=${baseline.sprite} blocked=${baseline.blockedHits} handoff=${baseline.handoffHits} dialogue=${baseline.dialogueHits}`);
 
     // TRUTH 1 — a real agent renders as a real, non-transparent sprite, and
     // it got there LIVE: the canvas was proven empty above, and no navigation
@@ -552,13 +632,14 @@ async function main() {
     // leftover pixels instead of on this run's events.
     assert(baseline.blockedHits === 0, `blocked-bubble colour already on canvas before the blocked event (${baseline.blockedHits} px)`);
     assert(baseline.handoffHits === 0, `handoff-bubble colour already on canvas before the handoff event (${baseline.handoffHits} px)`);
+    assert(baseline.dialogueHits === 0, `dialogue-box colour already on canvas before the handoff event (${baseline.dialogueHits} px)`);
     log(`TRUTH 1 PASS — ${baseline.sprite} sprite pixels painted from live events on an already-open page`);
 
     // ── TRUTH 2 — a blocked agent's status bubble is really painted, live.
     // The property being proven: a CONNECTED client re-derives AgentStatus
     // from a relayed task.status_changed with no navigation. That is
     // 05-VERIFICATION.md's headline gap and the first of its human-verification
-    // items; the 05-08 proof routed around it with a page reload.
+    // items; the 05-08 proof routed around it by reloading the page.
     await postEvent(token, statusChanged(BLOCKED, "live-proof-task-blocked", "blocked"));
     await sleep(RENDER_SETTLE_MS);
     const blockedScan = await scanCanvas(page);
@@ -600,6 +681,30 @@ async function main() {
       `bubble-handoff-task's distinctive colour(s) ${HANDOFF_COLORS.join(", ")} never appeared on canvas during the walk (0 px)`,
     );
 
+    // TRUTH 5 (during) — the sender stands IDLE on the receiver's desk tile
+    // and speaks the requested line. No task.created is posted and the
+    // receiver has no name, so the line interpolates the raw 23-char task id
+    // and 19-char agent id — both over 05-13's caps: the pixels counted are a
+    // capped line.
+    const speakerSpriteTop = spriteTopY(receiverDesk.row);
+    const speakerGlyphSlotTop = speakerSpriteTop - BUBBLE_ICON_GAP_PX - BUBBLE_ICON_HEIGHT_PX;
+    const speakerCentreX = receiverDesk.col * TILE_SIZE + TILE_SIZE / 2;
+    const dlg = await scanCanvas(page, null, speakerGlyphSlotTop);
+    const dlgWhere =
+      `${dlg.dialogueHits} dialogue-box px + ${dlg.dialogueTextPx} text px at x ${dlg.dialogueMinX}..${dlg.dialogueMaxX}, ` +
+      `y ${dlg.dialogueMinY}..${dlg.dialogueMaxY}`;
+    log(`dialogue scan: ${dlgWhere} (speaker centre x ${speakerCentreX}, sprite top ${speakerSpriteTop}, glyph slot top ${speakerGlyphSlotTop})`);
+    assert(dlg.dialogueHits > 0, `no ${DIALOGUE_BOX_COLOR} dialogue-box pixel on canvas while the sender waits at the receiver's desk (0 px)`);
+    assert(
+      dlg.dialogueMinX <= speakerCentreX && speakerCentreX <= dlg.dialogueMaxX,
+      `the dialogue box does not contain its speaker's column centre x ${speakerCentreX}: ${dlgWhere}`,
+    );
+    assert(
+      dlg.dialogueMaxY < speakerSpriteTop,
+      `the dialogue box is not entirely above its speaker's sprite (top y ${speakerSpriteTop}): ${dlgWhere}`,
+    );
+    assert(dlg.dialogueTextPx > 0, `no text pixel painted inside the dialogue box above y ${speakerGlyphSlotTop}: ${dlgWhere}`);
+
     await postEvent(token, {
       type: "agent.handoff_completed",
       taskId: HANDOFF_TASK,
@@ -614,6 +719,14 @@ async function main() {
       `handoff task icon never cleared after agent.handoff_completed (${clearedScan.handoffHits} px still painted)`,
     );
     log(`TRUTH 3 PASS — handoff task icon appeared during the walk and cleared on completion`);
+    // TRUTH 5 (after) — the sender is home, so the accepted line is cleared too.
+    assert(
+      clearedScan.dialogueHits === 0,
+      `${clearedScan.dialogueHits} dialogue-box px still painted after the handoff sequence ended (sender home)`,
+    );
+    log(
+      `TRUTH 5 PASS — ${dlgWhere}, above the speaker's sprite (top ${speakerSpriteTop}), cleared after the sequence`,
+    );
 
     // ── TRUTH 4 — the blocked glyph belongs to the agent it describes (CR-02).
     // 05-VERIFICATION.md reproduced this defect in a throwaway vitest against a
