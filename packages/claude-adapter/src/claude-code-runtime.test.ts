@@ -684,6 +684,31 @@ describe("ClaudeCodeRuntime superseded invocations (one live query() per task)",
     expect(calls[calls.length - 1][0].prompt).toBe("third");
   });
 
+  it.each([
+    ["pauseTask", "paused"],
+    ["cancelTask", "cancelled"],
+  ] as const)(
+    "Test G: %s landing during a pending sendMessage preemption wins — no new query(), status stays %s",
+    async (method, expected) => {
+      recordingQuery((signal, i) =>
+        i === 0 ? drainingQuery(signal, initMessage("session-0")) : abortableQuery(signal, initMessage(`session-${i}`)),
+      );
+      const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+      void runtime.startTask(startInput);
+      await vi.advanceTimersByTimeAsync(0);
+      void runtime.sendMessage("task-1", "second");
+      const stop = runtime[method]("task-1");
+      await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+      await stop;
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(await runtime.getStatus("task-1")).toBe(expected);
+      expect(statusesPosted().at(-1)).toBe(expected);
+    },
+  );
+
   // Yields init, then one message every 10 s forever (ignores abort) — keeps
   // its own invocation's watchdog reset.
   function chattyQuery(initMsg: unknown) {
