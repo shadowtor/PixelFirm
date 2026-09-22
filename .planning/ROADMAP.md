@@ -167,7 +167,7 @@ Plans:
   3. When one agent hands off work to another, the office shows the first agent walking over, a task icon appearing, and the second agent accepting it and moving to work — using deterministic, template-based dialogue, never LLM-generated at render time.
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
 
-**Plans:** 20/20 plans executed (gaps found a sixth time — 1 further gap-closure plan added 2026-09-22 per sixth --gaps re-plan)
+**Plans:** 20/28 plans executed (UAT 2026-09-22 diagnosed 7 gaps — 8 further gap-closure plans added 2026-09-22 per seventh --gaps re-plan)
 
 Plans:
 
@@ -191,6 +191,14 @@ Plans:
 - [x] 05-18-PLAN.md — Gap closure 4: runQuery claims its token before the preemption await; pause/cancel claim a fresh token (gap 2 / CR-01)
 - [x] 05-19-PLAN.md — Gap closure 5: arrival = not walking, single rest-pose writer that never interrupts WALK, at-target walk (review CR-01 paths a/b/c, IN-03) + one record per sender, sender identity, icon across glyph-less statuses (WR-01/WR-03/WR-02)
 - [x] 05-20-PLAN.md — Gap closure 6: stored status glyph (statusBubble) + single display writer applyBubble (frozen glyph > task icon while waiting > status glyph), restored on completion/retire (review CR-01) + sender identity in every phase incl. ICON_VISIBLE and completion (WR-01)
+- [ ] 05-21-PLAN.md — UAT gap closure: minimum integer display scale (>= 3x) via engine zoom, pixelated, live scale truth (G-05-1a)
+- [ ] 05-22-PLAN.md — UAT gap closure: MetroCity Interior sheets committed + reproducible decode to office-metrocity.json + ASSET-LICENSES provenance/credit and link-2 outfit-layer upgrade (G-05-1e)
+- [ ] 05-23-PLAN.md — UAT gap closure: frozen-state glyphs re-authored with closed black outline + contrast/shape guard tests (G-05-2)
+- [ ] 05-24-PLAN.md — UAT gap closure: furnished office — layout file, MetroCity floor/wall/desks/monitors/decor z-sorted with characters, pod seats + standing overflow, seated offset only at own desk, sprite cache (G-05-1e)
+- [ ] 05-25-PLAN.md — UAT gap closure: live harness rebased on layout/office data + furnished and frame-rate truths, floor-texture glyph contrast, UI-SPEC/ROADMAP/footer credit sync (G-05-1e, G-05-2)
+- [ ] 05-26-PLAN.md — UAT gap closure: handoff interaction tile beside the receiver + occupancy/furniture-aware walks, sender faces receiver, live sender-visible check (G-05-1d, G-05-1e)
+- [ ] 05-27-PLAN.md — UAT gap closure: compact tailed speech bubble under the pair spanning sender to receiver, floor-clamped, short templates, live TRUTH 5 (G-05-4, G-05-1b)
+- [ ] 05-28-PLAN.md — UAT gap closure: status glyphs anchored 1 px above the owner's visible head, on the floor, live TRUTH 4 (G-05-1c)
 
 **Wave 1**
 
@@ -246,7 +254,33 @@ Plans:
 
 **Wave 12** *(sixth gap-closure round — blocked on 05-19)*
 
-- [ ] 05-20-PLAN.md — Status glyph survives a handoff (CR-01) + sender identity in every phase (WR-01)
+- [x] 05-20-PLAN.md — Status glyph survives a handoff (CR-01) + sender identity in every phase (WR-01)
+
+**Wave 13** *(UAT gap-closure round — parallel, no file overlap; only 05-21 runs the live harness)*
+
+- [ ] 05-21-PLAN.md — Minimum integer display scale (G-05-1a)
+- [ ] 05-22-PLAN.md — MetroCity Interior asset pipeline + licences (G-05-1e)
+
+**Wave 14** *(blocked on Wave 13 — parallel, no file overlap, neither runs the live harness)*
+
+- [ ] 05-23-PLAN.md — Frozen-glyph outline and contrast (G-05-2)
+- [ ] 05-24-PLAN.md — Furnished office engine (G-05-1e)
+
+**Wave 15** *(blocked on 05-23 and 05-24)*
+
+- [ ] 05-25-PLAN.md — Live harness rebase + furnished truths + docs (G-05-1e, G-05-2)
+
+**Wave 16** *(blocked on 05-25)*
+
+- [ ] 05-26-PLAN.md — Handoff interaction tile + blocked walks (G-05-1d, G-05-1e)
+
+**Wave 17** *(blocked on 05-26)*
+
+- [ ] 05-27-PLAN.md — Attributed compact handoff bubble (G-05-4, G-05-1b)
+
+**Wave 18** *(blocked on 05-27)*
+
+- [ ] 05-28-PLAN.md — Head-anchored status glyphs (G-05-1c)
 
 **UI hint**: yes
 
@@ -305,7 +339,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 20/20 | In Progress|  |
+| 5. Pixel Office Renderer | 20/28 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
