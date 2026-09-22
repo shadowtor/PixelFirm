@@ -6,6 +6,7 @@ import type { BubbleType } from "../types.js";
 import { BUBBLE_SPRITES, resolveBubbleSprite } from "./bubbleSprites.js";
 import { STATUS_MAP } from "../status/status-mapping.js";
 import { FALLBACK_FLOOR_COLOR } from "../constants.js";
+import officeSprites from "./office-metrocity.json" with { type: "json" };
 
 /** The literal 12 members of the BubbleType union (types.ts). */
 const ALL_BUBBLE_TYPES: BubbleType[] = [
@@ -108,6 +109,15 @@ function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+const FLOOR_TILES = officeSprites.sprites.floorTiles.data as string[][][];
+
+/** Average RGB of a tile's cells, as #rrggbb. */
+function meanColor(tile: string[][]): string {
+  const cells = tile.flat().filter(Boolean);
+  const avg = [1, 3, 5].map((i) => Math.round(cells.reduce((s, c) => s + parseInt(c.slice(i, i + 2), 16), 0) / cells.length));
+  return `#${avg.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
 /** Bubble keys of every frozen STATUS_MAP entry (derived, not hard-coded). */
 const FROZEN = [
   ...new Set(
@@ -153,6 +163,19 @@ describe("G-05-2 frozen-state glyph contrast (shape + animation, never colour al
   it.each(FROZEN)("%s outline contrasts with the floor (>= 3:1)", (key) => {
     const { edge } = edgeAndInterior(resolveBubbleSprite(key));
     expect(contrast(edge[0]!, FALLBACK_FLOOR_COLOR), key).toBeGreaterThanOrEqual(3);
+  });
+
+  // 05-26: the real floor is MetroCity planks, not FALLBACK_FLOOR_COLOR.
+  it.each(FROZEN)("%s is legible on the MetroCity floor (outline or main fill >= 3:1 vs each tile's mean)", (key) => {
+    const sprite = resolveBubbleSprite(key);
+    const outline = edgeAndInterior(sprite).edge[0]!.toLowerCase();
+    const counts = new Map<string, number>();
+    for (const c of sprite.flat()) if (c && c.toLowerCase() !== outline) counts.set(c, (counts.get(c) ?? 0) + 1);
+    const mainFill = [...counts].sort((a, b) => b[1] - a[1])[0]![0];
+    for (const [i, tile] of FLOOR_TILES.entries()) {
+      const bg = meanColor(tile);
+      expect(Math.max(contrast(outline, bg), contrast(mainFill, bg)), `${key} on floor tile ${i} (${bg})`).toBeGreaterThanOrEqual(3);
+    }
   });
 
   it("shape separates the stuck states (>= 20 differing cells per pair)", () => {

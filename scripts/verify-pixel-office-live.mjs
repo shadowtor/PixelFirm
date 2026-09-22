@@ -38,7 +38,15 @@
 // positively observed after agent.handoff_completed (05-17, WR-10), and
 // nothing is left once the sequence ends (polled against a walk-home deadline
 // derived from WALK_SPEED_PX_PER_SEC). Dialogue is shown for its sequence only (requested line while the
-// sender waits; accepted line until the sender is home).
+// sender waits; accepted line until the sender is home); (6) the empty office
+// is furnished — no bare FALLBACK_FLOOR_COLOR pixel, and every desk paints at
+// its layout rectangle (05-26, G-05-1e); (7) with the whole cohort on the floor
+// the page sustains >= 30 animation frames per second (05-26).
+//
+// Geometry and colours come from the engine's own data files (05-12 rule):
+// seats and standing spots from layout/office-layout.json, office colours from
+// sprites/office-metrocity.json. An "agent pixel" is any pixel in no office
+// colour — on a textured, furnished floor "not grey" no longer means "sprite".
 //
 // The harness refuses to run while the API or web port is taken and never
 // reuses a server it did not start (WR-06).
@@ -180,8 +188,6 @@ function readNumberConst(src, where, name) {
 const TILE_SIZE = readNumberConst(constantsSrc, "constants.ts", "TILE_SIZE");
 const DEFAULT_COLS = readNumberConst(constantsSrc, "constants.ts", "DEFAULT_COLS");
 const DEFAULT_ROWS = readNumberConst(constantsSrc, "constants.ts", "DEFAULT_ROWS");
-const DESK_ROW_START = readNumberConst(officeIndexSrc, "index.ts", "DESK_ROW_START");
-const DESK_ROW_PITCH = readNumberConst(officeIndexSrc, "index.ts", "DESK_ROW_PITCH");
 const MIN_DISPLAY_SCALE = readNumberConst(officeIndexSrc, "index.ts", "MIN_DISPLAY_SCALE");
 // Optional review screenshots (05-21): only when PIXEL_OFFICE_SHOTS names a
 // directory outside the repo. Unset means no files are written.
@@ -196,14 +202,21 @@ async function shot(page, name) {
   log(`screenshot: ${path.join(SHOTS_DIR, name)}`);
 }
 const WALK_SPEED_PX_PER_SEC = readNumberConst(constantsSrc, "constants.ts", "WALK_SPEED_PX_PER_SEC");
-const INTERIOR_COLS = DEFAULT_COLS - 2;
+const CHARACTER_SITTING_OFFSET_PX = readNumberConst(constantsSrc, "constants.ts", "CHARACTER_SITTING_OFFSET_PX");
 const MAP_W = DEFAULT_COLS * TILE_SIZE;
 const MAP_H = DEFAULT_ROWS * TILE_SIZE;
 
-/** `nextDeskPosition()`'s formula (packages/pixel-office/src/index.ts). */
+// The furnished office's own data (05-24/05-25), never restated here.
+const LAYOUT = JSON.parse(
+  readFileSync(path.join(ROOT, "packages", "pixel-office", "src", "layout", "office-layout.json"), "utf8"),
+);
+const OFFICE_SPRITES = JSON.parse(readFileSync(path.join(SPRITE_DIR, "office-metrocity.json"), "utf8")).sprites;
+/** `nextDeskPosition()`'s order (packages/pixel-office/src/index.ts): seats, then standing spots. */
+const SPOTS = [...LAYOUT.seats, ...LAYOUT.standing].map(([col, row]) => ({ col, row }));
+
+/** Home tile for a creation-order slot; past the last spot everyone shares it. */
 function deskPosition(slot) {
-  const row = DESK_ROW_START + DESK_ROW_PITCH * Math.floor(slot / INTERIOR_COLS);
-  return { col: 1 + (slot % INTERIOR_COLS), row: Math.min(row, DEFAULT_ROWS - 2) };
+  return SPOTS[Math.min(slot, SPOTS.length - 1)];
 }
 
 // Desk slots are handed out in Character-CREATION order, so which column an
@@ -236,47 +249,52 @@ const hexToRgb = (hex) => [
   parseInt(hex.slice(3, 5), 16),
   parseInt(hex.slice(5, 7), 16),
 ];
-const FLOOR_RGB = hexToRgb(readColorConst("FALLBACK_FLOOR_COLOR"));
-const WALL_RGB = hexToRgb(readColorConst("WALL_COLOR"));
+const FALLBACK_FLOOR_COLOR = readColorConst("FALLBACK_FLOOR_COLOR");
+const FALLBACK_FLOOR_RGB = hexToRgb(FALLBACK_FLOOR_COLOR);
+
+/** Every non-empty colour string anywhere under `v` (nested sprite arrays). */
+function collectColors(v, set = new Set()) {
+  if (typeof v === "string") {
+    if (v) set.add(v.toLowerCase());
+  } else if (Array.isArray(v)) v.forEach((x) => collectColors(x, set));
+  return set;
+}
+/** Every colour the office itself can paint: all office sprites (floor tiles
+ *  included), the flat wall fill, and the fallback floor constant. */
+const OFFICE_COLORS = collectColors(Object.values(OFFICE_SPRITES).map((s) => s.data));
+OFFICE_COLORS.add(readColorConst("WALL_COLOR").toLowerCase());
+OFFICE_COLORS.add(FALLBACK_FLOOR_COLOR.toLowerCase());
 
 /** Every colour any character sprite frame can paint. */
 function characterColors() {
   const data = JSON.parse(readFileSync(path.join(SPRITE_DIR, "character-metrocity.json"), "utf8"));
-  const set = new Set();
-  const walk = (v) => {
-    if (typeof v === "string") {
-      if (v) set.add(v.toLowerCase());
-    } else if (Array.isArray(v)) v.forEach(walk);
-  };
-  walk(data.down);
-  walk(data.up);
-  walk(data.right);
-  return set;
+  return collectColors([data.down, data.up, data.right]);
 }
 
 /**
- * The colours a bubble asset paints that NO character sprite pixel can —
+ * The colours a bubble asset paints that NO character sprite pixel and no
+ * office pixel can —
  * read from the asset at run time (never hardcoded, so it can't drift from
  * whatever 05-07 actually authored). A hit on one of these is unambiguous
  * proof the bubble itself was painted, not the character underneath it.
  */
-function distinctiveBubbleColors(assetFile, charColors) {
+function distinctiveBubbleColors(assetFile, excluded) {
   const json = JSON.parse(readFileSync(path.join(SPRITE_DIR, assetFile), "utf8"));
   const found = new Set();
   for (const row of json.pixels) {
     for (const cell of row) {
       if (!cell) continue;
       const hex = (json.palette[cell] ?? "").toLowerCase();
-      if (hex && !charColors.has(hex)) found.add(hex);
+      if (hex && !excluded.has(hex)) found.add(hex);
     }
   }
-  if (found.size === 0) throw new Error(`${assetFile} shares every colour with the character sprite — no distinctive signal`);
+  if (found.size === 0) throw new Error(`${assetFile} shares every colour with the character or office sprites — no distinctive signal`);
   return [...found];
 }
 
-const charColors = characterColors();
-const BLOCKED_COLORS = distinctiveBubbleColors("bubble-blocked.json", charColors);
-const HANDOFF_COLORS = distinctiveBubbleColors("bubble-handoff-task.json", charColors);
+const NOT_DISTINCTIVE = new Set([...characterColors(), ...OFFICE_COLORS]);
+const BLOCKED_COLORS = distinctiveBubbleColors("bubble-blocked.json", NOT_DISTINCTIVE);
+const HANDOFF_COLORS = distinctiveBubbleColors("bubble-handoff-task.json", NOT_DISTINCTIVE);
 
 // Handoff dialogue geometry/colour (05-13), read from the engine source. A
 // pixel count of DIALOGUE_BOX_COLOR is unambiguous because 05-13's renderer
@@ -421,7 +439,7 @@ const statusChanged = (agentId, taskId, status) => ({
  */
 async function scanCanvas(page, xRange = null, textAboveY = null) {
   return page.evaluate(
-    ({ floor, wall, blocked, handoff, dialogueBox, mapW, mapH, band, textAbove }) => {
+    ({ office, fallbackFloor, blocked, handoff, dialogueBox, mapW, mapH, band, textAbove }) => {
       const canvas = document.getElementById("office-canvas");
       if (!canvas) throw new Error("#office-canvas is not in the DOM");
       const ctx = canvas.getContext("2d");
@@ -435,6 +453,7 @@ async function scanCanvas(page, xRange = null, textAboveY = null) {
         parseInt(hex.slice(3, 5), 16),
         parseInt(hex.slice(5, 7), 16),
       ];
+      const officeSet = new Set(office.map((hex) => parseInt(hex.slice(1), 16)));
       const blockedRgb = blocked.map(toRgb);
       const handoffRgb = handoff.map(toRgb);
       const dlg = toRgb(dialogueBox);
@@ -445,6 +464,7 @@ async function scanCanvas(page, xRange = null, textAboveY = null) {
       const toX = band ? Math.min(Math.round(band.to * scale), canvas.width) : canvas.width;
 
       let sprite = 0;
+      let fallbackFloorHits = 0;
       let blockedHits = 0;
       let handoffHits = 0;
       let blockedMinPxY = null;
@@ -461,9 +481,8 @@ async function scanCanvas(page, xRange = null, textAboveY = null) {
           const r = data[i];
           const g = data[i + 1];
           const b = data[i + 2];
-          const isFloor = r === floor[0] && g === floor[1] && b === floor[2];
-          const isWall = r === wall[0] && g === wall[1] && b === wall[2];
-          if (!isFloor && !isWall) sprite++;
+          if (!officeSet.has((r << 16) | (g << 8) | b)) sprite++;
+          if (r === fallbackFloor[0] && g === fallbackFloor[1] && b === fallbackFloor[2]) fallbackFloorHits++;
           if (matches(r, g, b, blockedRgb)) {
             blockedHits++;
             if (blockedMinPxY === null) blockedMinPxY = y;
@@ -495,6 +514,7 @@ async function scanCanvas(page, xRange = null, textAboveY = null) {
         height: canvas.height,
         scale,
         sprite,
+        fallbackFloorHits,
         blockedHits,
         handoffHits,
         // Back into the engine's own unzoomed grid coordinates.
@@ -509,8 +529,8 @@ async function scanCanvas(page, xRange = null, textAboveY = null) {
       };
     },
     {
-      floor: FLOOR_RGB,
-      wall: WALL_RGB,
+      office: [...OFFICE_COLORS],
+      fallbackFloor: FALLBACK_FLOOR_RGB,
       blocked: BLOCKED_COLORS,
       handoff: HANDOFF_COLORS,
       dialogueBox: DIALOGUE_BOX_COLOR,
@@ -532,6 +552,48 @@ async function pollScan(page, predicate, timeoutMs) {
     scan = await scanCanvas(page);
   }
   return scan;
+}
+
+/** Pixels inside each unzoomed rect `{x, y, w, h}` whose colour is in `colors`. */
+async function countColorsInRects(page, rects, colors) {
+  return page.evaluate(
+    ({ rects, colors, mapH }) => {
+      const canvas = document.getElementById("office-canvas");
+      const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+      const scale = canvas.height / mapH;
+      const set = new Set(colors.map((hex) => parseInt(hex.slice(1), 16)));
+      return rects.map((r) => {
+        let n = 0;
+        for (let y = Math.round(r.y * scale); y < Math.round((r.y + r.h) * scale); y++) {
+          for (let x = Math.round(r.x * scale); x < Math.round((r.x + r.w) * scale); x++) {
+            if (x < 0 || y < 0 || x >= canvas.width || y >= canvas.height) continue;
+            const i = (y * canvas.width + x) * 4;
+            if (data[i + 3] !== 0 && set.has((data[i] << 16) | (data[i + 1] << 8) | data[i + 2])) n++;
+          }
+        }
+        return n;
+      });
+    },
+    { rects, colors, mapH: MAP_H },
+  );
+}
+
+/** requestAnimationFrame callbacks the page runs per second, measured over `ms`. */
+async function measureFps(page, ms = 1000) {
+  return page.evaluate(
+    (ms) =>
+      new Promise((resolve) => {
+        let frames = 0;
+        const start = performance.now();
+        const tick = (now) => {
+          if (now - start >= ms) return resolve((frames * 1000) / (now - start));
+          frames++;
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+    ms,
+  );
 }
 
 /** Frames the renderer needs to settle after an event lands (or after load). */
@@ -634,7 +696,7 @@ async function main() {
     log(`office open: canvas ${empty.width}x${empty.height} (scale ${empty.scale}) — sprite=${empty.sprite}`);
     assert(
       empty.sprite === 0,
-      `the office was not empty when it opened (${empty.sprite} non-floor/non-wall px). Either the store was ` +
+      `the office was not empty when it opened (${empty.sprite} px in no office colour). Either the store was ` +
         `not reset, or the apps/api server on ${API_URL} is connected to a different database than this harness reset`,
     );
 
@@ -657,6 +719,36 @@ async function main() {
     assert(box.rendering === "pixelated", `canvas image-rendering is not pixelated (${boxWhere})`);
     log(`TRUTH 0 PASS — display scale ${empty.scale} (backing ${box.w}x${box.h}, CSS box ${box.cssW}x${box.cssH}, pixelated)`);
 
+    // ── TRUTH 6 — the office is furnished (05-26, G-05-1e): (a) the bare grey
+    // floor is gone; (b) every desk paints at its layout rectangle, placed by
+    // officeLayout.ts's rule (centred in its footprint, bottom-aligned, dy).
+    assert(
+      empty.fallbackFloorHits === 0,
+      `${empty.fallbackFloorHits} px of FALLBACK_FLOOR_COLOR ${FALLBACK_FLOOR_COLOR} painted — the bare grey floor is still showing`,
+    );
+    const deskSprite = OFFICE_SPRITES.desk.data;
+    const deskColors = [...collectColors(deskSprite)];
+    const deskOpaque = deskSprite.flat().filter(Boolean).length;
+    const deskMinPx = Math.ceil((deskOpaque * empty.scale * empty.scale) / 2);
+    const desks = LAYOUT.furniture.filter((f) => f.sprite === "desk");
+    const deskRects = desks.map((f) => ({
+      x: f.col * TILE_SIZE + Math.round((f.w * TILE_SIZE - deskSprite[0].length) / 2),
+      y: (f.row + f.h) * TILE_SIZE - deskSprite.length + (f.dy ?? 0),
+      w: deskSprite[0].length,
+      h: deskSprite.length,
+    }));
+    const deskCounts = await countColorsInRects(page, deskRects, deskColors);
+    assert(desks.length > 0, `office-layout.json places no desk`);
+    desks.forEach((f, i) =>
+      assert(
+        deskCounts[i] >= deskMinPx,
+        `desk at (${f.col},${f.row}) paints ${deskCounts[i]} desk-colour px in its rectangle ` +
+          `${JSON.stringify(deskRects[i])}, fewer than half its ${deskOpaque} opaque cells x scale^2 (${deskMinPx})`,
+      ),
+    );
+    await shot(page, "empty.png");
+    log(`TRUTH 6 PASS — furnished office: ${desks.length} desks, 0 bare-floor px (desk px ${deskCounts.join("/")} >= ${deskMinPx})`);
+
     // ── Baseline: two real agents materialised by real task.status_changed
     // events posted while the page was already open, both actively working
     // (no bubble on either of them).
@@ -674,7 +766,7 @@ async function main() {
     // happened between these posts and this scan.
     assert(
       baseline.sprite > 0,
-      `no non-floor/non-wall pixel found on the canvas — the sprite never painted (sprite pixel count 0)`,
+      `no pixel in a non-office colour found on the canvas — the sprite never painted (sprite pixel count 0)`,
     );
     // The baseline must be clean, otherwise truths 2 and 3 could pass on
     // leftover pixels instead of on this run's events.
@@ -804,25 +896,34 @@ async function main() {
     // went red: the clamp collapsed every early desk row's glyph onto y=0,
     // inside the sprite of the agent in front.
     //
-    // Seat INTERIOR_COLS + 1 agents so the first and last land in the SAME
-    // interior column on two consecutive desk rows. They start at whatever
-    // slot truths 1-3 left free, not at 0, so the column is computed here
-    // rather than assumed.
-    const cohort = Array.from({ length: INTERIOR_COLS + 1 }, (_, n) => `live-proof-seat-${String(n).padStart(2, "0")}`);
+    // Seat the cohort until the first pod-row-2 seat directly behind an
+    // already-occupied pod-row-1 seat is taken (computed from the layout; the
+    // cohort starts at whatever slot truths 1-3 left free).
+    const podRows = [...new Set(LAYOUT.seats.map(([, row]) => row))].sort((a, b) => a - b);
+    const occupiedFront = new Map();
+    for (const [id, slot] of deskSlots) {
+      const d = deskPosition(slot);
+      if (d.row === podRows[0]) occupiedFront.set(d.col, id);
+    }
+    const targetSlot = SPOTS.findIndex((s, i) => i < LAYOUT.seats.length && s.row === podRows[1] && occupiedFront.has(s.col));
+    assert(targetSlot >= nextDeskSlot, `no free pod-row-2 seat sits behind an occupied pod-row-1 seat (from slot ${nextDeskSlot})`);
+    const cohort = Array.from({ length: targetSlot - nextDeskSlot + 1 }, (_, n) => `live-proof-seat-${String(n).padStart(2, "0")}`);
     const cohortDesks = cohort.map((id) => claimDesk(id));
     for (const agentId of cohort) {
       await postEvent(token, statusChanged(agentId, `live-proof-task-${agentId}`, "running"));
     }
     await sleep(RENDER_SETTLE_MS);
 
-    const firstDesk = cohortDesks[0];
     const targetDesk = cohortDesks[cohortDesks.length - 1];
     const targetId = cohort[cohort.length - 1];
-    assert(
-      firstDesk.col === targetDesk.col && targetDesk.row === firstDesk.row + DESK_ROW_PITCH,
-      `the cohort did not straddle two consecutive desk rows in one column: first ${JSON.stringify(firstDesk)}, ` +
-        `last ${JSON.stringify(targetDesk)}`,
-    );
+    const frontId = occupiedFront.get(targetDesk.col);
+    const firstDesk = claimDesk(frontId);
+
+    // ── TRUTH 7 — frame rate with the whole cohort on the floor (05-26): the
+    // heaviest live scene, drawn through 05-24's per-(sprite, zoom) cache.
+    const fps = await measureFps(page);
+    assert(fps >= 30, `only ${fps.toFixed(1)} animation frames per second with ${deskSlots.size} agents on the floor (need >= 30)`);
+    log(`TRUTH 7 PASS — ${fps.toFixed(1)} fps with ${deskSlots.size} agents on the floor`);
 
     await postEvent(token, statusChanged(targetId, `live-proof-task-${targetId}`, "blocked"));
     await sleep(RENDER_SETTLE_MS);
@@ -833,7 +934,9 @@ async function main() {
     // excludes, so a global assertion would fail on every run.
     const targetBand = tileColumnRange(targetDesk.col);
     const bandScan = await scanCanvas(page, targetBand);
-    const firstRowSpriteBottom = spriteTopY(firstDesk.row) + SPRITE_HEIGHT;
+    await shot(page, "cohort.png");
+    // The front agent types at its own desk, so it sits CHARACTER_SITTING_OFFSET_PX lower.
+    const firstRowSpriteBottom = spriteTopY(firstDesk.row) + SPRITE_HEIGHT + CHARACTER_SITTING_OFFSET_PX;
     const targetSpriteTop = spriteTopY(targetDesk.row);
     log(
       `blocked glyph in col ${targetDesk.col} (x ${targetBand.from}..${targetBand.to}): ` +
@@ -848,9 +951,9 @@ async function main() {
     );
     assert(
       bandScan.blockedMinY > firstRowSpriteBottom,
-      `the blocked glyph reaches up into the desk row in front of its owner: measured y ` +
-        `${bandScan.blockedMinY}..${bandScan.blockedMaxY} in col ${targetDesk.col}, but a desk-row-${firstDesk.row} ` +
-        `sprite ends at y ${firstRowSpriteBottom} — the glyph must sit strictly below it (CR-02)`,
+      `the blocked glyph reaches up into the agent seated in front of its owner: measured y ` +
+        `${bandScan.blockedMinY}..${bandScan.blockedMaxY} in col ${targetDesk.col}, but ${frontId}'s seated ` +
+        `sprite at (${firstDesk.col},${firstDesk.row}) ends at y ${firstRowSpriteBottom} — the glyph must sit strictly below it (CR-02)`,
     );
     assert(
       bandScan.blockedMaxY < targetSpriteTop,
