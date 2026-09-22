@@ -627,6 +627,39 @@ async function measureFps(page, ms = 1000) {
   );
 }
 
+// ── near-black screenshot scan (05-31, G-05-P6) ───────────────────────────────
+//
+// The canvas checks above read the canvas; this reads the VIEWPORT, which is the
+// only place the defect lived — a too-small canvas pinned top-left left the rest
+// of the frame showing the host page's black background, and getImageData on the
+// canvas cannot see that. pngjs is already a devDependency of
+// packages/pixel-office (its sprite tooling), so it is resolved from there
+// rather than added anywhere.
+const { PNG } = createRequire(path.join(ROOT, "packages", "pixel-office", "package.json"))("pngjs");
+
+/** A channel value at or below this counts as black for G-05-P6's purposes.
+ *  No office sprite colour is anywhere near it (none has r+g+b < 60), and the
+ *  footer's #cccccc text antialiases against WALL_COLOR's 58,58,92 — so any hit
+ *  is genuinely unpainted page background. */
+const NEAR_BLACK_MAX = 16;
+
+/** Every near-black pixel in a full-viewport screenshot, plus the first one. */
+async function scanViewportForBlack(page) {
+  const png = PNG.sync.read(await page.screenshot());
+  let count = 0;
+  let first = null;
+  for (let y = 0; y < png.height; y++) {
+    for (let x = 0; x < png.width; x++) {
+      const i = (y * png.width + x) * 4;
+      if (png.data[i] <= NEAR_BLACK_MAX && png.data[i + 1] <= NEAR_BLACK_MAX && png.data[i + 2] <= NEAR_BLACK_MAX) {
+        count++;
+        if (!first) first = { x, y };
+      }
+    }
+  }
+  return { count, first, width: png.width, height: png.height };
+}
+
 /** Frames the renderer needs to settle after an event lands (or after load). */
 const RENDER_SETTLE_MS = 1500;
 
@@ -713,7 +746,10 @@ async function main() {
 
   const browser = await chromium.launch({ headless: true });
   try {
-    const page = await browser.newPage();
+    // 1280x720 was already Playwright's implicit default; 05-31 states it, since
+    // TRUTH 0 now asserts the literal display scale each documented OBS source
+    // size must produce.
+    const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
     page.on("console", (m) => {
       if (m.type() === "error") log(`browser console error: ${m.text()}`);
     });
@@ -731,24 +767,123 @@ async function main() {
         `not reset, or the apps/api server on ${API_URL} is connected to a different database than this harness reset`,
     );
 
-    // ── TRUTH 0 — never native 320x176 (05-21, G-05-1a): an integer scale
-    // >= MIN_DISPLAY_SCALE, drawn 1:1 in CSS, with pixelated scaling.
-    const box = await page.evaluate(() => {
-      const canvas = document.getElementById("office-canvas");
-      const r = canvas.getBoundingClientRect();
-      return { w: canvas.width, h: canvas.height, cssW: r.width, cssH: r.height, rendering: getComputedStyle(canvas).imageRendering };
-    });
-    const boxWhere = `backing ${box.w}x${box.h}, CSS box ${box.cssW}x${box.cssH}, image-rendering ${box.rendering}`;
-    assert(
-      Number.isInteger(empty.scale) && empty.scale >= MIN_DISPLAY_SCALE,
-      `display scale ${empty.scale} is not an integer >= MIN_DISPLAY_SCALE ${MIN_DISPLAY_SCALE} (${boxWhere})`,
-    );
-    assert(
-      Math.abs(box.cssW - box.w) <= 0.5 && Math.abs(box.cssH - box.h) <= 0.5,
-      `the canvas CSS box does not equal its backing store (${boxWhere})`,
-    );
-    assert(box.rendering === "pixelated", `canvas image-rendering is not pixelated (${boxWhere})`);
-    log(`TRUTH 0 PASS — display scale ${empty.scale} (backing ${box.w}x${box.h}, CSS box ${box.cssW}x${box.cssH}, pixelated)`);
+    // ── TRUTH 0 — the frame shows ONLY the office (05-21 G-05-1a, 05-31
+    // G-05-P6): at each documented OBS source size the office is presented at
+    // an integer scale >= MIN_DISPLAY_SCALE, drawn 1:1 in CSS with pixelated
+    // scaling, centred, the attribution overlaying the bottom wall row, and not
+    // one near-black pixel anywhere in the viewport. 1920x1080 is checked first
+    // so the run ENDS back at 1280x720 and every later truth sees the viewport
+    // it always has.
+    const OBS_SIZES = [
+      { w: 1920, h: 1080, obsScale: 6 },
+      { w: 1280, h: 720, obsScale: 4 },
+    ];
+    const truth0 = [];
+    for (const { w, h, obsScale } of OBS_SIZES) {
+      // The same floor the host computes, restated from the engine's own
+      // constants — with NO footer allowance, which is the whole of G-05-P6.
+      const expected = Math.max(MIN_DISPLAY_SCALE, Math.floor(Math.min(w / MAP_W, h / MAP_H)));
+      assert(
+        expected === obsScale,
+        `a ${w}x${h} OBS source must present the office at scale ${obsScale}, but the full-viewport floor gives ${expected}`,
+      );
+
+      await page.setViewportSize({ width: w, height: h });
+      // The host resizes the backing store from a resize listener, and writing
+      // canvas.width clears it — poll for the new size instead of assuming the
+      // next frame has already landed.
+      try {
+        await page.waitForFunction(
+          (want) => document.getElementById("office-canvas")?.width === want,
+          MAP_W * expected,
+          { timeout: 3000 },
+        );
+      } catch {
+        const got = await page.evaluate(() => document.getElementById("office-canvas")?.width);
+        assert(
+          false,
+          `at ${w}x${h} the canvas backing store never reached ${MAP_W * expected}px wide (scale ${expected}) — it is ${got}`,
+        );
+      }
+      await sleep(RENDER_SETTLE_MS);
+
+      const geom = await page.evaluate(() => {
+        const canvas = document.getElementById("office-canvas");
+        const footer = document.querySelector("footer");
+        const c = canvas.getBoundingClientRect();
+        const f = footer?.getBoundingClientRect();
+        return {
+          w: canvas.width,
+          h: canvas.height,
+          cssW: c.width,
+          cssH: c.height,
+          left: c.left,
+          top: c.top,
+          bottom: c.bottom,
+          rendering: getComputedStyle(canvas).imageRendering,
+          footer: f ? { top: f.top, bottom: f.bottom } : null,
+          footerText: footer?.textContent ?? "",
+          viewW: window.innerWidth,
+          viewH: window.innerHeight,
+        };
+      });
+      const scale = geom.w / MAP_W;
+      const where =
+        `at ${w}x${h}: backing ${geom.w}x${geom.h}, CSS box ${geom.cssW}x${geom.cssH} at (${geom.left},${geom.top}), ` +
+        `image-rendering ${geom.rendering}`;
+
+      // 05-21, kept verbatim in intent: integer scale, CSS box == backing store,
+      // pixelated.
+      assert(
+        Number.isInteger(scale) && scale >= MIN_DISPLAY_SCALE,
+        `display scale ${scale} is not an integer >= MIN_DISPLAY_SCALE ${MIN_DISPLAY_SCALE} (${where})`,
+      );
+      assert(scale === expected, `display scale ${scale} is not the expected ${expected} (${where})`);
+      assert(geom.h === MAP_H * expected, `backing height ${geom.h} is not ${MAP_H} x ${expected} (${where})`);
+      assert(
+        Math.abs(geom.cssW - geom.w) <= 0.5 && Math.abs(geom.cssH - geom.h) <= 0.5,
+        `the canvas CSS box does not equal its backing store (${where})`,
+      );
+      assert(geom.rendering === "pixelated", `canvas image-rendering is not pixelated (${where})`);
+
+      // 05-31: the remainder is split evenly, so the surround reads as a border
+      // rather than the canvas being pinned to one corner.
+      assert(
+        Math.abs(geom.left - (geom.viewW - geom.cssW) / 2) <= 0.5,
+        `the office is not horizontally centred — left ${geom.left}, expected ${(geom.viewW - geom.cssW) / 2} (${where})`,
+      );
+      assert(
+        Math.abs(geom.top - (geom.viewH - geom.cssH) / 2) <= 0.5,
+        `the office is not vertically centred — top ${geom.top}, expected ${(geom.viewH - geom.cssH) / 2} (${where})`,
+      );
+
+      // OFFICE-02 / SC4: the credit is still on screen, and it sits over the
+      // office's bottom wall row (one tile tall at this scale) plus whatever
+      // remainder strip is below it — never over the floor.
+      assert(geom.footer !== null, `no attribution <footer> is in the DOM (${where})`);
+      const bandTop = geom.bottom - TILE_SIZE * scale;
+      assert(
+        geom.footer.top >= bandTop - 0.5 && geom.footer.bottom <= geom.viewH + 0.5,
+        `the attribution footer (${geom.footer.top}..${geom.footer.bottom}) is outside the bottom wall row and remainder ` +
+          `(${bandTop}..${geom.viewH}) (${where})`,
+      );
+      assert(
+        geom.footerText.includes("pixel-agents-hq/pixel-agents"),
+        `the attribution footer does not name the fork it credits (${where})`,
+      );
+
+      // The defect itself: any unpainted host-page background left in the frame.
+      const black = await scanViewportForBlack(page);
+      assert(
+        black.count === 0,
+        `${black.count} near-black px (every channel <= ${NEAR_BLACK_MAX}) in the ${black.width}x${black.height} viewport ` +
+          `screenshot, first at x=${black.first?.x},y=${black.first?.y} — the frame is not only the office (${where})`,
+      );
+
+      await shot(page, `viewport-${w}x${h}.png`);
+      truth0.push(`${w}x${h}: scale ${scale} (backing ${geom.w}x${geom.h})`);
+    }
+    log(`TRUTH 0 PASS — ${truth0.join(", ")}; centred, pixelated, CSS box == backing store, credit on the bottom wall, 0 near-black px`);
 
     // ── TRUTH 6 — the office is furnished (05-26, G-05-1e): (a) the bare grey
     // floor is gone; (b) every desk paints at its layout rectangle, placed by
