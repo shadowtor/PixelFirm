@@ -269,9 +269,10 @@ const MIN_FRAME_OPAQUE = Math.min(
 
 /** Top edge of a character's sprite box on a given interior row, unzoomed —
  *  `renderScene`'s bottom-centre anchor: tile centre minus the sprite height.
- *  (A TYPE-posed character sits CHARACTER_SITTING_OFFSET_PX lower; the bounds
- *  below deliberately use the un-offset anchor, which is the desk row's own
- *  geometry rather than one pose's.) */
+ *  (A character RESTING on its own seat sits CHARACTER_SITTING_OFFSET_PX lower,
+ *  whatever its status — 05-32 / G-05-P3. This returns the un-offset anchor,
+ *  which is the desk row's own geometry rather than one pose's; callers add the
+ *  offset themselves when the character they measure is seated.) */
 const spriteTopY = (row) => row * TILE_SIZE + TILE_SIZE / 2 - SPRITE_HEIGHT;
 const hexToRgb = (hex) => [
   parseInt(hex.slice(1, 3), 16),
@@ -1133,12 +1134,17 @@ async function main() {
     const targetBand = tileColumnRange(targetDesk.col);
     const bandScan = await scanCanvas(page, targetBand);
     await shot(page, "cohort.png");
-    // The front agent types at its own desk, so it sits CHARACTER_SITTING_OFFSET_PX lower.
+    // The front agent rests at its own desk, so it sits CHARACTER_SITTING_OFFSET_PX
+    // lower (05-32 / G-05-P3 — since this plan that holds for every resting
+    // status, not only the TYPE pose this agent happens to be in).
     const firstRowSpriteBottom = spriteTopY(firstDesk.row) + SPRITE_HEIGHT + CHARACTER_SITTING_OFFSET_PX;
-    // The blocked owner stands (IDLE = down[1]); its visible head starts at the
-    // frame's first opaque row (05-30, G-05-1c: glyphs anchor on the head).
+    // The blocked owner SITS at its own seat: it is resting, not walking, so it
+    // is sunk by CHARACTER_SITTING_OFFSET_PX while keeping its IDLE frame
+    // (down[1]) — 05-32 / G-05-P3, superseding 05-25's TYPE-only sitting rule.
+    // Its visible head starts at that frame's first opaque row (05-30,
+    // G-05-1c: glyphs anchor on the head, so the glyph follows the seated head).
     const headRow = CHARACTER_SHEET.down[1].findIndex((r) => r.some((c) => c));
-    const headTop = spriteTopY(targetDesk.row) + headRow;
+    const headTop = spriteTopY(targetDesk.row) + CHARACTER_SITTING_OFFSET_PX + headRow;
     const headGap = bandScan.blockedMaxY === null ? null : headTop - (bandScan.blockedMaxY + 1);
     log(
       `blocked glyph in col ${targetDesk.col} (x ${targetBand.from}..${targetBand.to}): ` +
