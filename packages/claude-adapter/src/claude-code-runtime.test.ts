@@ -564,3 +564,84 @@ describe("ClaudeCodeRuntime gsd role-change poll (an observation, never a handof
     expect((observeGsdState as unknown as Mock).mock.calls.length).toBe(callCountAtCancel);
   });
 });
+
+// 05-VERIFICATION.md gap 4 / review CR-02: several runQuery invocations for
+// one task. The superseded invocation's teardown, watchdog, late messages,
+// role poll and query() callbacks must never touch the record its successor
+// now owns.
+describe("ClaudeCodeRuntime superseded invocations (one live query() per task)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    (observeGsdState as unknown as Mock).mockResolvedValue({
+      phase: "05",
+      status: "executing",
+      category: "execution",
+      role: "Engineering",
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  // A stream that yields init, then rejects once its own abort signal fires.
+  // interrupt() is a no-op, so graceful stop always times out and the
+  // hard-abort path runs.
+  function abortableQuery(signal: AbortSignal, initMsg: unknown, onAbort: () => unknown[] = () => []) {
+    const state = { done: false };
+    async function* gen() {
+      try {
+        yield initMsg;
+        await new Promise<void>((resolve) => {
+          if (signal.aborted) resolve();
+          else signal.addEventListener("abort", () => resolve(), { once: true });
+        });
+        const tail = onAbort();
+        if (tail.length === 0) throw new Error("aborted");
+        for (const message of tail) yield message;
+      } finally {
+        state.done = true;
+      }
+    }
+    const iter = gen() as AsyncGenerator<unknown, void> & { interrupt: Mock };
+    iter.interrupt = vi.fn(async () => undefined);
+    return { iter, signal, isLive: () => !signal.aborted && !state.done };
+  }
+
+  // Records, at the moment each query() is created, how many previously
+  // created streams are still live and which ones were aborted.
+  function recordingQuery(make: (signal: AbortSignal, index: number) => ReturnType<typeof abortableQuery>) {
+    const streams: ReturnType<typeof abortableQuery>[] = [];
+    const liveAtStart: number[] = [];
+    const abortedAtStart: boolean[][] = [];
+    (query as unknown as Mock).mockImplementation(({ options }: { options: { abortController: AbortController } }) => {
+      liveAtStart.push(streams.filter((s) => s.isLive()).length);
+      abortedAtStart.push(streams.map((s) => s.signal.aborted));
+      const s = make(options.abortController.signal, streams.length);
+      streams.push(s);
+      return s.iter;
+    });
+    return { streams, liveAtStart, abortedAtStart };
+  }
+
+  it("Test A: three successive runQuery calls against non-graceful streams never overlap two live query() streams", async () => {
+    const rec = recordingQuery((signal, i) => abortableQuery(signal, initMessage(`session-${i}`)));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    void runtime.startTask(startInput);
+    await vi.advanceTimersByTimeAsync(0);
+    void runtime.sendMessage("task-1", "second");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(0);
+    void runtime.sendMessage("task-1", "third");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(rec.streams).toHaveLength(3);
+    expect(rec.liveAtStart).toEqual([0, 0, 0]);
+    expect(rec.abortedAtStart[2]).toEqual([true, true]);
+  });
+});
