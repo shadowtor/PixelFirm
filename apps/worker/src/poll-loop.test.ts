@@ -26,6 +26,20 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Every tick spawns real `git` subprocesses, so a fixed sleep races the poll
+// interval: under CPU contention (the other worker test files, or a parallel
+// workspace run) a tick lands outside the window and a positive assertion sees
+// too few events. Wait for the expected count instead of a wall-clock guess.
+// Absence assertions ("zero more events") keep a fixed sleep — a slow tick
+// cannot falsify those.
+async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) return; // let the caller's expect() report the real shortfall
+    await sleep(10);
+  }
+}
+
 async function makeFixtureRepo(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "poll-loop-test-"));
   await execa("git", ["init"], { cwd: dir });
@@ -81,8 +95,8 @@ describe("startPollLoop", () => {
         intervalMs: 40,
       });
 
-      // Let several ticks pass with nothing on disk changing.
-      await sleep(200);
+      // Let the baseline tick land, with nothing on disk changing.
+      await waitFor(() => callsOfType("git.worktree_observed").length >= 1 && callsOfType("gsd.phase_observed").length >= 1);
       expect(callsOfType("git.worktree_observed")).toHaveLength(1);
       expect(callsOfType("gsd.phase_observed")).toHaveLength(1);
 
@@ -95,7 +109,7 @@ describe("startPollLoop", () => {
       // git.worktree_observed reflecting the new headSha, keyed by
       // worktreePath (never array index).
       await execa("git", ["commit", "--allow-empty", "-m", "second"], { cwd: repoPath });
-      await sleep(200);
+      await waitFor(() => callsOfType("git.worktree_observed").length >= 2);
 
       const worktreeCalls = callsOfType("git.worktree_observed");
       expect(worktreeCalls).toHaveLength(2);
@@ -124,9 +138,11 @@ describe("startPollLoop", () => {
       // isAnyClaudeProcessAlive resolves true throughout, but nothing on
       // disk changes after the first (baseline) tick — active must never be
       // true from a stale process-alive signal alone.
+      await waitFor(() => callsOfType("gsd.phase_observed").length >= 1);
       await sleep(300);
 
       const gsdCalls = callsOfType("gsd.phase_observed");
+      expect(gsdCalls.length).toBeGreaterThan(0); // never pass vacuously on a slow tick
       for (const call of gsdCalls) {
         // Any gsd event emitted after the baseline tick implies a real
         // change occurred; none should carry active: true without a
@@ -151,7 +167,7 @@ describe("startPollLoop", () => {
         intervalMs: 40,
       });
 
-      await sleep(150);
+      await waitFor(() => callsOfType("gsd.phase_observed").length >= 1);
 
       const gsdCalls = callsOfType("gsd.phase_observed");
       expect(gsdCalls.length).toBeGreaterThan(0);
@@ -191,7 +207,7 @@ describe("startPollLoop", () => {
       // fails against a nonexistent path), but the loop must keep running —
       // proven by the gsd.phase_observed side still firing on the baseline
       // tick (gsd observation is independent of git-adapter's failure).
-      await sleep(150);
+      await waitFor(() => callsOfType("gsd.phase_observed").length >= 1);
       expect(callsOfType("git.worktree_observed")).toHaveLength(0);
       expect(callsOfType("gsd.phase_observed").length).toBeGreaterThanOrEqual(1);
     },
