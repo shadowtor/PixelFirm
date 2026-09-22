@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-24-PLAN.md
-last_updated: "2026-09-22T11:13:23.499Z"
+stopped_at: Completed 05-25-PLAN.md
+last_updated: "2026-09-22T11:21:26.356Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 05 execution started
-state_head: edb14d108f401b9dd3a592b41f44c17baa99c879
+state_head: d96ad1b193f4d6b11e96d30c80b631febde5ff0d
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 45
-  completed_plans: 39
+  completed_plans: 40
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 5 of 30
+Plan: 6 of 30
 Status: Ready to execute
 Last activity: 2026-09-22 — Phase 05 execution started
 
@@ -99,6 +99,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P22 | 10m | 2 tasks | 10 files |
 | Phase 05 P23 | 10m | 2 tasks | 4 files |
 | Phase 05 P24 | 20m | 2 tasks | 5 files |
+| Phase 05 P25 | 15m | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -199,6 +200,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-23: frozen-state glyphs carry a closed 1 px black outline, fill >= 3:1 vs outline, masks differ pairwise >= 20 cells; guarded by bubbleSprites.test.ts (G-05-2)
 - [Phase 05]: 05-24: office layout = 8 desks in pods (cols 1/5/9/13, rows 5/9), 16 seats on rows 4/8, 4 standing spots in right strip; monitor dy -18
 - [Phase 05]: 05-24: per-(sprite, zoom) OffscreenCanvas cache with drawImage; fillRect fallback in node tests
+- [Phase 05]: 05-25: seats come from the layout (16 SEATS then 4 STANDING_SPOTS, lowest free first); 21st+ agent shares the last standing spot
+- [Phase 05]: 05-25: sitting offset only for TYPE on own layout seat (isOwnSeat); typing frames kept everywhere (D-01); walk ending at home faces DOWN
 
 ### Pending Todos
 
@@ -227,6 +230,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T11:13:23.243Z
-Stopped at: Completed 05-24-PLAN.md
+Last session: 2026-09-22T11:21:26.053Z
+Stopped at: Completed 05-25-PLAN.md
 Resume file: None
