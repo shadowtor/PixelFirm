@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import {
   DEFAULT_COLS,
   DEFAULT_ROWS,
+  MIN_DISPLAY_SCALE,
   TILE_SIZE,
+  displayScaleFor,
   startGameLoop,
   upsertCharacterFromAgent,
   registerTaskTitle,
@@ -15,6 +17,16 @@ import { applyLiveEvent } from "./agent-event-mapper";
 const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL as string;
 const browserToken = import.meta.env.VITE_BROWSER_ACCESS_TOKEN as string;
 
+// 05-21 (G-05-1a): the fixed attribution footer's height, rounded up — at
+// 1920x1080 the office is 1920x1056 (scale 6) with the footer underneath.
+const FOOTER_RESERVE_PX = 24;
+
+function currentDisplayScale(): number {
+  return typeof window === "undefined"
+    ? MIN_DISPLAY_SCALE
+    : displayScaleFor(window.innerWidth, window.innerHeight - FOOTER_RESERVE_PX);
+}
+
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // 05-09 (CR-01): the live projection every relayed event is folded into.
@@ -22,6 +34,14 @@ export function App() {
   // re-render is wanted per event.
   const projectionRef = useRef(emptyState());
   const [disconnected, setDisconnected] = useState(false);
+  const [scale, setScale] = useState(currentDisplayScale);
+
+  // Separate from the socket/game-loop effect so a resize never reconnects.
+  useEffect(() => {
+    const onResize = () => setScale(currentDisplayScale());
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -97,8 +117,10 @@ export function App() {
       <canvas
         id="office-canvas"
         ref={canvasRef}
-        width={DEFAULT_COLS * TILE_SIZE}
-        height={DEFAULT_ROWS * TILE_SIZE}
+        width={DEFAULT_COLS * TILE_SIZE * scale}
+        height={DEFAULT_ROWS * TILE_SIZE * scale}
+        // No CSS width/height: the CSS box must equal the backing store.
+        style={{ display: "block", imageRendering: "pixelated" }}
       />
       {disconnected && (
         <div

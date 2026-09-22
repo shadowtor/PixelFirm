@@ -8,6 +8,21 @@ import { DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE } from "./constants.js";
 // Re-exported so apps/web can size its <canvas> from this package's own grid
 // dimensions instead of hardcoding/duplicating them.
 export { DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE };
+
+// 05-21 (G-05-1a): the 320x176 office is never shown at native size — its
+// 11x13 glyphs are unreadable there. Minimum integer presentation scale.
+export const MIN_DISPLAY_SCALE = 3;
+
+/** Largest integer scale at which the office grid fits the given viewport,
+ *  never below MIN_DISPLAY_SCALE. Pure: any footer allowance is the caller's. */
+export function displayScaleFor(viewportWidth: number, viewportHeight: number): number {
+  return Math.max(
+    MIN_DISPLAY_SCALE,
+    Math.floor(
+      Math.min(viewportWidth / (DEFAULT_COLS * TILE_SIZE), viewportHeight / (DEFAULT_ROWS * TILE_SIZE)),
+    ),
+  );
+}
 import { createCharacter, setRestPose, updateCharacter } from "./engine/characters.js";
 import { startGameLoop as startForkGameLoop } from "./engine/gameLoop.js";
 import { renderFrame } from "./engine/renderer.js";
@@ -206,7 +221,10 @@ export function startGameLoop(canvas: HTMLCanvasElement): () => void {
   return startForkGameLoop(canvas, {
     update: stepOffice,
     render: (ctx) => {
-      renderFrame(ctx, canvas.width, canvas.height, tileMap, [...characters.values()]);
+      // The host sizes the backing store at an integer multiple of the grid
+      // (05-21); the engine reads that multiple back, never guesses a scale.
+      const zoom = Math.max(1, Math.floor(canvas.width / (DEFAULT_COLS * TILE_SIZE)));
+      renderFrame(ctx, canvas.width, canvas.height, tileMap, [...characters.values()], zoom);
     },
   });
 }
