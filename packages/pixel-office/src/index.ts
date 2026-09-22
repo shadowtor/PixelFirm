@@ -184,18 +184,24 @@ export function getCharacter(agentId: string): Character | undefined {
   return characters.get(agentId);
 }
 
+/**
+ * The one per-frame update (05-17). The requestAnimationFrame loop and the
+ * tests both run exactly this, so a test can never shortcut past it.
+ */
+export function stepOffice(dt: number): void {
+  for (const ch of characters.values()) {
+    updateCharacter(ch, dt);
+  }
+  // 05-04: advance the handoff FSM's arrival-driven transitions after
+  // every Character's own position update this frame — never a
+  // separate timer, purely reading the just-updated WALK->IDLE signal.
+  checkHandoffArrivals();
+}
+
 /** Starts the forked requestAnimationFrame loop against the given canvas. */
 export function startGameLoop(canvas: HTMLCanvasElement): () => void {
   return startForkGameLoop(canvas, {
-    update: (dt) => {
-      for (const ch of characters.values()) {
-        updateCharacter(ch, dt);
-      }
-      // 05-04: advance the handoff FSM's arrival-driven transitions after
-      // every Character's own position update this frame — never a
-      // separate timer, purely reading the just-updated WALK->IDLE signal.
-      checkHandoffArrivals();
-    },
+    update: stepOffice,
     render: (ctx) => {
       renderFrame(ctx, canvas.width, canvas.height, tileMap, [...characters.values()]);
     },

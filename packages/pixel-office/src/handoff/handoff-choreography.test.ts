@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { CompanyEvent } from "event-schema";
 import { AgentStatus } from "event-schema";
-import { upsertCharacterFromAgent, getCharacter, getTileMap, _resetForTests } from "../index";
+import { upsertCharacterFromAgent, getCharacter, getTileMap, stepOffice, _resetForTests } from "../index";
 import { CharacterState } from "../types";
 import type { Character } from "../types";
 import { findPath } from "../layout/tileMap";
@@ -219,5 +219,105 @@ describe("handoff sequence end + re-delivery idempotence (05-13, CR-01)", () => 
     handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b", "7fa85f64-5717-4562-b3fc-2c963f66afa6"));
     expect(fromChar.state).toBe(CharacterState.WALK);
     expect(fromChar.path.length).toBeGreaterThan(0);
+  });
+});
+
+describe("handoff robustness under interruption (05-17, WR-02): real update loop", () => {
+  const NEW_REQUEST_ID = "8fa85f64-5717-4562-b3fc-2c963f66afa6";
+
+  /** Runs the production per-frame update at 60 fps for `seconds`. */
+  function run(seconds: number): void {
+    for (let i = 0; i < Math.ceil(seconds * 60); i++) stepOffice(1 / 60);
+  }
+
+  /** a at col 1, b at col 5 (4-tile walk), c at col 6, all on row 3. */
+  function seatAll(): void {
+    for (const id of ["agent-a", "filler-1", "filler-2", "filler-3", "agent-b", "agent-c"]) {
+      upsertCharacterFromAgent(id, AgentStatus.IDLE);
+    }
+  }
+
+  function expectHomeIdle(ch: Character): void {
+    expect(ch.tileCol).toBe(ch.seatCol);
+    expect(ch.tileRow).toBe(ch.seatRow);
+    expect(ch.path.length).toBe(0);
+    expect(ch.state).toBe(CharacterState.IDLE);
+  }
+
+  function onSeatOf(ch: Character, other: Character): boolean {
+    return ch.tileCol === other.seatCol && ch.tileRow === other.seatRow;
+  }
+
+  function toIconVisible(): { a: Character; b: Character } {
+    seatAll();
+    const a = getCharacter("agent-a")!;
+    const b = getCharacter("agent-b")!;
+    handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+    run(3);
+    expect(onSeatOf(a, b)).toBe(true);
+    expect(a.bubbleType).toBe("handoff-task");
+    expect(a.bubbleText).toContain("Handing off");
+    return { a, b };
+  }
+
+  function toReturningMidWalk(): { a: Character; b: Character } {
+    const { a, b } = toIconVisible();
+    handleHandoffEvent(completedEvent("task-1", "agent-b"));
+    run(0.2);
+    expect(a.path.length).toBeGreaterThan(0);
+    expect(b.bubbleText).toContain("accepts");
+    return { a, b };
+  }
+
+  it("a1: a CODING status mid-return does not stop the walk home, and both lines clear", () => {
+    const { a, b } = toReturningMidWalk();
+    upsertCharacterFromAgent("agent-a", AgentStatus.CODING);
+    run(5);
+    expectHomeIdle(a);
+    expect(b.bubbleText).toBeNull();
+    expect(a.bubbleText).toBeNull();
+  });
+
+  it("a2: a frozen status mid-walk to the receiver holds frame 0 but the walk still completes", () => {
+    seatAll();
+    const a = getCharacter("agent-a")!;
+    const b = getCharacter("agent-b")!;
+    handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+    run(0.2);
+    expect(a.path.length).toBe(4);
+    upsertCharacterFromAgent("agent-a", AgentStatus.WAITING_FOR_AGENT);
+    run(0.5);
+    expect(a.frame).toBe(0);
+    expect(a.frozen).toBe(true);
+    expect(a.path.length).toBeLessThan(4);
+
+    run(3);
+    expect(onSeatOf(a, b)).toBe(true);
+    expect(a.bubbleText).toContain("Handing off");
+
+    handleHandoffEvent(completedEvent("task-1", "agent-b"));
+    expect(b.state).toBe(CharacterState.TYPE);
+
+    run(5);
+    expectHomeIdle(a);
+    expect(a.bubbleText ?? null).toBeNull();
+    expect(b.bubbleText).toBeNull();
+  });
+
+  it("a3: frozen while standing at the receiver, then walking home, still gets home", () => {
+    const { a, b } = toIconVisible();
+    const pathBefore = a.path.length;
+    upsertCharacterFromAgent("agent-a", AgentStatus.BLOCKED);
+    handleHandoffEvent(completedEvent("task-1", "agent-b"));
+    const homePath = a.path.length;
+    run(0.5);
+    expect(a.frame).toBe(0);
+    expect(!onSeatOf(a, b) || a.path.length < homePath).toBe(true);
+    expect(pathBefore).toBe(0);
+
+    run(5);
+    expectHomeIdle(a);
+    expect(a.bubbleText).toBeNull();
+    expect(b.bubbleText).toBeNull();
   });
 });
