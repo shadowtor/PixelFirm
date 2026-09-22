@@ -18,7 +18,14 @@
 import {
   BUBBLE_ICON_GAP_PX,
   CHARACTER_SITTING_OFFSET_PX,
+  BUBBLE_ICON_HEIGHT_PX,
   CHARACTER_Z_SORT_OFFSET,
+  DEFAULT_COLS,
+  DIALOGUE_BOX_COLOR,
+  DIALOGUE_BOX_HEIGHT_PX,
+  DIALOGUE_BOX_PAD_X_PX,
+  DIALOGUE_FONT_PX,
+  DIALOGUE_TEXT_COLOR,
   FALLBACK_FLOOR_COLOR,
   TILE_SIZE,
   WALL_COLOR,
@@ -61,9 +68,14 @@ export function renderTileGrid(
   }
 }
 
-interface ZDrawable {
+/** Per-character layout, computed once per frame and shared by every pass. */
+interface CharacterLayout {
+  ch: Character;
+  spriteData: SpriteData;
+  spriteWidth: number;
+  drawX: number;
+  drawY: number;
   zY: number;
-  draw: () => void;
 }
 
 /**
@@ -90,6 +102,72 @@ export function resolveBubbleY(drawY: number, bubbleHeight: number, zoom: number
   return Math.max(0, drawY);
 }
 
+/**
+ * Placement for a character's handoff dialogue box — owner-bound, like the
+ * glyph (05-13, closes VERIFICATION gap 1). @internal
+ *
+ * Centred on and stacked above its owner: the box sits directly above the
+ * owner's glyph SLOT (reserved whether or not a glyph is showing), clamped at
+ * y = 0, and is shifted horizontally only as far as needed to stay on the
+ * canvas — so its extent always contains the owner's centre x. A box wider
+ * than the canvas is clipped, never relocated.
+ *
+ * Geometry at zoom 1 on the 320x176 office: desk rows 3/6/9 leave no position
+ * for an 11px line that overlaps nothing. A row-3 owner's box lands at y 0..12
+ * on the top wall strip (over the top 4 rows of its own glyph slot); a row-6
+ * owner's at y 42..54, over the lower half of the desk row in front. It never
+ * overlaps its OWN sprite. Because it can overlap glyph rows, renderScene
+ * draws state glyphs after dialogue.
+ */
+export function resolveDialogueBox(
+  ownerCenterX: number,
+  drawY: number,
+  textWidth: number,
+  zoom: number,
+  canvasWidth: number,
+): { x: number; y: number; w: number; h: number } {
+  const h = DIALOGUE_BOX_HEIGHT_PX * zoom;
+  const w = Math.ceil(textWidth) + 2 * DIALOGUE_BOX_PAD_X_PX * zoom;
+  const glyphSlotY = resolveBubbleY(drawY, BUBBLE_ICON_HEIGHT_PX, zoom);
+  const y = Math.max(0, glyphSlotY - BUBBLE_ICON_GAP_PX * zoom - h);
+  const x = Math.min(Math.max(0, Math.round(ownerCenterX - w / 2)), Math.max(0, canvasWidth - w));
+  return { x, y, w, h };
+}
+
+function drawGlyph(ctx: CanvasRenderingContext2D, l: CharacterLayout, zoom: number): void {
+  if (!l.ch.bubbleType) return;
+  const bubbleSprite = resolveBubbleSprite(l.ch.bubbleType);
+  const bubbleWidth = bubbleSprite[0]?.length ?? 0;
+  const bubbleHeight = bubbleSprite.length;
+  // Centred on the owner. No horizontal clamp, deliberately: the glyph
+  // is 11 wide, the character sprite 16, so a centred glyph's extent is
+  // always a strict subset of its owner's — and the owner is always on
+  // the map. A clamp would be unreachable code. renderer.test.ts's
+  // horizontal-containment case is the guard, and goes red the moment a
+  // glyph wider than a character is introduced.
+  const bubbleX = Math.round(l.drawX + (l.spriteWidth * zoom - bubbleWidth * zoom) / 2);
+  const bubbleY = resolveBubbleY(l.drawY, bubbleHeight, zoom);
+  drawSpriteData(ctx, bubbleSprite, bubbleX, bubbleY, zoom);
+}
+
+function drawDialogue(
+  ctx: CanvasRenderingContext2D,
+  l: CharacterLayout,
+  offsetX: number,
+  zoom: number,
+  canvasWidth: number,
+): void {
+  const text = l.ch.bubbleText;
+  if (!text) return;
+  ctx.font = `${DIALOGUE_FONT_PX * zoom}px monospace`;
+  ctx.textBaseline = "top";
+  const box = resolveDialogueBox(offsetX + l.ch.x * zoom, l.drawY, ctx.measureText(text).width, zoom, canvasWidth);
+  ctx.fillStyle = DIALOGUE_BOX_COLOR;
+  ctx.fillRect(box.x, box.y, box.w, box.h);
+  ctx.fillStyle = DIALOGUE_TEXT_COLOR;
+  ctx.fillText(text, box.x + DIALOGUE_BOX_PAD_X_PX * zoom, box.y + zoom);
+}
+
 /** @internal */
 export function renderScene(
   ctx: CanvasRenderingContext2D,
@@ -97,8 +175,9 @@ export function renderScene(
   offsetX: number,
   offsetY: number,
   zoom: number,
+  canvasWidth = DEFAULT_COLS * TILE_SIZE * zoom,
 ): void {
-  const drawables: ZDrawable[] = characters.map((ch) => {
+  const layouts: CharacterLayout[] = characters.map((ch) => {
     const sprites = getCharacterSprites(ch.hueShift);
     const spriteData = getCharacterSprite(ch, sprites);
     const spriteHeight = spriteData.length;
@@ -111,37 +190,21 @@ export function renderScene(
     const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - spriteHeight * zoom);
 
     const zY = ch.y + TILE_SIZE / 2 + CHARACTER_Z_SORT_OFFSET;
-
-    return {
-      zY,
-      draw: () => {
-        drawSpriteData(ctx, spriteData, drawX, drawY, zoom);
-        // D-03 icon overlay (05-07): drawn inside the SAME z-sorted drawable as
-        // its own character, immediately after the base sprite — so it can never
-        // z-sort behind a character that should be in front of it.
-        if (!ch.bubbleType) return;
-        const bubbleSprite = resolveBubbleSprite(ch.bubbleType);
-        const bubbleWidth = bubbleSprite[0]?.length ?? 0;
-        const bubbleHeight = bubbleSprite.length;
-        // Centred on the owner. No horizontal clamp, deliberately: the glyph
-        // is 11 wide, the character sprite 16, so a centred glyph's extent is
-        // always a strict subset of its owner's — and the owner is always on
-        // the map. A clamp would be unreachable code. renderer.test.ts's
-        // horizontal-containment case is the guard, and goes red the moment a
-        // glyph wider than a character is introduced.
-        const bubbleX = Math.round(drawX + (spriteWidth * zoom - bubbleWidth * zoom) / 2);
-        const bubbleY = resolveBubbleY(drawY, bubbleHeight, zoom);
-        drawSpriteData(ctx, bubbleSprite, bubbleX, bubbleY, zoom);
-      },
-    };
+    return { ch, spriteData, spriteWidth, drawX, drawY, zY };
   });
 
   // Sort ascending by zY and draw in order: a LOWER zY is drawn FIRST and
   // therefore sits BEHIND anything drawn after it. (IN-06: the previous
   // comment claimed the opposite, which is exactly the ordering a future
   // reader reasons about when chasing an overlay-placement bug.)
-  drawables.sort((a, b) => a.zY - b.zY);
-  for (const d of drawables) d.draw();
+  layouts.sort((a, b) => a.zY - b.zY);
+  for (const l of layouts) {
+    drawSpriteData(ctx, l.spriteData, l.drawX, l.drawY, zoom);
+    // D-03 icon overlay (05-07): drawn immediately after its own character's
+    // base sprite, so it can never z-sort behind a character in front of it.
+    drawGlyph(ctx, l, zoom);
+  }
+  for (const l of layouts) drawDialogue(ctx, l, offsetX, zoom, canvasWidth);
 }
 
 /** @internal */
@@ -164,7 +227,7 @@ export function renderFrame(
   const offsetY = Math.round((canvasHeight - rows * TILE_SIZE * zoom) / 2);
 
   renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom);
-  renderScene(ctx, characters, offsetX, offsetY, zoom);
+  renderScene(ctx, characters, offsetX, offsetY, zoom, canvasWidth);
 
   return { offsetX, offsetY };
 }
