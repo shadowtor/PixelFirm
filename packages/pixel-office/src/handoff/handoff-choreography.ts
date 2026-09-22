@@ -27,6 +27,8 @@ interface HandoffRecord {
   phase: HandoffPhase;
   /** The receiver's accepted line, set at completion; null before (05-13). */
   acceptedText: string | null;
+  /** The sender's requested line, set at ICON_VISIBLE; null before (05-17). */
+  requestedText: string | null;
 }
 
 // No blocked-tile tracking exists anywhere in this repo yet (no furniture —
@@ -42,6 +44,30 @@ const handoffs = new Map<string, HandoffRecord>();
 // (handoffs are rare; no in-repo producer exists yet). Bound it with an LRU
 // if handoffs ever become high-frequency.
 const handledHandoffRequestIds = new Set<string>();
+
+/**
+ * The only place a handoff record ends (D-04: the sequence ends when the
+ * sender is home; 05-13: no line outlives its sequence). Clears only what is
+ * still this record's, so a newer line or a real status glyph survives.
+ */
+function retireHandoff(record: HandoffRecord, sendSenderHome: boolean): void {
+  const toChar = getCharacter(record.toAgentId);
+  if (toChar && record.acceptedText !== null && toChar.bubbleText === record.acceptedText) {
+    toChar.bubbleText = null;
+  }
+  const fromChar = getCharacter(record.fromAgentId);
+  if (fromChar) {
+    if (record.requestedText !== null && fromChar.bubbleText === record.requestedText) fromChar.bubbleText = null;
+    if (fromChar.bubbleType === "handoff-task") fromChar.bubbleType = null;
+    const last = fromChar.path[fromChar.path.length - 1];
+    const headingHome = last !== undefined && last.col === fromChar.seatCol && last.row === fromChar.seatRow;
+    const atHome = fromChar.tileCol === fromChar.seatCol && fromChar.tileRow === fromChar.seatRow;
+    if (sendSenderHome && !atHome && !headingHome) {
+      walkCharacterTo(fromChar, fromChar.seatCol, fromChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
+    }
+  }
+  handoffs.delete(record.taskId);
+}
 
 /**
  * Entry point wired from apps/web's onEvent handler for both halves of a
@@ -61,8 +87,19 @@ export function handleHandoffEvent(event: CompanyEvent): void {
     // Marked only once acted on: a request that arrived before its
     // participants existed was never acted on, so it is not marked.
     handledHandoffRequestIds.add(event.id);
+    const previous = handoffs.get(taskId);
+    // Same sender is not sent home: it is re-pathed below, and a leftover home
+    // path would fire the new record's arrival at its own desk.
+    if (previous) retireHandoff(previous, previous.fromAgentId !== fromAgentId);
     walkCharacterTo(fromChar, toChar.seatCol, toChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
-    handoffs.set(taskId, { taskId, fromAgentId, toAgentId, phase: "WALKING_TO_RECEIVER", acceptedText: null });
+    handoffs.set(taskId, {
+      taskId,
+      fromAgentId,
+      toAgentId,
+      phase: "WALKING_TO_RECEIVER",
+      acceptedText: null,
+      requestedText: null,
+    });
     return;
   }
 
@@ -78,8 +115,10 @@ export function handleHandoffEvent(event: CompanyEvent): void {
     const toChar = getCharacter(record.toAgentId);
 
     if (fromChar) {
-      fromChar.bubbleType = null;
-      fromChar.bubbleText = null;
+      // Clear only what the handoff put on the sender: a real status glyph
+      // set meanwhile (e.g. blocked) survives the return walk (05-17).
+      if (fromChar.bubbleType === "handoff-task") fromChar.bubbleType = null;
+      if (fromChar.bubbleText === record.requestedText) fromChar.bubbleText = null;
       walkCharacterTo(fromChar, fromChar.seatCol, fromChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
     }
     if (toChar) {
@@ -109,27 +148,31 @@ export function checkHandoffArrivals(): void {
   for (const record of handoffs.values()) {
     if (record.phase === "WALKING_TO_RECEIVER") {
       const fromChar = getCharacter(record.fromAgentId);
-      if (!fromChar || fromChar.state !== CharacterState.IDLE || fromChar.path.length !== 0) continue;
+      // A vanished sender ends the sequence: a re-seated one must never
+      // inherit a stale arrival.
+      if (!fromChar) {
+        retireHandoff(record, false);
+        continue;
+      }
+      if (fromChar.state !== CharacterState.IDLE || fromChar.path.length !== 0) continue;
 
       const taskTitle = getTaskTitle(record.taskId) ?? record.taskId;
       const toChar = getCharacter(record.toAgentId);
       const toAgentName = toChar?.name ?? record.toAgentId;
       fromChar.bubbleType = "handoff-task";
-      fromChar.bubbleText = resolveHandoffDialogue("requested", taskTitle, toAgentName);
+      record.requestedText = resolveHandoffDialogue("requested", taskTitle, toAgentName);
+      fromChar.bubbleText = record.requestedText;
       record.phase = "ICON_VISIBLE";
       continue;
     }
 
     if (record.phase === "RETURNING_TO_DESK") {
       const fromChar = getCharacter(record.fromAgentId);
-      if (!fromChar || fromChar.state !== CharacterState.IDLE || fromChar.path.length !== 0) continue;
+      if (fromChar && (fromChar.state !== CharacterState.IDLE || fromChar.path.length !== 0)) continue;
 
-      // D-04's sequence ends when the sender is home: a line left painted
-      // after that is a stale claim (Pitfall 2). Only clear it if it is still
-      // ours, so a newer line from another handoff is never clobbered.
-      const toChar = getCharacter(record.toAgentId);
-      if (toChar && toChar.bubbleText === record.acceptedText) toChar.bubbleText = null;
-      handoffs.delete(record.taskId);
+      // D-04's sequence ends when the sender is home (or gone): a line left
+      // painted after that is a stale claim (Pitfall 2).
+      retireHandoff(record, false);
     }
   }
 }
