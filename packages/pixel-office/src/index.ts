@@ -40,7 +40,6 @@ function buildDefaultTileMap(): TileType[][] {
 
 const tileMap = buildDefaultTileMap();
 const characters = new Map<string, Character>();
-let nextSlot = 0;
 const interiorCols = DEFAULT_COLS - 2;
 
 // Task titles known so far (from snapshot's ProjectionState.tasks or live
@@ -103,17 +102,33 @@ function hueForAgentId(agentId: string): number {
   return (hash % HUE_BUCKETS) * (360 / HUE_BUCKETS);
 }
 
-function nextDeskPosition(): { col: number; row: number } {
-  const slot = nextSlot++;
+function deskForSlot(slot: number): { col: number; row: number } {
   const row = DESK_ROW_START + DESK_ROW_PITCH * Math.floor(slot / interiorCols);
-  return {
-    col: 1 + (slot % interiorCols),
-    // ponytail: 54 desks on the default 20x11 grid (rows 3/6/9 x 18 cols);
-    // past that, agents stack on the last valid row rather than being seated
-    // inside the wall border. Upgrade path: a larger grid or a scrolling
-    // camera — neither exists yet and neither is needed below 54 agents.
-    row: Math.min(row, DEFAULT_ROWS - 2),
-  };
+  return { col: 1 + (slot % interiorCols), row: Math.min(row, DEFAULT_ROWS - 2) };
+}
+
+const DESK_CAPACITY =
+  (Math.floor((DEFAULT_ROWS - 2 - DESK_ROW_START) / DESK_ROW_PITCH) + 1) * interiorCols;
+
+/**
+ * Lowest-numbered desk no seated character holds — derived from state, not a
+ * counter, so an empty floor seats agent k at slot k exactly as before.
+ *
+ * ponytail: 54 CONCURRENTLY seated desks on the default 20x11 grid (rows
+ * 3/6/9 x 18 cols). A despawned character's desk is reclaimed (lowest free
+ * first), so churn no longer burns desks; only a 55th concurrently seated
+ * character stacks on the last valid row rather than inside the wall border.
+ * Upgrade path: a larger grid or a scrolling camera. No producer emits
+ * OFFLINE today, so the reclaim path is exercised only through
+ * upsertCharacterFromAgent's public contract until one does.
+ */
+function nextDeskPosition(): { col: number; row: number } {
+  const taken = new Set([...characters.values()].map((ch) => `${ch.seatCol},${ch.seatRow}`));
+  for (let slot = 0; slot < DESK_CAPACITY; slot++) {
+    const desk = deskForSlot(slot);
+    if (!taken.has(`${desk.col},${desk.row}`)) return desk;
+  }
+  return deskForSlot(characters.size);
 }
 
 /**
@@ -177,7 +192,6 @@ export function startGameLoop(canvas: HTMLCanvasElement): () => void {
 
 export function _resetForTests(): void {
   characters.clear();
-  nextSlot = 0;
   taskTitles.clear();
   _resetHandoffsForTests();
 }
