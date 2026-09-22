@@ -98,8 +98,10 @@ export function createClaudeCodeRuntime(options: {
 
   // Real, non-stub requestHandoff — a required AgentRuntime interface member.
   // This runtime has NO automatic handoff trigger: a handoff is initiated by a
-  // caller that already knows a real receiving agent id, which is Phase 6's
-  // multi-agent orchestration territory. The role-change poll below used to
+  // caller that already knows a real receiving agent id, and no ROADMAP phase
+  // currently owns a real handoff trigger — see
+  // .planning/phases/05-pixel-office-renderer/deferred-items.md ("agent.
+  // handoff_completed has no in-repo producer"). The role-change poll below used to
   // call this with a GSD workflow role label ("Engineering", "QA") as
   // toAgentId — a fabricated handoff out of a workflow observation (CR-04);
   // it now emits the observation as an observation instead.
@@ -173,6 +175,10 @@ export function createClaudeCodeRuntime(options: {
         // Anti-Pattern 2) — the actual human-approval mechanism is Phase 6's
         // job; Phase 4 only guarantees the signal fires and is surfaced.
         canUseTool: async (toolName, input) => {
+          // Superseded: deny everything, never auto-approve (TaskRecord.currentRun).
+          if (!isCurrent()) {
+            return { behavior: "deny", message: `Invocation superseded for task ${taskId} — tool call refused.` };
+          }
           const signal = classifySignal(toolName, input);
           if (!signal) return { behavior: "allow", updatedInput: input };
           await requestReview(taskId, signal.reason);
@@ -192,6 +198,7 @@ export function createClaudeCodeRuntime(options: {
             {
               hooks: [
                 async (hookInput) => {
+                  if (!isCurrent()) return {}; // superseded (TaskRecord.currentRun)
                   await requestReview(
                     taskId,
                     `permission_prompt: ${(hookInput as { message?: string }).message ?? "unanswered ~6s"}`,
@@ -213,8 +220,10 @@ export function createClaudeCodeRuntime(options: {
     // uses, just with a different terminal status (blocked, not cancelled).
     const watchdog = createWatchdog(DEFAULT_WATCHDOG_TIMEOUT_MS, () => {
       void (async () => {
+        if (!isCurrent()) return; // superseded (TaskRecord.currentRun)
         const exitedCleanly = await attemptGracefulStop(record);
         if (!exitedCleanly) controller.abort();
+        if (!isCurrent()) return; // superseded during the graceful-stop wait
         record.status = "blocked";
         await emitStatus(taskId, "blocked");
       })();
@@ -230,6 +239,11 @@ export function createClaudeCodeRuntime(options: {
     let isFirstRoleTick = true;
     const rolePoll = record.worktreePath
       ? setInterval(() => {
+          // Superseded: stop this invocation's own poll (TaskRecord.currentRun).
+          if (!isCurrent()) {
+            clearInterval(rolePoll);
+            return;
+          }
           void (async () => {
             try {
               const observed = await observeGsdState(join(record.worktreePath!, ".planning"), undefined, false);
@@ -283,6 +297,7 @@ export function createClaudeCodeRuntime(options: {
       try {
         for await (const message of stream) {
           watchdog.reset();
+          if (!isCurrent()) continue; // superseded (TaskRecord.currentRun)
           if (message.type === "system" && message.subtype === "init") {
             record.sessionId = message.session_id;
             // A captured session_id and no result yet means the turn is
