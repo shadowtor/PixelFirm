@@ -1,236 +1,177 @@
 ---
 phase: 05-pixel-office-renderer
-reviewed: 2026-09-22T16:15:00Z
+reviewed: 2026-09-22T18:00:00Z
 depth: standard
-scope: incremental (diff_base 739887c — gap-closure plan 05-19, prior CR-01/WR-01/WR-02/WR-03/IN-03)
-files_reviewed: 6
+scope: incremental (diff_base 45c9a16 — gap-closure plan 05-20, prior CR-01/WR-01)
+files_reviewed: 5
 files_reviewed_list:
   - packages/pixel-office/src/engine/characters.ts
   - packages/pixel-office/src/handoff/handoff-choreography.test.ts
   - packages/pixel-office/src/handoff/handoff-choreography.ts
   - packages/pixel-office/src/index.ts
   - packages/pixel-office/src/types.ts
-  - scripts/verify-pixel-office-live.mjs
 findings:
-  critical: 1
-  warning: 5
-  info: 6
-  total: 12
+  critical: 0
+  warning: 1
+  info: 4
+  total: 5
 status: issues_found
 ---
 
-# Phase 5: Code Review Report (incremental re-review after 05-19)
+# Phase 5: Code Review Report (incremental re-review after 05-20)
 
-**Reviewed:** 2026-09-22T16:15:00Z
+**Reviewed:** 2026-09-22T18:00:00Z
 **Depth:** standard
-**Files Reviewed:** 6
+**Files Reviewed:** 5
 **Status:** issues_found
 
 ## Summary
 
-This pass covers what plan 05-19 changed since `739887c`: `restPose` + `setRestPose`, the
-same-tile early return in `walkCharacterTo`, `hasArrived`, retiring every record from the same
-sender, the `fromChar` identity check, and `isWaitingHandoffSender`. The pixel-office suite
-passes (103/103). One defect below was reproduced with a throwaway vitest probe that drove the
-real `stepOffice` loop. The probe was deleted afterwards, and no source file was changed.
+This pass covers what plan 05-20 changed since `45c9a16`: `Character.statusBubble`, `applyBubble`
+as the only writer of `bubbleType`, `senderIsCurrent` applied at the loop top, in the completion
+handler and in `retireHandoff`, and `handoffs.delete` moved to the start of `retireHandoff`. The
+pixel-office suite passes (110/110).
 
-The 05-19 fixes are correct for what they target. The single pose writer (`setRestPose`) plus
-arrival defined as "not WALK, empty path" closes all three stranding paths, and each path now
-has a real-loop test. But 05-19 fixed only the pose half of "status that lands during a
-handoff". The status **glyph** half is still broken: the handoff overwrites a real status
-glyph when the sender arrives and deletes it on completion. The sender then comes home showing
-its true pose with no glyph. For BLOCKED/TESTING/REVIEWING and similar statuses, that shows a
-state the agent is not in (CR-01).
+Both prior findings are closed:
+
+- **CR-01 is closed.** A grep confirms that `applyBubble` (`handoff-choreography.ts:241`) is the only
+  production writer of `bubbleType`. Every transition into or out of ICON_VISIBLE calls it:
+  arrival (`:205`), completion (`:157`, after the phase moves to RETURNING), and retire (`:86`,
+  after the record is deleted). The status upsert (`index.ts:178-180`) writes `statusBubble` and
+  `frozen` before it calls `applyBubble`, so the order is correct. The only path that skips
+  `applyBubble` is a retire for a sender that is no longer current, and that object is no longer
+  rendered.
+- **WR-01 is closed.** `getCharacter(record.fromAgentId)` now appears only inside
+  `senderIsCurrent`. ICON_VISIBLE is covered by the loop-top check, and the completion handler
+  retires the record and returns before it writes anything to the receiver.
+
+A throwaway vitest probe drove the real `stepOffice` loop to check one new finding (WR-01 below).
+The probe was deleted afterwards, and `git status` for `packages/` is clean.
+
+The identity rule now covers the sender in every phase but covers the receiver in none. A
+receiver that goes OFFLINE leaves the sender stuck at an empty desk (or at the desk of whichever
+agent is seated there next). The sender keeps its task icon for good, and that icon hides a real
+status glyph. This is the same class of defect as the prior CR-01 and WR-01, with the receiver in
+place of the sender.
 
 ## Status of prior findings
 
 | Prior ID | Status | Where now |
 |---|---|---|
-| CR-01 stranding (arrival frame / same-tile re-request / receiver mid-walk) | **Resolved.** `hasArrived` (`handoff-choreography.ts:49-51`), same-tile path drop (`characters.ts:177-181`), `setRestPose` is the only non-walk pose writer (`characters.ts:157-160`). Tests (a), (b), (b2), (c) | — |
-| WR-01 two records drive one sender | **Resolved.** Every record from the same sender is retired on a new request (`handoff-choreography.ts:106-112`). WR-01 test | IN-02 (side effect) |
-| WR-02 icon lost for the rest of the wait | **Resolved** while ICON_VISIBLE (`index.ts:176`). The opposite direction (handoff icon overwrites a real glyph) is still open | CR-01 |
-| WR-03 re-seat in the same frame inherits the arrival | **Resolved** for WALKING_TO_RECEIVER and RETURNING_TO_DESK. Not applied to ICON_VISIBLE or to the completion handler | WR-01 |
-| IN-03 mid-walk status never applied | **Resolved.** The walk ends in `restPose` (`characters.ts:121`). Test a1 now expects TYPE | — |
-| prior WR-06 (orig. WR-10) accepted line not tied to the receiver, short window | Open. Script unchanged apart from a comment | WR-02 |
-| prior WR-08 colour partition ignores hue shift | Open (`verify-pixel-office-live.mjs:264-265`) | WR-03 |
-| prior WR-09 POSIX `killChildren` leaks | Open (`:308`, no `detached`) | WR-04 |
-| prior WR-10 API port silent fallback | Open (`:159`) | WR-05 |
-| prior IN-04 re-route jumps back a tile | Open. The same-tile early return adds a second route to it | IN-03 |
-| prior IN-05/06/07 | Open | IN-04, IN-05, IN-06 |
-| prior WR-04, WR-05, WR-07, IN-01, IN-02 (claude-adapter) | Out of this scope (file not reviewed). Still open per the prior report | — |
+| CR-01 handoff erases the sender's status glyph | **Resolved.** `statusBubble` (`types.ts:134`, `characters.ts:72`), written only at `index.ts:178`. `applyBubble` is the single writer (`handoff-choreography.ts:240-242`). Tests: it.each TESTING/BLOCKED/WAITING_FOR_CEO, "CR-01 retire", "CR-01 order" | — |
+| WR-01 identity rule missing in ICON_VISIBLE and completion | **Resolved** for the sender (`handoff-choreography.ts:58-60, 83, 147-150, 190-193`). Tests: "WR-01 tick", "WR-01 same frame". Not applied to the receiver | WR-01 (new) |
+| WR-02..WR-05 (`scripts/verify-pixel-office-live.mjs`) | Out of scope for this round (file not changed or reviewed). Still open per the prior report | — |
+| IN-01 stale comments | Open (`index.ts:198-200`, `characters.ts:165`). 05-20 adds one more stale comment | IN-01 |
+| IN-02 same-sender supersede clears the previous receiver's accepted line | Open (`handoff-choreography.ts:80-82, 120-121`) | IN-02 |
+| IN-03 re-route jumps back a tile | Open (`characters.ts:178-181`) | IN-03 |
+| IN-04, IN-05 (harness) | Out of scope for this round. Still open | — |
+| IN-06 `identityHueFor` documented as "Pure" | Open (`index.ts:88-90`) | IN-04 |
+| claude-adapter items carried from earlier rounds | Out of scope. Still open per earlier reports | — |
 
 ---
 
 ## Narrative Findings (AI reviewer)
 
-## Critical Issues
-
-### CR-01: A handoff permanently deletes the sender's real status glyph, so the sender comes home showing a status it is not in
-
-**File:** `packages/pixel-office/src/handoff/handoff-choreography.ts:185, 140, 74`
-
-**Issue:** When the sender arrives, `checkHandoffArrivals` sets
-`fromChar.bubbleType = "handoff-task"` with no condition (line 185). That overwrites any real
-status glyph the sender had: `blocked`, `testing`, `reviewing`, `researching`, `deploying`,
-`permission`, `waiting`, and so on. On completion (line 140) or retire (line 74), the icon is
-cleared to `null`. Nothing puts back the real glyph.
-
-05-19 made the pose come back after the walk (`restPose`), so the sender ends in a state that
-does not match its status: the pose is correct, but the glyph is gone.
-
-Reproduced on the real loop: the sender is `TESTING` (TYPE + `testing` glyph) and hands off to
-b. At the receiver its `bubbleType` is `handoff-task`. After completion and 5 s it is home with
-`state: "type"` and `bubbleType: null`, so it reads as CODING.
-
-It is worse for a sender that is BLOCKED or WAITING_FOR_* when the request lands (the walk now
-runs while frozen, 05-17). It comes home frozen in IDLE with no glyph, which reads as an idle
-agent. OFFICE-03 relies on the glyph to show state, and the Core Value forbids showing a state
-that is not true. This remains until the agent's next *changed* status, which may never come
-while it is blocked.
-
-Test `d` covers only a glyph set *during* ICON_VISIBLE. It does not cover a glyph the sender
-already had before it arrived. That is the normal case, because the reducer never changes the
-sender's status on a handoff.
-
-This is the same class of defect as the prior IN-03, and 05-19 fixed only the pose half. It is
-also the opposite of the precedence the new WR-02 code states: "a real glyph still wins"
-(`index.ts:174`).
-
-**Fix:** store the status glyph the same way the pose is stored, and derive the displayed glyph
-from it:
-
-```ts
-// types.ts
-statusBubble: BubbleType | null; // written only by upsertCharacterFromAgent
-
-// index.ts:176
-ch.statusBubble = visual.bubble ?? null;
-ch.bubbleType = ch.statusBubble ?? (isWaitingHandoffSender(ch) ? "handoff-task" : null);
-
-// handoff-choreography.ts:185 — a real glyph wins on arrival too
-fromChar.bubbleType = fromChar.statusBubble ?? "handoff-task";
-
-// handoff-choreography.ts:140 and :74 — restore instead of nulling
-if (fromChar.bubbleType === "handoff-task") fromChar.bubbleType = fromChar.statusBubble;
-```
-
-Add a real-loop test: sender `BLOCKED` (and `TESTING`) *before* the request. Assert that
-`bubbleType` is `"blocked"` / `"testing"` once the sender is home after completion.
-
----
-
 ## Warnings
 
-### WR-01: The WR-03 identity rule is not applied to ICON_VISIBLE or to completion, so a vanished sender's record can never retire and a re-seated sender's completion flashes a line
+### WR-01: The identity rule is not applied to the receiver. If the receiver goes OFFLINE, the sender is stuck at the empty desk with a task icon that hides its status, and the record never retires
 
-**File:** `packages/pixel-office/src/handoff/handoff-choreography.ts:170-200, 134-143, 66-83`
+**File:** `packages/pixel-office/src/handoff/handoff-choreography.ts:124, 184-216, 153, 79`
 
-**Issue:** `checkHandoffArrivals` checks `fromChar !== record.fromChar` only in
-WALKING_TO_RECEIVER and RETURNING_TO_DESK. ICON_VISIBLE has no branch at all. Two problems
-follow:
+**Issue:** `senderIsCurrent` checks only `fromChar`. The receiver is resolved by id every time
+it is needed, and `checkHandoffArrivals` never checks it. The sender's walk target is the
+receiver's seat as it was at request time (`:124`). If the receiver goes OFFLINE during
+WALKING_TO_RECEIVER or ICON_VISIBLE:
 
-- **A sender that goes OFFLINE while waiting at the receiver** leaves an ICON_VISIBLE record in
-  `handoffs` for good if `handoff_completed` never arrives (the agent is gone, so it may not
-  arrive). The prior report says "OFFLINE retires the record in both phases", but a third phase
-  is not covered.
-- **A sender re-seated during ICON_VISIBLE** (A goes OFFLINE, then A' comes back) is still
-  handled by agentId at completion (line 134). The handler clears A''s bubbles, sets receiver B
-  to TYPE, and paints B's accepted line. Then, on the next tick, the RETURNING identity check
-  fails, and `retireHandoff` clears that line one frame after it was painted: a one-frame flash
-  of a claim. `retireHandoff` (lines 67/71) also looks characters up by id, not through
-  `record.fromChar`, so it clears and re-paths whichever object currently holds the id.
+- The sender still walks to the empty desk and moves to ICON_VISIBLE there. It shows
+  "Handing off … to agent-b" for an agent that is no longer on the floor.
+- The record retires only on `agent.handoff_completed`, and that event may never arrive once the
+  receiver is gone. While the record is live, `applyBubble` shows `handoff-task` in place of any
+  non-frozen status glyph (TESTING, REVIEWING, COMPLETED, …). A new status upsert does not fix
+  this, because the task icon keeps priority for as long as the record lives. This is the
+  CR-01 symptom (the office shows a state the agent is not in) with a new trigger.
+- `nextDeskPosition` gives the freed desk to the next agent seated (`index.ts:137-144`). The
+  stuck sender and the new occupant are then drawn on the same tile, and the sender's line
+  seems to address the new occupant.
+- If the receiver is re-seated (the same agentId with a new object), the completion (`:153`)
+  sets that new object to TYPE and gives it the accepted line, even when it now sits at a
+  different desk from the one the sender walked to.
 
-**Fix:** add an ICON_VISIBLE branch that retires when `getCharacter(record.fromAgentId) !==
-record.fromChar`. In the completion handler and in `retireHandoff`, use `record.fromChar` and act
-only when `getCharacter(record.fromAgentId) === record.fromChar`.
+Reproduced on the real loop: agent-a is TESTING and hands off to agent-b at (5,3). After 0.2 s,
+agent-b goes OFFLINE and agent-z is seated. After 30 s, agent-a is still at (5,3) with
+`bubbleType: "handoff-task"` (not `"testing"`), with the requested line still showing, and with
+`isWaitingHandoffSender(a) === true`. agent-z's seat is (5,3).
 
-### WR-02: (carried, prior WR-06 / orig. WR-10) The accepted-line check is not tied to the receiver and races a ~667 ms window
+This is a WARNING rather than a BLOCKER for one reason: `index.ts:133-135` notes that no producer
+emits OFFLINE today. The same was true of the prior WR-01, which 05-20 fixed.
 
-**File:** `scripts/verify-pixel-office-live.mjs:691, 736-742`
+**Fix:** store `toChar` in the record the same way as `fromChar`. Then apply one identity check to
+both participants:
 
-**Issue:** Not changed. 05-19 edited only the comment at 699-704. `pollScan` still scans the
-whole canvas for the accepted line. The window is still the sender's walk home, counted from
-when the POST returns rather than from when the event is rendered. The walk-out step still uses
-a fixed `sleep(2500)`.
+```ts
+interface HandoffRecord { /* … */ toChar: Character; }
 
-**Fix:** unchanged from the prior report. Assert
-`dialogueMinX <= receiverCentreX <= dialogueMaxX`, widen the gap between sender and receiver,
-and replace `sleep(2500)` with a `pollScan` whose deadline is derived from
-`WALK_SPEED_PX_PER_SEC`.
+function participantsAreCurrent(record: HandoffRecord): boolean {
+  return getCharacter(record.fromAgentId) === record.fromChar
+      && getCharacter(record.toAgentId) === record.toChar;
+}
 
-### WR-03: (carried, prior WR-08) The blocked/handoff colour partition ignores hue shifts
+// checkHandoffArrivals loop top: while the sender has not yet handed off
+// (WALKING_TO_RECEIVER / ICON_VISIBLE), a gone receiver ends the sequence and
+// sends the sender home. In RETURNING_TO_DESK only the sender matters.
+if (!senderIsCurrent(record)) { retireHandoff(record, false); continue; }
+if (record.phase !== "RETURNING_TO_DESK" && getCharacter(record.toAgentId) !== record.toChar) {
+  retireHandoff(record, true);
+  continue;
+}
 
-**File:** `scripts/verify-pixel-office-live.mjs:264-265`
-**Issue:** Not changed.
-**Fix:** before subtracting, expand the character palette through `adjustSprite` for all twelve
-hue buckets.
+// completed branch: act on record.toChar, and only while it is current.
+```
 
-### WR-04: (carried, prior WR-09) POSIX `killChildren` leaks the dev servers
-
-**File:** `scripts/verify-pixel-office-live.mjs:288-310`
-**Issue:** Not changed. `process.kill(-child.pid)` at line 308 targets a process group that does
-not exist, because the spawn has no `detached`.
-**Fix:** pass `detached: process.platform !== "win32"` to `spawn`.
-
-### WR-05: (carried, prior WR-10) The API port silently falls back when `VITE_WS_BASE_URL` is missing or cannot be parsed
-
-**File:** `scripts/verify-pixel-office-live.mjs:159-160`
-**Issue:** Not changed.
-**Fix:** throw when `VITE_WS_BASE_URL` has no port that can be parsed.
+Add a real-loop test with the same steps as the probe: receiver OFFLINE mid-walk. Assert that
+the sender is home, that `bubbleType` equals its status glyph, and that `isWaitingHandoffSender`
+is false.
 
 ---
 
 ## Info
 
-### IN-01: Comments still describe the old arrival and no-op behaviour
+### IN-01: Comments still describe behaviour that has changed (carried prior IN-01, plus one new)
 
-**File:** `packages/pixel-office/src/index.ts:195-197`; `packages/pixel-office/src/engine/characters.ts:163-164, 183`
+**File:** `packages/pixel-office/src/handoff/handoff-choreography.ts:219-223`; `packages/pixel-office/src/index.ts:198-200`; `packages/pixel-office/src/engine/characters.ts:165`
 **Issue:**
-- `stepOffice` still says the FSM reads "the just-updated WALK->IDLE signal". A walk now ends in
-  `restPose`, which is often TYPE.
-- `walkCharacterTo` says it "No-ops (stays in current state) if no path exists". On an
-  unreachable target it actually keeps the character's **previous** path. A re-route to an
-  unreachable desk would then continue the old walk, and the new record would "arrive" at the
-  old destination. No target is unreachable on today's open floor, so this is latent.
+- New in 05-20: the `isWaitingHandoffSender` doc says the icon holds through "a glyph-less
+  status" (05-19 WR-02). The rule is now broader and set by `applyBubble`: the icon holds
+  through any status that is not frozen. After 05-20, only tests call this function, because
+  `index.ts` no longer imports it.
+- Carried: `stepOffice` still says it reads "the just-updated WALK->IDLE signal". A walk now
+  ends in `restPose`. `walkCharacterTo` still says it "No-ops … if no path exists", but in that
+  case it keeps the previous path.
 
-**Fix:** update the comments. In `walkCharacterTo`, clear `ch.path` when `findPath` returns `[]`
-and the character was walking, so a failed re-route stops the character instead of continuing
-the old route.
+**Fix:** reword the `isWaitingHandoffSender` doc as "true while `ch` waits at a receiver; read by
+`applyBubble` (and by tests)". Update the other two comments as described in the prior report.
 
-### IN-02: A new request from the same sender cuts short the previous receiver's "accepts" line
+### IN-02: (carried, prior IN-02) A same-sender supersede cuts short the previous receiver's accepted line
 
-**File:** `packages/pixel-office/src/handoff/handoff-choreography.ts:106-112, 68-70`
-**Issue:** A same-sender supersede also retires a record in RETURNING_TO_DESK. `retireHandoff`
-then clears that receiver's accepted line at once, even though that handoff finished
-legitimately. This is cosmetic.
-**Fix:** for a same-sender supersede of a RETURNING record, skip clearing `acceptedText`. Leave
-the line to the receiver's next status or bubble.
+**File:** `packages/pixel-office/src/handoff/handoff-choreography.ts:80-82, 120-121`
+**Issue:** 05-20 did not change this. A RETURNING record that a new request from the same sender
+retires still clears a receiver line that was legitimately shown. This is cosmetic.
+**Fix:** as in the prior report, skip the `acceptedText` clear for a same-sender supersede of a
+RETURNING record.
 
-### IN-03: (carried, prior IN-04) A re-route mid-step jumps the character back to the previous tile centre
+### IN-03: (carried, prior IN-03) A re-route in the middle of a step snaps the character back to the previous tile centre
 
-**File:** `packages/pixel-office/src/engine/characters.ts:177-185`
-**Issue:** Not changed, and the new same-tile early return adds a second route to it. A walker
-with `moveProgress > 0` whose `tileCol/tileRow` equals the target gets `moveProgress = 0` and an
-empty path. On the next update it snaps back to that tile's centre.
+**File:** `packages/pixel-office/src/engine/characters.ts:178-181`
+**Issue:** Not changed.
 **Fix:** accept this as cosmetic, or re-path from `path[0]` when `moveProgress > 0`.
 
-### IN-04: (carried, prior IN-05) The harness still silences all child stdout/stderr
-
-**File:** `scripts/verify-pixel-office-live.mjs:293`
-**Fix:** keep a ring buffer of the last ~50 lines and print it in `waitFor` timeout errors.
-
-### IN-05: (carried, prior IN-06) `parseComposeTarget` takes the first published port
-
-**File:** `scripts/verify-pixel-office-live.mjs:112-120`
-**Fix:** tie the match to the `postgres:` service block.
-
-### IN-06: (carried, prior IN-07) `identityHueFor` is documented as "Pure" but reads the `characters` map
+### IN-04: (carried, prior IN-06) `identityHueFor` is documented as "Pure" but reads the `characters` map
 
 **File:** `packages/pixel-office/src/index.ts:88-90`
 **Fix:** reword it as "deterministic given the seated set; no Math.random/Date.now".
 
 ---
 
-_Reviewed: 2026-09-22T16:15:00Z_
+_Reviewed: 2026-09-22T18:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
