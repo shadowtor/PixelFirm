@@ -236,6 +236,26 @@ const FURNITURE_BLOCKS = new Set(
     .flatMap((f) => Array.from({ length: f.w * f.h }, (_, i) => `${f.col + (i % f.w)},${f.row + Math.floor(i / f.w)}`)),
 );
 
+/** Every furniture piece's rect in unzoomed map px, by officeLayout.ts's own
+ *  placement rule (centred in its footprint, bottom-aligned, plus dy) — the
+ *  single source for TRUTH 6's desk rects and for TRUTH 5's "the bubble covers
+ *  no furniture" check (05-33, G-05-P1). Must change with officeLayout.ts. */
+const FURNITURE_RECTS = LAYOUT.furniture.map((f) => {
+  const sprite = OFFICE_SPRITES[f.sprite].data;
+  return {
+    sprite: f.sprite,
+    col: f.col,
+    row: f.row,
+    x: f.col * TILE_SIZE + Math.round((f.w * TILE_SIZE - sprite[0].length) / 2),
+    y: (f.row + f.h) * TILE_SIZE - sprite.length + (f.dy ?? 0),
+    w: sprite[0].length,
+    h: sprite.length,
+  };
+});
+
+/** The floor interior a bubble must stay inside (05-33, G-05-P1). */
+const FLOOR = { left: TILE_SIZE, top: TILE_SIZE, right: MAP_W - TILE_SIZE, bottom: MAP_H - TILE_SIZE };
+
 /** Where a handoff sender waits (05-27): outward along the receiver's seat row
  *  (-1, +1, -2, +2, ...), the first free walkable non-furniture tile.
  *  Mirrors `interactionTileFor` in handoff-choreography.ts and must change with it. */
@@ -325,6 +345,10 @@ function distinctiveBubbleColors(assetFile, excluded) {
 const NOT_DISTINCTIVE = new Set([...characterColors(), ...OFFICE_COLORS]);
 const BLOCKED_COLORS = distinctiveBubbleColors("bubble-blocked.json", NOT_DISTINCTIVE);
 const HANDOFF_COLORS = distinctiveBubbleColors("bubble-handoff-task.json", NOT_DISTINCTIVE);
+// 05-33: the receiver waits while the handoff is in flight, so its hourglass is
+// the third glyph that could land on a bubble. All three are counted inside the
+// bubble's box in TRUTH 5, where the answer must be zero.
+const WAITING_COLORS = distinctiveBubbleColors("bubble-waiting.json", NOT_DISTINCTIVE);
 
 // Handoff dialogue geometry/colour (05-13), read from the engine source. A
 // pixel count of DIALOGUE_BOX_COLOR is unambiguous because 05-13's renderer
@@ -897,24 +921,21 @@ async function main() {
     const deskColors = [...collectColors(deskSprite)];
     const deskOpaque = deskSprite.flat().filter(Boolean).length;
     const deskMinPx = Math.ceil((deskOpaque * empty.scale * empty.scale) / 2);
-    const desks = LAYOUT.furniture.filter((f) => f.sprite === "desk");
-    const deskRects = desks.map((f) => ({
-      x: f.col * TILE_SIZE + Math.round((f.w * TILE_SIZE - deskSprite[0].length) / 2),
-      y: (f.row + f.h) * TILE_SIZE - deskSprite.length + (f.dy ?? 0),
-      w: deskSprite[0].length,
-      h: deskSprite.length,
-    }));
+    // 05-33 generalised this placement arithmetic into FURNITURE_RECTS, so the
+    // rects TRUTH 6 measures and the rects TRUTH 5 keeps the bubble off are
+    // computed once, from officeLayout.ts's one rule.
+    const deskRects = FURNITURE_RECTS.filter((r) => r.sprite === "desk");
     const deskCounts = await countColorsInRects(page, deskRects, deskColors);
-    assert(desks.length > 0, `office-layout.json places no desk`);
-    desks.forEach((f, i) =>
+    assert(deskRects.length > 0, `office-layout.json places no desk`);
+    deskRects.forEach((r, i) =>
       assert(
         deskCounts[i] >= deskMinPx,
-        `desk at (${f.col},${f.row}) paints ${deskCounts[i]} desk-colour px in its rectangle ` +
-          `${JSON.stringify(deskRects[i])}, fewer than half its ${deskOpaque} opaque cells x scale^2 (${deskMinPx})`,
+        `desk at (${r.col},${r.row}) paints ${deskCounts[i]} desk-colour px in its rectangle ` +
+          `${JSON.stringify({ x: r.x, y: r.y, w: r.w, h: r.h })}, fewer than half its ${deskOpaque} opaque cells x scale^2 (${deskMinPx})`,
       ),
     );
     await shot(page, "empty.png");
-    log(`TRUTH 6 PASS — furnished office: ${desks.length} desks, 0 bare-floor px (desk px ${deskCounts.join("/")} >= ${deskMinPx})`);
+    log(`TRUTH 6 PASS — furnished office: ${deskRects.length} desks, 0 bare-floor px (desk px ${deskCounts.join("/")} >= ${deskMinPx})`);
 
     // ── Baseline: two real agents materialised by real task.status_changed
     // events posted while the page was already open, both actively working
@@ -995,41 +1016,74 @@ async function main() {
     // receiver has no name, so the line interpolates the raw 23-char task id
     // and 19-char agent id — both over 05-13's caps: the pixels counted are a
     // capped line.
-    // 05-28 (G-05-4): the line is a speech bubble in the band under the pair's
-    // feet, spanning sender and receiver, clamped only to the floor interior.
+    // 05-33 (G-05-P1) rebases this on the candidate placement rule, superseding
+    // 05-28's fixed band under the pair's feet: the bubble is wherever the
+    // frame's obstacles allow, so what is asserted is the PROPERTY — inside the
+    // floor interior, carrying text, with no state glyph painted over it, off
+    // every furniture rect, and within tail reach of its speaker.
     // The fill-colour extent is the bubble's interior (the 1 px ink border and
-    // tail paint over the fill), so non-fill px inside it are the text.
+    // tail paint over the fill), so non-fill px inside it are the text, and the
+    // box itself is one px larger on every side.
     const senderHome = claimDesk(SENDER);
     const othersSeats = new Set(
       [...deskSlots.keys()].filter((id) => id !== SENDER).map((id) => `${claimDesk(id).col},${claimDesk(id).row}`),
     );
     const senderTile = interactionTile(receiverDesk, othersSeats);
     assert(senderTile !== null, `no interaction tile on the receiver's seat row ${receiverDesk.row}`);
-    const footLine = receiverDesk.row * TILE_SIZE + TILE_SIZE / 2;
-    const receiverCentreX = receiverDesk.col * TILE_SIZE + TILE_SIZE / 2;
-    const senderCentreX = senderTile.col * TILE_SIZE + TILE_SIZE / 2;
-    const floorLeft = TILE_SIZE;
-    const floorRight = MAP_W - TILE_SIZE;
-    /** Asserts a scanned bubble lies in the band under the foot line, inside the floor, over every given centre x. */
-    const assertBubble = (scan, label, centres) => {
+    /** Longest any 05-33 candidate's tail can be: the "above" candidate clears
+     *  the whole glyph band (GLYPH_ROWS 13 + BUBBLE_ICON_GAP_PX 1) plus the
+     *  DIALOGUE_TAIL_PX gap, then 2 px of slack for the interior inset. */
+    const TAIL_REACH_PX = 18;
+    /** A character's sprite box on a tile, un-offset (a seated agent sits
+     *  CHARACTER_SITTING_OFFSET_PX lower, so this is the looser of the two). */
+    const spriteBoxAt = (tile) => ({
+      x: tile.col * TILE_SIZE,
+      y: spriteTopY(tile.row),
+      w: TILE_SIZE,
+      h: tile.row * TILE_SIZE + TILE_SIZE / 2 - spriteTopY(tile.row),
+    });
+    const assertBubble = async (scan, label, speakerTile) => {
+      const px = 1 / scan.scale;
+      const box = {
+        x: scan.dialogueMinX - 1,
+        y: scan.dialogueMinY - 1,
+        w: scan.dialogueMaxX - scan.dialogueMinX + px + 2,
+        h: scan.dialogueMaxY - scan.dialogueMinY + px + 2,
+      };
+      const sprite = spriteBoxAt(speakerTile);
       const where =
-        `${label}: ${scan.dialogueHits} bubble px + ${scan.dialogueTextPx} text px at x ${scan.dialogueMinX}..${scan.dialogueMaxX}, ` +
-        `y ${scan.dialogueMinY}..${scan.dialogueMaxY} (foot line ${footLine}, centres ${centres.join("/")})`;
+        `${label}: ${scan.dialogueHits} bubble px + ${scan.dialogueTextPx} text px, box x ${box.x}..${box.x + box.w}, ` +
+        `y ${box.y}..${box.y + box.h}; speaker tile (${speakerTile.col},${speakerTile.row}) sprite ` +
+        `x ${sprite.x}..${sprite.x + sprite.w}, y ${sprite.y}..${sprite.y + sprite.h}`;
       assert(scan.dialogueHits > 0, `no ${DIALOGUE_BOX_COLOR} bubble px on canvas: ${where}`);
-      assert(scan.dialogueMinX >= floorLeft && scan.dialogueMaxX <= floorRight, `bubble leaves the floor x ${floorLeft}..${floorRight}: ${where}`);
-      for (const cx of centres) {
-        assert(scan.dialogueMinX <= cx && cx <= scan.dialogueMaxX, `bubble does not contain centre x ${cx}: ${where}`);
-      }
       assert(
-        scan.dialogueMinY >= footLine && scan.dialogueMaxY < footLine + TILE_SIZE,
-        `bubble is not in the band under the pair's feet (y ${footLine}..${footLine + TILE_SIZE}): ${where}`,
+        box.x >= FLOOR.left && box.x + box.w <= FLOOR.right && box.y >= FLOOR.top && box.y + box.h <= FLOOR.bottom,
+        `bubble leaves the floor interior (x ${FLOOR.left}..${FLOOR.right}, y ${FLOOR.top}..${FLOOR.bottom}): ${where}`,
       );
       assert(scan.dialogueTextPx > 0, `no text px inside the bubble: ${where}`);
+      // Glyphs are the top pass, so a glyph colour anywhere in the box means a
+      // state signal is painted over the line — exactly what G-05-P1 forbids.
+      const [glyphPx] = await countColorsInRects(page, [box], [...BLOCKED_COLORS, ...HANDOFF_COLORS, ...WAITING_COLORS]);
+      assert(glyphPx === 0, `${glyphPx} state-glyph px inside the bubble box: ${where}`);
+      const hit = FURNITURE_RECTS.find(
+        (r) => box.x < r.x + r.w && r.x < box.x + box.w && box.y < r.y + r.h && r.y < box.y + box.h,
+      );
+      assert(
+        !hit,
+        `bubble covers ${hit?.sprite} at (${hit?.col},${hit?.row}) ` +
+          `${JSON.stringify(hit && { x: hit.x, y: hit.y, w: hit.w, h: hit.h })}, and this scene has a clear placement: ${where}`,
+      );
+      const dx = Math.max(0, box.x - (sprite.x + sprite.w), sprite.x - (box.x + box.w));
+      const dy = Math.max(0, box.y - (sprite.y + sprite.h), sprite.y - (box.y + box.h));
+      assert(
+        Math.max(dx, dy) <= TAIL_REACH_PX,
+        `bubble is ${dx} px across / ${dy} px away from its speaker, beyond the ${TAIL_REACH_PX} px tail reach: ${where}`,
+      );
       return where;
     };
     const dlg = await scanCanvas(page);
     await shot(page, "handoff.png");
-    const dlgWhere = assertBubble(dlg, "requested", [senderCentreX, receiverCentreX]);
+    const dlgWhere = await assertBubble(dlg, "requested", senderTile);
     log(`TRUTH 5 (during) PASS — ${dlgWhere}`);
 
     // TRUTH 5 (sender visible) — 05-27 (G-05-1d): the sender waits on its own
@@ -1067,7 +1121,7 @@ async function main() {
       `WR-10: the receiver's accepted line was never painted after agent.handoff_completed ` +
         `(0 dialogue-box px within ${Math.round(handoffEndDeadlineMs)} ms)`,
     );
-    log(`TRUTH 5 (accepted) PASS — ${assertBubble(acceptedScan, "accepted", [receiverCentreX])}`);
+    log(`TRUTH 5 (accepted) PASS — ${await assertBubble(acceptedScan, "accepted", receiverDesk)}`);
     const clearedScan = await pollScan(
       page,
       (s) => s.dialogueHits === 0 && s.handoffHits === 0,
