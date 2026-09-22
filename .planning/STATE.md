@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-13-PLAN.md
-last_updated: "2026-09-22T01:55:30.238Z"
+stopped_at: Completed 05-14-PLAN.md
+last_updated: "2026-09-22T02:02:10.760Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 05 execution started
-state_head: 51711c5b2daa90b4fa5779c9470b176f8b9036f1
+state_head: 7bc320de86bfc68b4545aacc5a2172f77b1599b4
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 31
-  completed_plans: 28
+  completed_plans: 29
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 2 of 16
+Plan: 15 of 16
 Status: Ready to execute
 Last activity: 2026-09-22 — Phase 05 execution started
 
@@ -88,6 +88,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P11 | 16 min | 3 tasks | 7 files |
 | Phase 05 P12 | 17 min | 3 tasks | 8 files |
 | Phase 05 P13 | 8 min | 3 tasks | 8 files |
+| Phase 05 P14 | 4 min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -171,6 +172,7 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-12: Truth 4's glyph-band assertion is scoped to the blocked agent's own tile column — a whole-canvas colour count is a claim about every agent on the floor, and the Truth-2 agent's glyph sits in exactly the band the assertion excludes
 - [Phase 05]: 05-12: requirements-completed left empty (matching 05-11) — three of Phase 5's four observable truths still depend on an unrun live proof and human verification; flipping them Complete would be the over-claim this plan exists to remove
 - [Phase 05]: 05-13: dialogue colours #121212/#f0f0f0 (planned #1a1a1a/#ffffff are in the sprite palette); render order sprites -> dialogue -> glyphs; request-event dedup lives in the handoff FSM
+- [Phase 05]: 05-14: desks and identity hues derived from seated characters (lowest free desk; hashed hue then next free bucket) — collisions start at the 13th concurrently seated agent
 
 ### Pending Todos
 
@@ -199,6 +201,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T01:55:30.118Z
-Stopped at: Completed 05-13-PLAN.md
+Last session: 2026-09-22T02:02:10.647Z
+Stopped at: Completed 05-14-PLAN.md
 Resume file: None
