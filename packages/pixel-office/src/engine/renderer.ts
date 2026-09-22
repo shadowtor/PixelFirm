@@ -121,13 +121,44 @@ interface CharacterLayout {
   zY: number;
 }
 
+// Opaque row bounds per sprite, memoised: SpriteData objects are stable
+// module-level values (see the sprite cache note above).
+const firstRows = new WeakMap<SpriteData, number>();
+const lastRows = new WeakMap<SpriteData, number>();
+
+/** First row with an opaque cell (0 for an all-transparent sprite). */
+function firstOpaqueRow(sprite: SpriteData): number {
+  let r = firstRows.get(sprite);
+  if (r === undefined) {
+    r = sprite.findIndex((row) => row.some(Boolean));
+    if (r < 0) r = 0;
+    firstRows.set(sprite, r);
+  }
+  return r;
+}
+
+/** Last row with an opaque cell (the last index for an all-transparent sprite). */
+function lastOpaqueRow(sprite: SpriteData): number {
+  let r = lastRows.get(sprite);
+  if (r === undefined) {
+    r = sprite.length - 1;
+    while (r > 0 && !sprite[r].some(Boolean)) r--;
+    lastRows.set(sprite, r);
+  }
+  return r;
+}
+
 /**
  * Vertical placement for a character's state-glyph overlay — bound to its
  * OWNER, never to the canvas (05-10, closes CR-02).
  *
- * Preferred position is directly above the owner's own sprite top edge. When
- * that would be negative there is no headroom, and the glyph is attached to
- * the owner's own sprite box instead (floored at 0 so it stays paintable).
+ * Preferred position puts the glyph's lowest ink row (glyphInkBottomRow)
+ * BUBBLE_ICON_GAP_PX above the owner's visible head (headTopRow, the frame's
+ * first opaque row) — anchored per frame on pixels, not the 16x32 frame box
+ * (05-30, G-05-1c: the frame-top anchor left 5-6 px of air and the glyphs
+ * read as a detached legend). When that would be negative there is no
+ * headroom, and the glyph is attached to the owner's own sprite box instead
+ * (floored at 0 so it stays paintable).
  *
  * What this replaced, and why: 05-08 floored the glyph against the canvas
  * (`Math.max(0, drawY - height - gap)`) independently of `drawY`. That does
@@ -139,8 +170,10 @@ interface CharacterLayout {
  * clipped by the canvas edge is strictly better than being attributed to the
  * wrong agent.
  */
-export function resolveBubbleY(drawY: number, bubbleHeight: number, zoom: number): number {
-  const preferred = Math.round(drawY - bubbleHeight * zoom - BUBBLE_ICON_GAP_PX * zoom);
+export function resolveBubbleY(drawY: number, headTopRow: number, glyphInkBottomRow: number, zoom: number): number {
+  const preferred = Math.round(
+    drawY + headTopRow * zoom - BUBBLE_ICON_GAP_PX * zoom - (glyphInkBottomRow + 1) * zoom,
+  );
   if (preferred >= 0) return preferred;
   return Math.max(0, drawY);
 }
@@ -186,7 +219,6 @@ function drawGlyph(ctx: CanvasRenderingContext2D, l: CharacterLayout, zoom: numb
   if (!l.ch.bubbleType) return;
   const bubbleSprite = resolveBubbleSprite(l.ch.bubbleType);
   const bubbleWidth = bubbleSprite[0]?.length ?? 0;
-  const bubbleHeight = bubbleSprite.length;
   // Centred on the owner. No horizontal clamp, deliberately: the glyph
   // is 11 wide, the character sprite 16, so a centred glyph's extent is
   // always a strict subset of its owner's — and the owner is always on
@@ -194,7 +226,7 @@ function drawGlyph(ctx: CanvasRenderingContext2D, l: CharacterLayout, zoom: numb
   // horizontal-containment case is the guard, and goes red the moment a
   // glyph wider than a character is introduced.
   const bubbleX = Math.round(l.drawX + (l.spriteWidth * zoom - bubbleWidth * zoom) / 2);
-  const bubbleY = resolveBubbleY(l.drawY, bubbleHeight, zoom);
+  const bubbleY = resolveBubbleY(l.drawY, firstOpaqueRow(l.spriteData), lastOpaqueRow(bubbleSprite), zoom);
   drawSpriteData(ctx, bubbleSprite, bubbleX, bubbleY, zoom);
 }
 
