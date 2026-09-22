@@ -196,22 +196,92 @@ function spriteBox(ch: Character): { left: number; right: number; top: number; b
   return { left, right: left + SPRITE_W, top, bottom: top + SPRITE_H };
 }
 
-describe("resolveBubbleY — owner-bound glyph placement (CR-02)", () => {
-  it("places the glyph above the owner's own head when the owner has headroom", async () => {
-    const { resolveBubbleY } = await import("./renderer.js");
-    // First desk row (interior row 3): drawY 24, 13px glyph + 2px gap.
-    expect(resolveBubbleY(24, 13, 1)).toBe(9);
-    // Second desk row (interior row 6): drawY 72.
-    expect(resolveBubbleY(72, 13, 1)).toBe(57);
+describe("resolveBubbleY — owner-bound glyph placement (CR-02, head-anchored 05-30)", () => {
+  it("puts the glyph's lowest ink row 1 px above the owner's first opaque row when there is headroom", () => {
+    // Seat row 4 IDLE: drawY 40, head ink from frame row 3, blocked ink rows 0..11.
+    // Head at y 43, glyph bottom edge at 42, glyph top at 42 - 12 = 30.
+    expect(resolveBubbleY(40, 3, 11, 1)).toBe(30);
+    // Same at zoom 3: every term scales.
+    expect(resolveBubbleY(120, 3, 11, 3)).toBe(90);
   });
 
-  it("attaches the glyph to the owner's own sprite top — never a canvas row a neighbour owns — when there is no headroom", async () => {
-    const { resolveBubbleY } = await import("./renderer.js");
-    // drawY -8 is interior row 1: no room above, so the glyph lands inside
-    // its OWNER's box rather than being relocated onto whoever is at y=0.
-    expect(resolveBubbleY(-8, 13, 1)).toBe(0);
+  it("attaches the glyph to the owner's own sprite top — never a canvas row a neighbour owns — when there is no headroom", () => {
+    // drawY -8 (interior row 1): no room above, floored at 0 inside the owner's box.
+    expect(resolveBubbleY(-8, 3, 11, 1)).toBe(0);
+    // drawY 5: head at 8 cannot fit a 12-row glyph above it, so the glyph
+    // starts at the owner's own sprite top (5), not at y 0.
+    expect(resolveBubbleY(5, 3, 11, 1)).toBe(5);
   });
 });
+
+// ── 05-30 (G-05-1c): glyph anchored to the visible head, on the floor ─────
+
+const ALL_GLYPHS = Object.keys(BUBBLE_SPRITES) as Array<keyof typeof BUBBLE_SPRITES>;
+
+/** Renders ch alone with and without its glyph; returns the head's first
+ *  opaque y and the glyph's ink rects (pass 3 follows the sprite cells). */
+function headAndGlyph(ch: Character, glyph: keyof typeof BUBBLE_SPRITES, zoom: number) {
+  ch.bubbleType = null;
+  const control = mockCtx();
+  renderScene(control.ctx, [ch], 0, 0, zoom);
+  ch.bubbleType = glyph;
+  const withGlyph = mockCtx();
+  renderScene(withGlyph.ctx, [ch], 0, 0, zoom);
+  const headTop = Math.min(...control.rects.map((r) => r.y));
+  return { headTop, glyphRects: withGlyph.rects.slice(control.rects.length) };
+}
+
+describe("glyph sits on its owner's head (05-30, G-05-1c)", () => {
+  const seat = SEATS[0];
+  const poses: Array<[string, () => Character]> = [
+    ["IDLE on a seat", () => createCharacter("a", seat.col, seat.row)],
+    ["TYPE seated", () => Object.assign(createCharacter("a", seat.col, seat.row), { state: CharacterState.TYPE })],
+    [
+      "TYPE off-seat",
+      () => Object.assign(createCharacter("a", seat.col, seat.row), { state: CharacterState.TYPE, seatCol: seat.col + 1 }),
+    ],
+    ...[Direction.DOWN, Direction.UP, Direction.RIGHT].flatMap((dir) =>
+      [0, 1, 2, 3].map(
+        (frame): [string, () => Character] => [
+          `WALK dir ${dir} frame ${frame}`,
+          () => Object.assign(createCharacter("a", seat.col, seat.row), { state: CharacterState.WALK, dir, frame }),
+        ],
+      ),
+    ),
+  ];
+
+  it("leaves exactly BUBBLE_ICON_GAP_PX of air between every glyph's ink and the head, in every pose, at zoom 1 and 3", async () => {
+    const { BUBBLE_ICON_GAP_PX } = await import("../constants.js");
+    expect(BUBBLE_ICON_GAP_PX).toBe(1);
+    for (const zoom of [1, 3]) {
+      for (const [pose, make] of poses) {
+        for (const glyph of ALL_GLYPHS) {
+          const { headTop, glyphRects } = headAndGlyph(make(), glyph, zoom);
+          expect(glyphRects.length).toBeGreaterThan(0);
+          const inkBottom = Math.max(...glyphRects.map((r) => r.y + r.h));
+          expect(inkBottom + BUBBLE_ICON_GAP_PX * zoom, `${glyph} / ${pose} / zoom ${zoom}`).toBe(headTop);
+        }
+      }
+    }
+  });
+
+  it("keeps every glyph on the floor for every seat and standing spot, standing and seated", () => {
+    for (const tile of [...SEATS, ...STANDING_SPOTS]) {
+      for (const state of [CharacterState.IDLE, CharacterState.TYPE]) {
+        for (const glyph of ALL_GLYPHS) {
+          const ch = Object.assign(createCharacter("a", tile.col, tile.row), { state });
+          const { glyphRects } = headAndGlyph(ch, glyph, 1);
+          const where = `${glyph} at (${tile.col},${tile.row}) ${state}`;
+          expect(Math.min(...glyphRects.map((r) => r.y)), where).toBeGreaterThanOrEqual(TILE_PX);
+          expect(Math.min(...glyphRects.map((r) => r.x)), where).toBeGreaterThanOrEqual(TILE_PX);
+          expect(Math.max(...glyphRects.map((r) => r.x + r.w)), where).toBeLessThanOrEqual(19 * TILE_PX);
+        }
+      }
+    }
+  });
+});
+
+const TILE_PX = 16;
 
 describe("renderScene over the real desk layout — CR-02 two-character composite", () => {
   beforeEach(() => {
@@ -279,12 +349,14 @@ describe("renderScene over the real desk layout — CR-02 two-character composit
     expect(glyphRects.some((g) => g.y < laterBox.top)).toBe(true);
 
     // Concrete expected geometry, so a silent layout drift is caught too:
-    // seat rows 4 and 8 => sprite boxes y 40..72 and y 104..136; the glyph
-    // lies strictly between agent-1's box bottom and agent-9's box top.
+    // seat rows 4 and 8 => sprite boxes y 40..72 and y 104..136. agent-9's
+    // IDLE head ink starts at frame row 3 (y 107); the blocked glyph (ink rows
+    // 0..11) ends 1 px above it, y 94..106 — strictly below agent-1's box (05-30).
     expect(firstBox).toMatchObject({ top: 40, bottom: 72 });
     expect(laterBox.top).toBe(104);
+    expect(Math.min(...glyphRects.map((r) => r.y))).toBe(94);
+    expect(Math.max(...glyphRects.map((r) => r.y + r.h))).toBe(106);
     expect(Math.min(...glyphRects.map((r) => r.y))).toBeGreaterThan(firstBox.bottom);
-    expect(Math.max(...glyphRects.map((r) => r.y + r.h))).toBeLessThan(laterBox.top);
   });
 
   it("keeps the glyph's horizontal extent inside its own character's sprite extent — the property that makes a horizontal clamp unnecessary", () => {
