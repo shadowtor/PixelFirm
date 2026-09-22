@@ -33,8 +33,8 @@
 // Truths: (0) the office is presented at an integer scale >= MIN_DISPLAY_SCALE,
 // never native (05-21, G-05-1a); (1) a live agent paints a sprite; (2) a live blocked status paints
 // its glyph; (3) a handoff pair paints the task icon, then clears it; (4) the
-// blocked glyph is owner-bound; (5) the handoff dialogue line is painted
-// owner-bound above the waiting sender, the receiver's accepted line is
+// blocked glyph is owner-bound; (5) the handoff speech bubble is painted in the
+// band under the pair, spanning sender and receiver (05-28), the accepted line is
 // positively observed after agent.handoff_completed (05-17, WR-10), and
 // nothing is left once the sequence ends (polled against a walk-home deadline
 // derived from WALK_SPEED_PX_PER_SEC). Dialogue is shown for its sequence only (requested line while the
@@ -331,8 +331,6 @@ const HANDOFF_COLORS = distinctiveBubbleColors("bubble-handoff-task.json", NOT_D
 // or glyph can paint it. The raw-palette partition behind BLOCKED_COLORS /
 // HANDOFF_COLORS above does not model hue shifts (review WR-04, out of scope).
 const DIALOGUE_BOX_COLOR = readColorConst("DIALOGUE_BOX_COLOR");
-const BUBBLE_ICON_GAP_PX = readNumberConst(constantsSrc, "constants.ts", "BUBBLE_ICON_GAP_PX");
-const BUBBLE_ICON_HEIGHT_PX = readNumberConst(constantsSrc, "constants.ts", "BUBBLE_ICON_HEIGHT_PX");
 
 // ── process helpers ──────────────────────────────────────────────────────────
 
@@ -861,35 +859,46 @@ async function main() {
     // receiver has no name, so the line interpolates the raw 23-char task id
     // and 19-char agent id — both over 05-13's caps: the pixels counted are a
     // capped line.
-    const speakerSpriteTop = spriteTopY(receiverDesk.row);
-    const speakerGlyphSlotTop = speakerSpriteTop - BUBBLE_ICON_GAP_PX - BUBBLE_ICON_HEIGHT_PX;
-    const speakerCentreX = receiverDesk.col * TILE_SIZE + TILE_SIZE / 2;
-    const dlg = await scanCanvas(page, null, speakerGlyphSlotTop);
-    await shot(page, "handoff.png");
-    const dlgWhere =
-      `${dlg.dialogueHits} dialogue-box px + ${dlg.dialogueTextPx} text px at x ${dlg.dialogueMinX}..${dlg.dialogueMaxX}, ` +
-      `y ${dlg.dialogueMinY}..${dlg.dialogueMaxY}`;
-    log(`dialogue scan: ${dlgWhere} (speaker centre x ${speakerCentreX}, sprite top ${speakerSpriteTop}, glyph slot top ${speakerGlyphSlotTop})`);
-    assert(dlg.dialogueHits > 0, `no ${DIALOGUE_BOX_COLOR} dialogue-box pixel on canvas while the sender waits at the receiver's desk (0 px)`);
-    assert(
-      dlg.dialogueMinX <= speakerCentreX && speakerCentreX <= dlg.dialogueMaxX,
-      `the dialogue box does not contain its speaker's column centre x ${speakerCentreX}: ${dlgWhere}`,
-    );
-    assert(
-      dlg.dialogueMaxY < speakerSpriteTop,
-      `the dialogue box is not entirely above its speaker's sprite (top y ${speakerSpriteTop}): ${dlgWhere}`,
-    );
-    assert(dlg.dialogueTextPx > 0, `no text pixel painted inside the dialogue box above y ${speakerGlyphSlotTop}: ${dlgWhere}`);
-
-    // TRUTH 5 (sender visible) — 05-27 (G-05-1d): the sender waits on its own
-    // interaction tile beside the receiver, so each full sprite sits in its own
-    // tile column (the UAT defect left 22% of the sender visible).
+    // 05-28 (G-05-4): the line is a speech bubble in the band under the pair's
+    // feet, spanning sender and receiver, clamped only to the floor interior.
+    // The fill-colour extent is the bubble's interior (the 1 px ink border and
+    // tail paint over the fill), so non-fill px inside it are the text.
     const senderHome = claimDesk(SENDER);
     const othersSeats = new Set(
       [...deskSlots.keys()].filter((id) => id !== SENDER).map((id) => `${claimDesk(id).col},${claimDesk(id).row}`),
     );
     const senderTile = interactionTile(receiverDesk, othersSeats);
     assert(senderTile !== null, `no interaction tile on the receiver's seat row ${receiverDesk.row}`);
+    const footLine = receiverDesk.row * TILE_SIZE + TILE_SIZE / 2;
+    const receiverCentreX = receiverDesk.col * TILE_SIZE + TILE_SIZE / 2;
+    const senderCentreX = senderTile.col * TILE_SIZE + TILE_SIZE / 2;
+    const floorLeft = TILE_SIZE;
+    const floorRight = MAP_W - TILE_SIZE;
+    /** Asserts a scanned bubble lies in the band under the foot line, inside the floor, over every given centre x. */
+    const assertBubble = (scan, label, centres) => {
+      const where =
+        `${label}: ${scan.dialogueHits} bubble px + ${scan.dialogueTextPx} text px at x ${scan.dialogueMinX}..${scan.dialogueMaxX}, ` +
+        `y ${scan.dialogueMinY}..${scan.dialogueMaxY} (foot line ${footLine}, centres ${centres.join("/")})`;
+      assert(scan.dialogueHits > 0, `no ${DIALOGUE_BOX_COLOR} bubble px on canvas: ${where}`);
+      assert(scan.dialogueMinX >= floorLeft && scan.dialogueMaxX <= floorRight, `bubble leaves the floor x ${floorLeft}..${floorRight}: ${where}`);
+      for (const cx of centres) {
+        assert(scan.dialogueMinX <= cx && cx <= scan.dialogueMaxX, `bubble does not contain centre x ${cx}: ${where}`);
+      }
+      assert(
+        scan.dialogueMinY >= footLine && scan.dialogueMaxY < footLine + TILE_SIZE,
+        `bubble is not in the band under the pair's feet (y ${footLine}..${footLine + TILE_SIZE}): ${where}`,
+      );
+      assert(scan.dialogueTextPx > 0, `no text px inside the bubble: ${where}`);
+      return where;
+    };
+    const dlg = await scanCanvas(page);
+    await shot(page, "handoff.png");
+    const dlgWhere = assertBubble(dlg, "requested", [senderCentreX, receiverCentreX]);
+    log(`TRUTH 5 (during) PASS — ${dlgWhere}`);
+
+    // TRUTH 5 (sender visible) — 05-27 (G-05-1d): the sender waits on its own
+    // interaction tile beside the receiver, so each full sprite sits in its own
+    // tile column (the UAT defect left 22% of the sender visible).
     // Only the standing sprite's own rows: the glyph and dialogue above it are not the body.
     const senderRows = { from: spriteTopY(senderTile.row), to: spriteTopY(senderTile.row) + SPRITE_HEIGHT };
     const senderBandScan = await scanCanvas(page, tileColumnRange(senderTile.col), null, senderRows);
@@ -922,7 +931,7 @@ async function main() {
       `WR-10: the receiver's accepted line was never painted after agent.handoff_completed ` +
         `(0 dialogue-box px within ${Math.round(handoffEndDeadlineMs)} ms)`,
     );
-    log(`accepted line painted after handoff_completed: ${acceptedScan.dialogueHits} dialogue-box px`);
+    log(`TRUTH 5 (accepted) PASS — ${assertBubble(acceptedScan, "accepted", [receiverCentreX])}`);
     const clearedScan = await pollScan(
       page,
       (s) => s.dialogueHits === 0 && s.handoffHits === 0,
@@ -940,7 +949,7 @@ async function main() {
       `${clearedScan.dialogueHits} dialogue-box px still painted after the handoff sequence ended (sender home)`,
     );
     log(
-      `TRUTH 5 PASS — ${dlgWhere}, above the speaker's sprite (top ${speakerSpriteTop}), cleared after the sequence`,
+      `TRUTH 5 PASS — ${dlgWhere}; cleared after the sequence`,
     );
 
     // ── TRUTH 4 — the blocked glyph belongs to the agent it describes (CR-02).
