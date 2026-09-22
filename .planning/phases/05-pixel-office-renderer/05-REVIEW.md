@@ -1,509 +1,409 @@
 ---
 phase: 05-pixel-office-renderer
-reviewed: 2026-09-21T12:00:00Z
+reviewed: 2026-09-22T12:00:00Z
 depth: standard
-scope: incremental (diff_base a9eed1c — plans 05-09, 05-10, 05-11, 05-12)
-files_reviewed: 22
+scope: incremental (diff_base bfb3e8f — gap-closure plans 05-13, 05-14, 05-15, 05-16)
+files_reviewed: 13
 files_reviewed_list:
-  - apps/api/src/routes/ws-browser.ts
-  - apps/api/src/routes/ws-browser.test.ts
-  - apps/api/src/ws/browser-connections.ts
-  - apps/api/src/ws/browser-connections.test.ts
-  - apps/web/src/App.tsx
-  - apps/web/src/App.test.tsx
-  - apps/web/src/agent-event-mapper.ts
-  - apps/web/src/agent-event-mapper.test.ts
-  - packages/claude-adapter/package.json
   - packages/claude-adapter/src/claude-code-runtime.ts
   - packages/claude-adapter/src/claude-code-runtime.test.ts
-  - packages/pixel-office/src/engine/characters.ts
+  - packages/pixel-office/src/constants.ts
   - packages/pixel-office/src/engine/renderer.ts
   - packages/pixel-office/src/engine/renderer.test.ts
+  - packages/pixel-office/src/handoff/dialogue-templates.ts
+  - packages/pixel-office/src/handoff/dialogue-templates.test.ts
+  - packages/pixel-office/src/handoff/handoff-choreography.ts
   - packages/pixel-office/src/handoff/handoff-choreography.test.ts
   - packages/pixel-office/src/index.ts
   - packages/pixel-office/src/index.test.ts
-  - packages/pixel-office/src/sprites/spriteData.ts
-  - packages/pixel-office/src/sprites/spriteData.test.ts
   - packages/pixel-office/src/types.ts
-  - references/ASSET-LICENSES.md
   - scripts/verify-pixel-office-live.mjs
 findings:
-  critical: 2
-  warning: 8
-  info: 6
-  total: 16
+  critical: 1
+  warning: 10
+  info: 7
+  total: 18
 status: issues_found
 ---
 
-# Phase 5: Code Review Report (incremental)
+# Phase 5: Code Review Report (incremental re-review)
 
-**Reviewed:** 2026-09-21T12:00:00Z
+**Reviewed:** 2026-09-22T12:00:00Z
 **Depth:** standard
-**Files Reviewed:** 22
+**Files Reviewed:** 13
 **Status:** issues_found
 
 ## Summary
 
-This pass covers only what plans 05-09 through 05-12 changed since the previous
-REVIEW.md commit (`a9eed1c`). Those plans existed to close CR-01..CR-04, WR-01,
-WR-08, IN-04 and IN-06, so the review was aimed at two questions: is each fix at
-the root, and did the fix introduce a new defect.
+This pass covers what plans 05-13..05-16 changed since `bfb3e8f`, and re-checks
+every finding from the previous report.
 
-Most of the fixes hold at the root. `applyLiveEvent` genuinely routes the live
-path through company-core's own `reduce`, so a second derivation table can no
-longer drift (and its reference-inequality diff is sound — every reducer handler
-in `packages/company-core/src/reducer.ts` returns a fresh object per touched
-agent, and untouched agents keep identity). `resolveBubbleY` really is
-owner-bound now, and the desk re-pitch (`DESK_ROW_START=3`/`DESK_ROW_PITCH=3`)
-is arithmetically correct against the engine's own geometry — row 3's glyph
-occupies y 9..22 with the sprite box at 24, row 6's occupies 57..70 against
-row 3's box ending at 56. `getCharacterSprites` really did lose the dead
-parameter, and the hue is now genuinely read. The `delete-trigger` decision was
-carried out: no in-repo producer fabricates a handoff pair any more.
+**What the fixes got right:**
 
-Two changes are not sound.
+- **Prior CR-02** (a superseded `runQuery` clearing `inFlight` for the invocation
+  that replaced it) is fixed for calls that arrive one after another. Every write
+  from a superseded invocation now checks ownership through `currentRun`/`isCurrent()`:
+  the `finally`, the watchdog, stream messages, the role poll, `canUseTool` and the
+  Notification hook.
+- **Prior WR-03** (desk slots never reclaimed) is fixed. Desks now come from what
+  is currently seated, not from a counter.
+- **Prior WR-06** (the harness reusing any server it finds) is fixed. It now checks
+  the ports first and refuses to run if they are taken.
+- **Prior CR-01** is half fixed. The FSM now skips a re-delivered request by event
+  id, so the stranded-sender symptom is gone. The server still sends the duplicate,
+  so that part is carried forward as a warning.
 
-The CR-03 `/ws/browser` fix converted a **lost**-event window into a
-**duplicated**-event window, and nothing anywhere dedups by event id. That is
-not cosmetic: the handoff choreography FSM is not idempotent, and a duplicated
-`agent.handoff_requested` strands the sending character at another agent's desk,
-holding a task icon, permanently — a fabricated visual state, which is the exact
-class of defect this phase's Core Value prohibits (CR-01 below).
+**What is still broken or new:**
 
-The CR-03 `inFlight` fix in `claude-code-runtime.ts` has a stale-write race that
-re-opens the very defect it closed, in the one scenario the flag exists for
-(CR-02 below).
+- **The CR-02 ownership fix has a new race.** The ownership token is taken only
+  *after* the up-to-5 s graceful-stop wait. Two callers that arrive during that
+  wait both take over the record, one after the other. The first one's `query()`
+  is left running, and nothing can stop it (CR-01 below).
+- **Row-3 dialogue is partly hidden.** 05-13's dialogue box sits under its owner's
+  own glyph for every row-3 desk, which covers the first 18 agents. The only time
+  a sender shows both a glyph and a line is while waiting at a row-3 receiver's
+  desk, and there the task icon covers part of the "Handing off" text (WR-01).
+- **Dialogue lines can stay up forever.** A line is cleared only when the sender
+  arrives home. Any AgentStatus update for the sender during a walk freezes it
+  mid-path, so it never arrives and the line never clears (WR-02). Before 05-13
+  this text was never drawn, so this is a new visible defect.
 
-Beyond those, the new live harness (`scripts/verify-pixel-office-live.mjs`) makes
-several guarantees in its own comments that its code does not actually deliver —
-its "unambiguous proof" colour partition is computed against the un-hue-shifted
-sprite sheet while every character it renders is hue-shifted (verified: 11 of the
-12 hue buckets are in use across its own agent ids), its "can never test two
-different API processes" port derivation silently falls back, and its process
-cleanup leaks dev servers on POSIX. None of those are shipped code, but the
-phase's whole evidentiary claim rests on that file, so they are treated as
-defects, not nits.
+## Status of prior findings
+
+| Prior ID | Status | Where now |
+|---|---|---|
+| CR-01 duplicated `/ws/browser` events strand the handoff sender | **Partially resolved.** The FSM ignores duplicate requests by id; the server still duplicates | WR-03 |
+| CR-02 superseded `runQuery` clears the successor's `inFlight` | **Resolved** for calls one after another; a new race when calls overlap | CR-01 |
+| WR-01 `/ws/browser` lifecycle handlers attached after the await | Open (file not changed) | WR-04 |
+| WR-02 env strip removes only `ANTHROPIC_API_KEY` | Open (line 171 unchanged) | WR-05 |
+| WR-03 desk slots never reclaimed | **Resolved** (`nextDeskPosition` works from seated state) | — |
+| WR-04 harness colour partition ignores hue shift | Open (deferred on purpose, per the harness comment) | WR-06 |
+| WR-05 `killChildren` cannot kill process groups on POSIX | Open, and **worse** now (see WR-07) | WR-07 |
+| WR-06 harness reuses a server wired to an unknown DB | **Resolved** (port preflight) | — |
+| WR-07 API port silently falls back | Open (lines 157-158 unchanged) | WR-08 |
+| WR-08 snapshot not validated | Open (file not changed) | WR-09 |
+| IN-01 dead identity branch in `getCharacterSprites` | Open (`spriteData.ts:75`) | IN-01 |
+| IN-02 zero-hue frames alias the JSON module | Open | IN-02 |
+| IN-03 `useRef(emptyState())` | Open | IN-03 |
+| IN-04 harness silences child output | Open (lines 293-294) | IN-04 |
+| IN-05 `parseComposeTarget` takes the first port | Open | IN-05 |
+| IN-06 token in the WS query string | Open (accepted risk) | IN-06 |
 
 ---
+
+## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01: The `/ws/browser` snapshot fix replaces event loss with event duplication, and a duplicated handoff strands a character permanently
+### CR-01: Two `runQuery` calls that arrive during the same graceful-stop wait both take over the record, leaving one `query()` running with nothing able to stop it
 
-**File:** `apps/api/src/routes/ws-browser.ts:36-42`, `apps/api/src/ws/browser-connections.ts:25-53`, `apps/web/src/App.tsx:51-77`
-
-**Issue:**
-The fix registers the socket before the awaited snapshot SELECT and buffers
-broadcasts until the snapshot has gone out. That closes the "committed mid-SELECT
-and reached neither" window. It opens the symmetric one, because
-`apps/api/src/routes/events.ts:47-86` commits the insert *and then* broadcasts:
-
-1. `registerBrowserSocket(socket)` runs; the socket is buffering.
-2. `db.select()` is created but has not yet acquired a pool connection / begun
-   executing (the pool is shared with `POST /events`, so this is not a narrow
-   window).
-3. `POST /events` inserts and commits event `E`, then calls
-   `broadcastToBrowsers` → `E` is pushed into this socket's buffer.
-4. The SELECT statement *now* begins; under READ COMMITTED its snapshot is taken
-   at statement start, so it sees `E`. `E` is folded into the snapshot state.
-5. `flushBrowserSocket` delivers the buffered `E` on top of the snapshot that
-   already contains it.
-
-The client has no dedup: `ws-client.ts` forwards every `type: "event"` message,
-`applyLiveEvent` re-`reduce`s it, and the snapshot message carries no event ids,
-so the client *cannot* dedup even if it wanted to.
-
-Most reducer handlers are idempotent, so this mostly passes unnoticed — but
-`handoff-choreography.ts` is a stateful FSM and is not:
-
-- duplicate `agent.handoff_requested` → `handoffs.set(taskId, {... phase:
-  "WALKING_TO_RECEIVER"})` **overwrites** the existing record and re-issues
-  `walkCharacterTo`;
-- the following duplicate `agent.handoff_completed` hits
-  `if (!record || record.phase !== "ICON_VISIBLE") return;`
-  (`handoff-choreography.ts:61`) and no-ops;
-- the sender then walks to the receiver's desk, arrives, gets the
-  `handoff-task` bubble at `checkHandoffArrivals` and **stays there forever**,
-  displaying a task it already handed off, at someone else's desk, until the
-  page is reloaded.
-
-The buffering tests (`browser-connections.test.ts`) and the route test
-(`ws-browser.test.ts:222`) only exercise the ordering, never the
-snapshot-overlap case, so this is invisible to the suite.
-
-**Fix:** dedup at the flush boundary, server-side, where the snapshot's own ids
-are already in hand. Queue the id alongside the payload and drop anything the
-snapshot already contained:
-
-```ts
-// browser-connections.ts
-type Queued = { id?: string; payload: string };
-const browserSockets = new Map<WebSocket, Queued[] | null>();
-
-export function flushBrowserSocket(socket: WebSocket, alreadySent: Set<string>): void {
-  const queued = browserSockets.get(socket);
-  if (queued === undefined) return;
-  browserSockets.set(socket, null);
-  if (!queued || socket.readyState !== socket.OPEN) return;
-  for (const { id, payload } of queued) {
-    if (id && alreadySent.has(id)) continue; // already folded into the snapshot
-    socket.send(payload);
-  }
-}
-
-export function broadcastToBrowsers(message: unknown, eventId?: string): void { /* ... */ }
-```
-
-```ts
-// ws-browser.ts
-const rows = await db.select().from(events).orderBy(events.occurredAt);
-const companyEvents = rows.map(rowToCompanyEvent);
-socket.send(JSON.stringify({ type: "snapshot", state: fold(companyEvents) }));
-flushBrowserSocket(socket, new Set(rows.map((r) => r.id)));
-```
-
-Add a regression test that posts an event, waits for the 202, *then* opens the
-socket while a second event is in flight, and asserts no event id is delivered
-twice.
-
----
-
-### CR-02: A superseded `runQuery` invocation clears `record.inFlight` for the invocation that replaced it, re-opening CR-03
-
-**File:** `packages/claude-adapter/src/claude-code-runtime.ts:130-138, 290-300`
+**File:** `packages/claude-adapter/src/claude-code-runtime.ts:144-154` (also `pauseTask`/`cancelTask` at 374-416)
 
 **Issue:**
-`record.inFlight` is a single shared field on the task record, but its `finally`
-writer is per-invocation:
+The ownership token is set only after the preemption `await`:
 
 ```ts
 if (record.inFlight) {
-  const exitedCleanly = await attemptGracefulStop(record);
-  if (!exitedCleanly) record.controller?.abort();   // <- returns immediately; the old
-}                                                   //    loop has NOT drained yet
+  const exitedCleanly = await attemptGracefulStop(record); // up to 5 s
+  if (!exitedCleanly) record.controller?.abort();
+}
 const controller = new AbortController();
+const invocation = {};
 record.controller = controller;
-record.inFlight = true;                             // invocation B claims the record
+record.currentRun = invocation;   // <- claimed only here
 ```
 
-`attemptGracefulStop` returns `false` by *timing out* after `GRACEFUL_TIMEOUT_MS`
-(line 324) — it does not wait for the abort to take effect. So when invocation A
-does not exit gracefully (exactly the case this branch exists for), A's stream
-throws some time after the abort, A's `finally` runs, and line 299 executes
-`record.inFlight = false` — on a record that now belongs to invocation B, which
-is genuinely in flight.
+Suppose invocation A is in flight, and `sendMessage` B and `sendMessage` C both
+arrive before A has stopped (a double-send, or a retry within 5 s). Here is what
+happens:
 
-A third call (`sendMessage`/`resumeTask`) then sees `inFlight === false`, skips
-the stop branch entirely, and starts a *third* concurrent `query()` — orphaning
-B's watchdog, B's role-poll `setInterval`, and B's controller, with no way for
-`pauseTask`/`cancelTask` to reach it. That is verbatim the defect the CR-03
-comment on lines 22-26 says this field prevents. The suite never covers it: no
-test issues a second `runQuery` against a `hangingQuery`.
+1. B and C both see `inFlight === true`, and both wait in
+   `attemptGracefulStop(record)` on A's `runPromise`.
+2. B resumes first. It sets `currentRun = B`, starts `query()` #2, and stores
+   `record.controller = B.controller` and `record.runPromise = B`.
+3. C resumes. Nothing re-checks the record after the await, so C sets
+   `currentRun = C` and starts `query()` #3. `record.controller` and
+   `record.handle` now point only at C.
+4. B's subprocess keeps running. Its watchdog callback returns early
+   (`if (!isCurrent()) return`) without aborting. Its `canUseTool` denies every
+   tool, but the model still runs turns against the same resumed `sessionId` that
+   C is using. `pauseTask`/`cancelTask` can only reach C's controller, so B runs
+   until it ends on its own.
 
-**Fix:** make the flag per-invocation-owned, so a superseded invocation cannot
-write it.
+That is two live `query()` streams for one task: the exact defect prior CR-02
+closed, reached one step earlier. The same gap drops a `pauseTask`/`cancelTask`
+that lands during a pending preemption. Pause sets `status = "paused"` and
+returns. The waiting runQuery then starts a new `query()` anyway, and its `init`
+message flips the status back to `running`.
+
+Test A (`claude-code-runtime.test.ts:630`) sends its messages strictly one after
+another (each `sendMessage` waits a full `GRACEFUL_TIMEOUT_MS` first), so it never
+covers overlapping calls.
+
+**Fix:** take the token before the await, and give up if someone else took it
+during the wait. Have pause/cancel take it too, so a waiting runQuery gives up:
 
 ```ts
-interface TaskRecord { /* ... */ currentRun?: object; }
-
 const invocation = {};
-record.currentRun = invocation;
+const isCurrent = () => record.currentRun === invocation;
+const hadPrior = record.inFlight;
+record.currentRun = invocation;            // claim first
+if (hadPrior) {
+  const exitedCleanly = await attemptGracefulStop(record);
+  if (!exitedCleanly) record.controller?.abort();
+}
+if (!isCurrent()) return;                  // superseded (or paused/cancelled) while waiting
+const controller = new AbortController();
 record.controller = controller;
 record.inFlight = true;
-// ...
-} finally {
-  watchdog.clear();
-  if (rolePoll) clearInterval(rolePoll);
-  if (record.currentRun === invocation) record.inFlight = false;
-}
 ```
 
-The same guard should wrap the watchdog callback's `record.status = "blocked"`
-write (lines 199-206), which can likewise land on a successor invocation.
+```ts
+// pauseTask / cancelTask, before attemptGracefulStop:
+record.currentRun = {};  // any runQuery still in its preemption wait gives up
+```
+
+Add a test that fires two `sendMessage` calls together against a `hangingQuery`.
+It should check that at most one stream is live and not aborted at any moment.
 
 ---
 
 ## Warnings
 
-### WR-01: `/ws/browser` attaches its `close`/`error` handlers only after the awaited SELECT — a client that disconnects during the snapshot is never unregistered
+### WR-01: At row 3 (the first 18 desks), the sender's handoff icon covers the middle of its own "Handing off" line
+
+**File:** `packages/pixel-office/src/engine/renderer.ts:125-137, 203-215`; `packages/pixel-office/src/index.ts:73`
+
+**Issue:** The canvas is `DEFAULT_COLS*TILE_SIZE` x `DEFAULT_ROWS*TILE_SIZE`
+(`apps/web/src/App.tsx:100-101`), so `offsetY = 0` and `zoom = 1`. For an owner on
+row 3:
+
+- `drawY = 24`
+- glyph slot at y 9..21
+- `y = max(0, 9 - 2 - 13) = 0`, so the box covers y 0..12, with text drawn from y 1
+
+Pass 3 then paints the owner's own 11x13 glyph at y 9..21, centred on the owner.
+The text is centred on the owner too. So the glyph covers the bottom four text
+rows (y 9..12) of the ~11 px at the centre of the line.
+
+In a handoff, the sender stands on the receiver's desk tile and has
+`bubbleType = "handoff-task"` and the requested text at the same moment. Every
+receiver on desks 0..17 is on row 3. So the most common handoff paints a line
+whose middle characters are cut off by an icon. The docstring notes the overlap
+("over the top 4 rows of its own glyph slot"). The harness scan stops counting
+text at the glyph slot top (`textAboveY`), so the problem is known but not caught
+by any check.
+
+**Fix:** give row 3 enough headroom for both layers, using the same geometry
+05-10 used. A 13 px box plus a 2 px gap on top of the glyph slot needs
+`16r - 39 - 15 >= 0`, so `r >= 4`. Set `DESK_ROW_START = 4`, which leaves rows 4/7
+and 36 desks. Update the `ponytail:` capacity note and the index tests to match.
+Glyph-over-dialogue ordering stays as it is, as the safety net.
+
+### WR-02: A handoff line can stay painted forever when the sender's walk is interrupted or the sender despawns
+
+**File:** `packages/pixel-office/src/index.ts:171`, `packages/pixel-office/src/handoff/handoff-choreography.ts:60-66, 110-133`
+
+**Issue:** `checkHandoffArrivals` moves forward only when
+`fromChar.state === IDLE && fromChar.path.length === 0`. Three live paths never
+meet that condition:
+
+1. **A status update mid-walk.** `upsertCharacterFromAgent` runs on every agent
+   diff and does `ch.state = visual.pose` without touching `path`. If the sender
+   gets any status change while walking, it leaves WALK with a non-empty path.
+   `updateCharacter` moves a character only in WALK, so the sender freezes
+   between tiles and the record never moves on. In `RETURNING_TO_DESK`, the
+   receiver's "accepts" line stays up forever. In `WALKING_TO_RECEIVER`, the icon
+   and the requested line never appear.
+2. **The sender goes OFFLINE** during `RETURNING_TO_DESK`. `!fromChar` means
+   `continue` forever, so the record is never deleted and the receiver's line is
+   never cleared.
+3. **A new request (new id) for the same `taskId` while the old record is
+   `RETURNING_TO_DESK`.** `handoffs.set` overwrites the record, including its
+   `acceptedText`, so the old accepted line can never be matched and cleared.
+
+Before 05-13 `bubbleText` was stored but never drawn. Now each of these paths
+paints a lasting claim ("X accepts ...") that is no longer true.
+
+**Fix:**
+
+```ts
+// index.ts upsertCharacterFromAgent — don't cancel an in-progress walk:
+if (ch.path.length === 0) ch.state = visual.pose;
+```
+
+```ts
+// checkHandoffArrivals, RETURNING_TO_DESK: a vanished sender also ends the sequence
+if (fromChar && (fromChar.state !== CharacterState.IDLE || fromChar.path.length !== 0)) continue;
+```
+
+```ts
+// handleHandoffEvent requested: retire a record being replaced
+const prev = handoffs.get(taskId);
+const prevTo = prev && getCharacter(prev.toAgentId);
+if (prevTo && prev.acceptedText && prevTo.bubbleText === prev.acceptedText) prevTo.bubbleText = null;
+```
+
+### WR-03: (carried from prior CR-01, partially resolved) `/ws/browser` still re-delivers events already folded into the snapshot
+
+**File:** `apps/api/src/routes/ws-browser.ts:36-42`, `apps/api/src/ws/browser-connections.ts:25-53`
+
+**Issue:** 05-13 fixed the worst symptom at the one consumer that could not handle
+a repeat. `handledHandoffRequestIds` skips a re-delivered request by `event.id`,
+and repeated completions were already ignored by the phase guard. The server
+behaviour is unchanged, though: an event committed between registration and
+SELECT is sent twice.
+
+Every other consumer relies on the reducer tolerating a repeat. Replaying an older
+buffered event on top of a snapshot that already holds newer ones briefly rolls
+state back, until the newer buffered events play again. Downgraded to WARNING
+because no known consumer is left permanently wrong.
+
+**Fix:** unchanged from the prior report. At flush time, drop buffered payloads
+whose id is already in the snapshot's `rows`.
+
+### WR-04: (carried, prior WR-01) `/ws/browser` attaches `close`/`error` only after the awaited SELECT
 
 **File:** `apps/api/src/routes/ws-browser.ts:36-60`
 
-**Issue:** `registerBrowserSocket(socket)` now runs at line 36, but
-`socket.on("close")` / `socket.on("error")` are not attached until lines 55-60,
-*after* the awaited SELECT. A client that connects and drops during the snapshot
-window (StrictMode double-mount in `apps/web/src/main.tsx` does exactly this on
-every dev page load, and so does any refresh) fires `close` before any listener
-exists, so the entry is never removed from `browserSockets`. The map then grows
-without bound for the process lifetime, and every subsequent `broadcastToBrowsers`
-iterates the dead entries. If the SELECT is slow, the dead entry is still in the
-buffering state, so each broadcast also `push`es a payload into a queue that will
-never be flushed or freed.
+**Issue:** Not changed in this range. A client that drops during the snapshot is
+never unregistered, and its buffer keeps growing.
 
-**Fix:** attach the lifecycle handlers in the same synchronous block as the
-registration, before the first `await`:
+**Fix:** attach both handlers right after `registerBrowserSocket(socket)`, before
+the first `await`.
 
-```ts
-registerBrowserSocket(socket);
-socket.on("close", () => unregisterBrowserSocket(socket));
-socket.on("error", () => unregisterBrowserSocket(socket));
-try {
-  const rows = await db.select()...
-```
+### WR-05: (carried, prior WR-02) The env strip removes only `ANTHROPIC_API_KEY`
 
-The catch block's `unregisterBrowserSocket` then becomes redundant but harmless.
+**File:** `packages/claude-adapter/src/claude-code-runtime.ts:171`
 
----
+**Issue:** Not changed. `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`,
+`CLAUDE_CODE_USE_BEDROCK`/`_VERTEX` (and so on) are still passed to the
+subprocess, which breaks the never-forward guarantee in the header (lines 58-66).
 
-### WR-02: The CR-01 env-leak fix strips only `ANTHROPIC_API_KEY`, leaving every other credential override in place
+**Fix:** filter by one pattern, e.g.
+`/^(ANTHROPIC_(API_KEY|AUTH_TOKEN|API_KEY_HELPER|BASE_URL)|CLAUDE_CODE_USE_(BEDROCK|VERTEX))$/`.
 
-**File:** `packages/claude-adapter/src/claude-code-runtime.ts:147-154`
+### WR-06: (carried, prior WR-04) The blocked/handoff colour partition ignores hue shifts
 
-**Issue:** The stated guarantee (lines 54-58: "never reads/logs/forwards
-ANTHROPIC_API_KEY or any `~/.claude/` OAuth credential") is enforced against one
-variable name:
+**File:** `scripts/verify-pixel-office-live.mjs:228-262`
 
-```ts
-env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "ANTHROPIC_API_KEY")),
-```
+**Issue:** The new comment at 264-268 now defers this explicitly. It is still
+open: `BLOCKED_COLORS`/`HANDOFF_COLORS` come from the un-shifted palette. 05-15's
+hue probing makes the rendered hue set depend on seating order, which makes this
+harder to reason about by hand than before. The new `DIALOGUE_BOX_COLOR` count is
+backed by a renderer test, but the TRUTH 2/3/4 counts still are not.
 
-`ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY_HELPER`, `ANTHROPIC_BASE_URL`,
-`CLAUDE_CODE_USE_BEDROCK` / `CLAUDE_CODE_USE_VERTEX` (plus the AWS/GCP
-credentials those activate) all override CLI subscription auth just as
-effectively, and all are still forwarded verbatim. The fix is at the symptom
-(the one variable the review named), not at the root (any ambient credential
-override).
+**Fix:** unchanged. Before subtracting, expand the palette through `adjustSprite`
+for all twelve buckets.
 
-**Fix:** strip the family, in one place, so a new variable name is a one-line
-change:
+### WR-07: (carried, prior WR-05, now worse) POSIX `killChildren` leaks the dev servers, and the new port preflight then blocks every later run
 
-```ts
-const AUTH_OVERRIDE_ENV = /^(ANTHROPIC_(API_KEY|AUTH_TOKEN|API_KEY_HELPER|BASE_URL)|CLAUDE_CODE_USE_(BEDROCK|VERTEX))$/;
-// ...
-env: Object.fromEntries(Object.entries(process.env).filter(([k]) => !AUTH_OVERRIDE_ENV.test(k))),
-```
+**File:** `scripts/verify-pixel-office-live.mjs:286-310, 527-538`
 
----
+**Issue:** `spawnBackground` still spawns with `shell: true` and no `detached`, so
+`process.kill(-child.pid, ...)` targets a process group that does not exist. The
+`pnpm`/`vite`/`tsx` grandchildren survive.
 
-### WR-03: Desk slots are never reclaimed, and the new row pitch cuts capacity from 162 to 54 before characters start overlapping
+Before 05-16, the next run quietly reused them. Now the WR-06 preflight refuses
+whenever 5177 or the API port is taken. So on Linux/macOS, every run after the
+first fails with "refusing to reuse a server this harness did not start" until the
+operator hunts down the leaked processes by hand. On POSIX, the WR-06 fix turns a
+silent leak into a harness that works only once.
 
-**File:** `packages/pixel-office/src/index.ts:106-117, 126-143`
+**Fix:** pass `detached: process.platform !== "win32"` to `spawn` so that
+`-child.pid` is a real process group. Keep the `taskkill /T` branch for Windows.
 
-**Issue:** `nextSlot` is monotonic and is only ever incremented, while
-`upsertCharacterFromAgent` **deletes** the character on `AgentStatus.OFFLINE`
-(line 134). An agent that goes offline and comes back therefore gets a *new*
-slot, and its old one is burned forever. Before 05-10 the layout had
-9 interior rows × 18 = 162 slots; the re-pitch to rows 3/6/9 leaves 54. Past 54,
-`Math.min(row, DEFAULT_ROWS - 2)` (line 115) clamps every further agent onto
-interior row 9 at `1 + (slot % 18)` — i.e. characters are drawn **stacked on top
-of each other**, silently, with no indication that two agents share a desk. A
-worker process that restarts a few dozen times reaches this in a normal session,
-with only three real agents on the floor.
+### WR-08: (carried, prior WR-07) The API port silently falls back when `VITE_WS_BASE_URL` is missing or cannot be parsed
 
-The `ponytail:` comment acknowledges the >54 ceiling but not the churn path that
-reaches it with far fewer live agents, and `index.test.ts`'s overflow test
-asserts only that the clamp stays inside the wall border, never that two
-characters do not share a tile.
+**File:** `scripts/verify-pixel-office-live.mjs:157-158`
 
-**Fix:** reclaim the slot on despawn — the seat is already on the character:
+**Issue:** Not changed. It matters more now, because the preflight and
+`startServer` both use `API_PORT`. A guessed port means the harness checks and
+starts a server on a port the browser never connects to.
 
-```ts
-const freeSlots: number[] = [];
-// in the OFFLINE branch, before characters.delete(agentId):
-const gone = characters.get(agentId);
-if (gone) freeSlots.push(slotOf(gone)); // or store the slot on the Character
-// in nextDeskPosition():
-const slot = freeSlots.shift() ?? nextSlot++;
-```
+**Fix:** validate `apps/web/.env` keys the same way `apiEnv` is validated, and
+throw if no port can be parsed.
 
-`_resetForTests` must clear `freeSlots` too.
-
----
-
-### WR-04: The live harness's "unambiguous proof" colour partition is computed against the un-hue-shifted sprite sheet
-
-**File:** `scripts/verify-pixel-office-live.mjs:214-251`
-
-**Issue:** `characterColors()` reads the raw `character-metrocity.json` palette,
-and `distinctiveBubbleColors` keeps only bubble colours absent from that set,
-documented as "unambiguous proof the bubble itself was painted, not the character
-underneath it" (lines 229-234). But 05-10's WR-08 fix means every character on
-that canvas is drawn through `adjustSprite` with a per-agent hue shift — verified
-against the harness's own ids, 11 of the 12 hue buckets are in use
-(`live-proof-sender` 300°, `live-proof-blocked` 150°, the 19-agent cohort spans
-0/30/60/90/120/150/180/210/240/270/300/330). The 31 palette colours become 284
-distinct rendered colours, none of which `characterColors()` knows about.
-
-Consequences: (a) the `found.size === 0` "shares every colour" guard (line 245)
-can no longer detect a genuinely non-distinctive glyph; (b) a hue-shifted
-character pixel that happens to equal a bubble colour is counted as a bubble hit,
-which would make TRUTH 2/3/4 pass on the wrong pixels and TRUTH 1's
-`blockedHits === 0` baseline fail spuriously. I checked the current assets — no
-collision exists today (`#d62828`, `#7209b7`, `#e0d7f5` are absent from all 284
-shifted colours) — so this is latent, not currently failing. Nothing enforces it:
-one re-authored glyph or one more hue bucket silently turns a PASS into a false
-positive, in the file the phase's entire evidence rests on.
-
-**Fix:** build the character colour set from the colours actually rendered, not
-the source sheet — expand the raw palette through `adjustSprite` for all 12
-buckets (the same 0/30/…/330 set `hueForAgentId` can produce) before subtracting
-it, and keep the `found.size === 0` guard so the harness halts if a glyph stops
-being distinctive.
-
----
-
-### WR-05: `killChildren` cannot kill the dev servers it spawned on POSIX
-
-**File:** `scripts/verify-pixel-office-live.mjs:265-291`
-
-**Issue:** `spawnBackground` uses `shell: true` and does **not** pass
-`detached: true`, so the child is not a process-group leader. `killChildren`
-then does `process.kill(-child.pid, "SIGTERM")` (line 286), which targets a
-process group whose id equals the shell's pid — a group that does not exist
-(`ESRCH`, caught, falling back to `child.kill("SIGKILL")` on the shell only, not
-the `pnpm`/`vite`/`tsx` grandchildren) or, worse, an unrelated group that happens
-to own that pgid. Every POSIX run therefore leaks a Vite server on 5177 and an
-API dev server on the API port; the *next* run's `ensureServer` then "reuses"
-them (see WR-06).
-
-**Fix:** `spawn(..., { detached: process.platform !== "win32", ... })`, which
-makes `-child.pid` a real process group, and keep the existing `taskkill /T`
-branch for Windows.
-
----
-
-### WR-06: `ensureServer` will happily run the whole destructive proof against a developer's own dev database
-
-**File:** `scripts/verify-pixel-office-live.mjs:313-323, 490-500`
-
-**Issue:** `assertHarnessOwnedTarget` carefully proves the *harness's* target is
-the compose container — and then `ensureServer` reuses **any** process already
-answering on the API port, whatever database it is connected to, and the run
-posts real events and issues a real worker credential through it. The
-inline defence (lines 492-494: "a reused server pointed at some other database
-shows up immediately as a non-empty office at the empty-canvas assertion") only
-holds if that database is non-empty. A developer whose dev store is empty (fresh
-clone, just-reset dev DB) gets a silent PASS *and* permanent `live-proof-*`
-worker/agent/task rows appended into their dev event store — which
-`0001_append_only_trigger.sql` and `0003_no_truncate_trigger.sql` make impossible
-to remove by design.
-
-**Fix:** do not reuse an API server whose database is unverified. Either always
-spawn a fresh one on a dedicated harness port, or add the resolved database name
-to `GET /health`'s response and refuse to reuse a server that does not report
-`COMPOSE_TARGET.db`.
-
----
-
-### WR-07: The "can never test two different API processes" port derivation silently falls back
-
-**File:** `scripts/verify-pixel-office-live.mjs:143-148`
-
-**Issue:**
-
-```js
-const wsBase = webEnv.VITE_WS_BASE_URL ?? "";
-const API_PORT = Number(wsBase.match(/:(\d+)\s*$/)?.[1] ?? apiEnv.PORT ?? 3000);
-```
-
-The stated guarantee is that the harness posts to the same server the browser
-talks to. But `parseEnvFile` returns `{}` for a missing `apps/web/.env` (which,
-unlike `apps/api/.env`, is never validated — the required-keys loop at lines
-77-83 checks only `apiEnv`), so `wsBase` becomes `""`, the regex misses, and the
-port silently falls back to `apiEnv.PORT ?? 3000`. In that state the browser
-builds its socket URL as `undefined/ws/browser` (`ws-client.ts:15`), the office
-stays empty, the empty-canvas assertion *passes*, and the run fails later at
-TRUTH 1 with a message about sprites that has nothing to do with the real cause.
-The same fallback fires if `VITE_WS_BASE_URL` ever carries a path suffix.
-
-**Fix:** validate `VITE_WS_BASE_URL` and `VITE_BROWSER_ACCESS_TOKEN` with the
-same required-keys loop used for `apiEnv`, and throw when the port cannot be
-parsed out of `VITE_WS_BASE_URL` rather than guessing.
-
----
-
-### WR-08: The snapshot message is trusted unvalidated and now seeds the entire live projection
+### WR-09: (carried, prior WR-08) The snapshot message is trusted without validation
 
 **File:** `apps/web/src/ws-client.ts:27-31`, `apps/web/src/App.tsx:36-49`
 
-**Issue:** relayed events are re-validated client-side with
-`CompanyEventSchema.safeParse` ("defense in depth (T-05-02)"), but the snapshot
-is passed through with a bare `state as ProjectionState`. 05-09 raised the cost
-of that asymmetry: the snapshot is now assigned to `projectionRef.current` and
-becomes the `prev` argument of every subsequent `reduce` call. A snapshot missing
-`agents` throws inside the WebSocket `message` listener at
-`Object.entries(state.agents)` — an uncaught exception in an event handler, which
-leaves the office frozen with no "Disconnected" banner (the socket is still open),
-i.e. exactly the silent-freeze failure mode 05-09's own must_haves calls out.
+**Issue:** Not changed. A snapshot with no `agents` throws inside the message
+listener and silently freezes the office.
 
-**Fix:** validate the snapshot shape at the same boundary — at minimum
-`if (!state || typeof state !== "object" || !state.agents || !state.tasks) return;`
-before handing it to `onSnapshot`, ideally a zod schema alongside
-`CompanyEventSchema`.
+**Fix:** validate the shape before `onSnapshot`, ideally with a zod schema placed
+next to `CompanyEventSchema`.
+
+### WR-10: TRUTH 5 never shows that the "accepts" line is painted, so an accepted line that is never drawn still passes
+
+**File:** `scripts/verify-pixel-office-live.mjs:30-38, 707-729`
+
+**Issue:** The header says dialogue is shown for "accepted line until the sender
+is home". But after `agent.handoff_completed`, the harness sleeps 1500 ms and
+checks only `clearedScan.dialogueHits === 0`. Both of these pass that check:
+
+- a renderer that never draws the receiver's line
+- an FSM that never sets `acceptedText`
+
+The 1500 ms is also not tied to the walk-home distance (48 px/s), so moving the
+desks further apart makes the check flaky.
+
+**Fix:** after posting completion, first poll until dialogue pixels appear over the
+receiver's column and assert that happens. Then poll, with a deadline based on
+`WALK_SPEED_PX_PER_SEC` and the tile distance, until `dialogueHits === 0`.
 
 ---
 
 ## Info
 
-### IN-01: Dead identity branch in `getCharacterSprites`
+### IN-01: (carried) Dead identity branch in `getCharacterSprites`
 
 **File:** `packages/pixel-office/src/sprites/spriteData.ts:75`
+**Fix:** drop the ternary. `colorAdjust` is used only inside `if (hueShift !== 0)`.
 
-**Issue:** `colorAdjust` is defined with a ternary whose else-branch is the
-identity function, but the binding is only ever referenced inside
-`if (hueShift !== 0)` (lines 98-104). The identity branch is unreachable.
-**Fix:** drop the ternary — `const colorAdjust = (s: SpriteData) => adjustSprite(s, { h: hueShift, s: 0, b: 0, c: 0 });`
-
-### IN-02: Zero-hue sprite frames alias the imported JSON module
+### IN-02: (carried) Zero-hue sprite frames alias the imported JSON module
 
 **File:** `packages/pixel-office/src/sprites/spriteData.ts:67-96`
+**Fix:** add a comment marking the frames as shared and immutable, or make a
+shallow copy on the zero-hue path.
 
-**Issue:** for `hueShift === 0`, `walk`/`typing`/`reading` hold direct references
-into `characterData` (and the same row arrays are shared between the two `d[1]`
-entries). Nothing mutates sprites today, so this is currently harmless, but any
-future in-place pixel edit would corrupt the checked-in asset for every consumer.
-**Fix:** a comment stating the frames are shared-immutable, or a shallow copy on
-the zero-hue path.
-
-### IN-03: `useRef(emptyState())` allocates a discarded projection on every render
+### IN-03: (carried) `useRef(emptyState())` allocates a projection on every render that is thrown away
 
 **File:** `apps/web/src/App.tsx:23`
-**Fix:** `useRef<ProjectionState | null>(null)` with lazy init, or accept it and
-note that `emptyState()` is cheap. Cosmetic only.
+**Fix:** initialise lazily, or accept it as cosmetic.
 
-### IN-04: The live harness silences all child stdout/stderr
+### IN-04: (carried) The harness still silences all child stdout/stderr
 
-**File:** `scripts/verify-pixel-office-live.mjs:273-274`
+**File:** `scripts/verify-pixel-office-live.mjs:293-294`
+**Fix:** keep the last ~50 lines and print them in the `waitFor` timeout error.
+This matters more now that `startServer` always spawns.
 
-**Issue:** `child.stdout.on("data", () => {})` / same for stderr. When a dev
-server fails to boot, the operator sees only `never became reachable within
-90000ms` with no cause. **Fix:** buffer the last ~50 lines and print them in the
-`waitFor` timeout error.
-
-### IN-05: `parseComposeTarget` takes the first published port in the file
+### IN-05: (carried) `parseComposeTarget` takes the first published port in the file
 
 **File:** `scripts/verify-pixel-office-live.mjs:99-107`
+**Fix:** anchor the match to the `postgres:` block, or fail when there is more
+than one mapping.
 
-**Issue:** the regex matches the first `- "host:container"` line anywhere in
-`docker-compose.test.yml`. Correct for today's single-service file; it silently
-picks the wrong service's port the moment a second one is added.
-**Fix:** anchor the match under the `postgres:` service block, or fail if more
-than one `ports:` mapping is present.
+### IN-06: (carried, accepted risk) The browser token is sent in the WS query string
 
-### IN-06: The browser access token still travels in the WebSocket query string
+**File:** `apps/web/src/ws-client.ts:15`
+**Fix:** use a short-lived ticket when Phase 7 visibility filtering ships.
 
-**File:** `apps/web/src/ws-client.ts:15`, `apps/api/src/routes/ws-browser.ts:16`
+### IN-07: `identityHueFor` is documented as "Pure", but it reads module state
 
-**Issue:** pre-existing and documented (a browser `WebSocket` cannot set headers),
-but worth restating now that this route is being actively modified: the shared
-token lands in any reverse-proxy/access log that records request URLs. Noted
-because the route file is in scope, not as a new regression — the INTERNAL-tier
-acceptance (T-05-03) still stands.
-**Fix:** when Phase 7's visibility filtering ships, move to a short-lived
-single-use ticket fetched over HTTP and redeemed in the first WS frame.
+**File:** `packages/pixel-office/src/index.ts:88-90`, `packages/pixel-office/src/types.ts:113-114`
+**Issue:** The result now depends on the `characters` map (which hues are held).
+The `ponytail:` note does say hue depends on seating order, but "Pure — no
+Math.random, no Date.now" in the same comment says otherwise. Someone reasoning
+about replay determinism will trust the word "Pure". Separately, the ~6.6 px per
+character width budget in `dialogue-templates.ts:355-359` assumes ASCII glyphs.
+A full-width title (CJK or emoji) within the 16-code-point cap renders about
+twice as wide. The box then goes past 320 px and is cut off silently at x = 0.
+**Fix:** reword it as "deterministic given the seated set; no Math.random/Date.now".
+Note the full-width case next to the caps.
 
 ---
 
-_Reviewed: 2026-09-21T12:00:00Z_
+_Reviewed: 2026-09-22T12:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
