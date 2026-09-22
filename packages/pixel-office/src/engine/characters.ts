@@ -119,6 +119,8 @@ export function updateCharacter(ch: Character, dt: number): void {
         const center = tileCenter(ch.tileCol, ch.tileRow);
         ch.x = center.x;
         ch.y = center.y;
+        // 05-25: home (a seat or standing spot) faces the viewer.
+        if (ch.tileCol === ch.seatCol && ch.tileRow === ch.seatRow) ch.dir = Direction.DOWN;
         ch.state = ch.restPose;
         ch.frame = 0;
         ch.frameTimer = 0;

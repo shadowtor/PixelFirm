@@ -328,7 +328,7 @@ function seatReal(n: number): Character[] {
 /** drawY renderScene uses for a character at offset 0 / zoom 1. */
 function ownerDrawY(ch: Character): number {
   const sprite = getCharacterSprite(ch, getCharacterSprites(ch.hueShift));
-  const sitting = ch.state === CharacterState.TYPE ? 6 : 0;
+  const sitting = ch.state === CharacterState.TYPE && isOwnSeat(ch) ? CHARACTER_SITTING_OFFSET_PX : 0;
   return Math.round(ch.y + sitting - sprite.length);
 }
 

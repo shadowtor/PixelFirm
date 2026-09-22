@@ -37,7 +37,7 @@ import {
   TILE_SIZE,
   WALL_COLOR,
 } from "../constants.js";
-import { type PlacedFurniture, tileSpriteAt } from "../layout/officeLayout.js";
+import { isOwnSeat, type PlacedFurniture, tileSpriteAt } from "../layout/officeLayout.js";
 import { resolveBubbleSprite } from "../sprites/bubbleSprites.js";
 import { getCharacterSprites } from "../sprites/spriteData.js";
 import type { Character, SpriteData, TileType as TileTypeVal } from "../types.js";
@@ -227,8 +227,9 @@ export function renderScene(
     const spriteHeight = spriteData.length;
     const spriteWidth = spriteData[0]?.length ?? 0;
 
-    // Sitting offset: shift character down when seated so they visually sit in the chair
-    const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0;
+    // Sitting offset: only a TYPE character on its own layout seat sinks into
+    // the chair (05-25); elsewhere it keeps typing at standing height (D-01).
+    const sittingOffset = ch.state === CharacterState.TYPE && isOwnSeat(ch) ? CHARACTER_SITTING_OFFSET_PX : 0;
     // Anchor at bottom-center of character
     const drawX = Math.round(offsetX + ch.x * zoom - (spriteWidth * zoom) / 2);
     const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - spriteHeight * zoom);
