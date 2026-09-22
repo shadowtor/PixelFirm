@@ -9,9 +9,10 @@
 // the matrix spawn/despawn effect, the fork's own speech-bubble renderer
 // (replaced by this repo's state-glyph and handoff-dialogue passes below),
 // every VS-Code-editor-only overlay (ghost preview, selection highlight,
-// delete/rotate buttons, grid overlay, area labels), and the offscreen
-// sprite-cache module (spriteCache.ts — drawing each SpriteData pixel
-// directly via fillRect is simpler and correct at this scale). Re-add the
+// delete/rotate buttons, grid overlay, area labels), and the fork's
+// spriteCache.ts module. 05-24 re-adds a small per-(sprite, zoom)
+// OffscreenCanvas cache below: the furnished floor makes per-pixel fillRect
+// every frame too expensive. Re-add the
 // relevant layer here (not a fresh guess) once a later plan actually needs
 // carpets/areas/pets.
 //
@@ -43,8 +44,10 @@ import type { Character, SpriteData, TileType as TileTypeVal } from "../types.js
 import { CharacterState, TileType } from "../types.js";
 import { getCharacterSprite } from "./characters.js";
 
-/** Draw a SpriteData pixel array directly — one fillRect per non-transparent cell. */
-function drawSpriteData(ctx: CanvasRenderingContext2D, sprite: SpriteData, x: number, y: number, zoom: number): void {
+type Paintable = Pick<CanvasRenderingContext2D, "fillStyle" | "fillRect">;
+
+/** One fillRect per non-transparent cell. */
+function paintSpriteData(ctx: Paintable, sprite: SpriteData, x: number, y: number, zoom: number): void {
   for (let row = 0; row < sprite.length; row++) {
     const cols = sprite[row];
     for (let col = 0; col < cols.length; col++) {
@@ -54,6 +57,34 @@ function drawSpriteData(ctx: CanvasRenderingContext2D, sprite: SpriteData, x: nu
       ctx.fillRect(x + col * zoom, y + row * zoom, zoom, zoom);
     }
   }
+}
+
+// ponytail: bounded by the module-level SpriteData objects (character frames
+// per identity hue, 12 glyphs, office sprites) per zoom; a window resize adds
+// one zoom's worth. Never evicted — add an LRU if zooms ever become unbounded.
+const spriteCanvases = new WeakMap<SpriteData, Map<number, OffscreenCanvas>>();
+
+/** The sprite rasterised once at this zoom, or null where OffscreenCanvas
+ *  does not exist (vitest's node environment). */
+function spriteCanvas(sprite: SpriteData, zoom: number): OffscreenCanvas | null {
+  if (typeof OffscreenCanvas !== "function") return null;
+  let byZoom = spriteCanvases.get(sprite);
+  if (!byZoom) spriteCanvases.set(sprite, (byZoom = new Map()));
+  let canvas = byZoom.get(zoom);
+  if (!canvas) {
+    canvas = new OffscreenCanvas(Math.max(1, (sprite[0]?.length ?? 0) * zoom), Math.max(1, sprite.length * zoom));
+    const octx = canvas.getContext("2d");
+    if (octx) paintSpriteData(octx, sprite, 0, 0, zoom);
+    byZoom.set(zoom, canvas);
+  }
+  return canvas;
+}
+
+/** Draw a sprite: the cached canvas via drawImage in the browser, else fillRect per cell. */
+function drawSpriteData(ctx: CanvasRenderingContext2D, sprite: SpriteData, x: number, y: number, zoom: number): void {
+  const canvas = spriteCanvas(sprite, zoom);
+  if (canvas) ctx.drawImage(canvas, x, y);
+  else paintSpriteData(ctx, sprite, x, y, zoom);
 }
 
 /** @internal */
