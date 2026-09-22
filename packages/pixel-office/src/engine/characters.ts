@@ -13,8 +13,10 @@
 // (isReadingTool — packages/pixel-office has no toolUtils.js; READING is one
 // of the two AgentStatus values this phase's derivation deliberately never
 // emits, per 05-01-PLAN.md's flagged_assumptions). The WALK state's path-
-// following logic is kept verbatim except for one modification (05-17): a
-// frozen character still walks, only its walk frame is held. 05-04's handoff
+// following logic is kept verbatim except for these modifications: a frozen
+// character still walks, only its walk frame is held (05-17); every walk ends
+// in the character's rest pose instead of IDLE, and a walk to the tile the
+// character already stands on drops any pending path (05-19). 05-04's handoff
 // choreography reuses it via walkCharacterTo below (RESEARCH.md Architecture
 // Patterns → Pattern 1).
 
@@ -52,6 +54,7 @@ export function createCharacter(id: string, tileCol = 1, tileRow = 1, hueShift =
   return {
     id,
     state: CharacterState.IDLE,
+    restPose: CharacterState.IDLE,
     dir: Direction.DOWN,
     x: center.x,
     y: center.y,
@@ -111,11 +114,11 @@ export function updateCharacter(ch: Character, dt: number): void {
       }
 
       if (ch.path.length === 0) {
-        // Path complete — snap to tile center and go idle.
+        // Path complete — snap to tile center and take the rest pose (05-19).
         const center = tileCenter(ch.tileCol, ch.tileRow);
         ch.x = center.x;
         ch.y = center.y;
-        ch.state = CharacterState.IDLE;
+        ch.state = ch.restPose;
         ch.frame = 0;
         ch.frameTimer = 0;
         break;
@@ -147,10 +150,22 @@ export function updateCharacter(ch: Character, dt: number): void {
 }
 
 /**
+ * The only writer of a non-walk pose (05-19, review CR-01/IN-03). WALK is what
+ * must never be interrupted (not path length): a walker keeps walking and
+ * picks the pose up when its walk ends.
+ */
+export function setRestPose(ch: Character, pose: CharacterState): void {
+  ch.restPose = pose;
+  if (ch.state !== CharacterState.WALK) ch.state = pose;
+}
+
+/**
  * Path this character to a target tile via the forked BFS findPath and
  * transition to WALK. No-ops (stays in current state) if no path exists.
- * Reused unmodified by 05-04's handoff walk-to-desk choreography
- * (RESEARCH.md Architecture Patterns → Pattern 1).
+ * Already on the target tile: any pending path is dropped, so a walker ends
+ * its walk there on its next update and a standing character counts as
+ * arrived (05-19, review CR-01 path b). Reused by 05-04's handoff
+ * walk-to-desk choreography (RESEARCH.md Architecture Patterns → Pattern 1).
  */
 export function walkCharacterTo(
   ch: Character,
@@ -159,6 +174,11 @@ export function walkCharacterTo(
   tileMap: TileTypeVal[][],
   blockedTiles: Set<string>,
 ): void {
+  if (ch.tileCol === targetCol && ch.tileRow === targetRow) {
+    ch.path = [];
+    ch.moveProgress = 0;
+    return;
+  }
   const path = findPath(ch.tileCol, ch.tileRow, targetCol, targetRow, tileMap, blockedTiles);
   if (path.length === 0) return;
   ch.path = path;

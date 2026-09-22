@@ -1,5 +1,5 @@
 // Event-driven walk/icon/accept/return FSM (HANDOFF-01), keyed by taskId.
-// Drives 05-01's forked findPath BFS (via walkCharacterTo, unmodified — no
+// Drives 05-01's forked findPath BFS (via walkCharacterTo — no
 // new pathfinder is written here, per RESEARCH.md's Don't Hand-Roll) purely
 // off real agent.handoff_requested/agent.handoff_completed event pairs.
 // Never a timer, never a path-length heuristic: the receiving character MUST
@@ -13,8 +13,9 @@
 // time, so ESM's live-binding linking resolves it correctly regardless of
 // which module finishes evaluating first.
 import type { CompanyEvent } from "event-schema";
-import { walkCharacterTo } from "../engine/characters.js";
+import { setRestPose, walkCharacterTo } from "../engine/characters.js";
 import { getCharacter, getTaskTitle, getTileMap } from "../index.js";
+import type { Character } from "../types.js";
 import { CharacterState } from "../types.js";
 import { resolveHandoffDialogue } from "./dialogue-templates.js";
 
@@ -36,6 +37,15 @@ interface HandoffRecord {
 const NO_BLOCKED_TILES = new Set<string>();
 
 const handoffs = new Map<string, HandoffRecord>();
+
+/**
+ * Arrival is "not walking and nothing left to walk" (05-19, review CR-01).
+ * An empty path alone is not arrival: the final frame of a walk still has
+ * state WALK.
+ */
+function hasArrived(ch: Character): boolean {
+  return ch.state !== CharacterState.WALK && ch.path.length === 0;
+}
 
 // Request event ids this FSM has already acted on — the FSM is the only
 // non-idempotent consumer of relayed events, so a re-delivered request must
@@ -124,7 +134,9 @@ export function handleHandoffEvent(event: CompanyEvent): void {
     if (toChar) {
       // The receiver "accepts and moves to work" at their existing desk —
       // per HANDOFF-01's exact wording, no second walk leg for them.
-      toChar.state = CharacterState.TYPE;
+      // setRestPose: a receiver mid-walk on its own handoff keeps walking and
+      // types when its walk ends (05-19, gap item 2). Still only here (05-04).
+      setRestPose(toChar, CharacterState.TYPE);
       const taskTitle = getTaskTitle(taskId) ?? taskId;
       const toAgentName = toChar.name ?? record.toAgentId;
       record.acceptedText = resolveHandoffDialogue("accepted", taskTitle, toAgentName);
@@ -140,9 +152,10 @@ export function handleHandoffEvent(event: CompanyEvent): void {
  * Advances the FSM's arrival-driven transitions — call once per game-loop
  * tick, after every Character's own updateCharacter has run for that frame
  * (index.ts wires this in). Detects "sending character has arrived" purely
- * from the already-updated Character struct (state === IDLE, path emptied)
- * — the same signal engine/characters.ts's WALK case already produces when
- * a walkCharacterTo-driven path completes; no separate timer/heuristic.
+ * from the already-updated Character struct: arrival is "not walking and
+ * nothing left to walk" (hasArrived, 05-19) — the signal engine/characters.ts's
+ * WALK case produces when a walkCharacterTo-driven path completes; no
+ * separate timer/heuristic.
  */
 export function checkHandoffArrivals(): void {
   for (const record of handoffs.values()) {
@@ -154,7 +167,7 @@ export function checkHandoffArrivals(): void {
         retireHandoff(record, false);
         continue;
       }
-      if (fromChar.state !== CharacterState.IDLE || fromChar.path.length !== 0) continue;
+      if (!hasArrived(fromChar)) continue;
 
       const taskTitle = getTaskTitle(record.taskId) ?? record.taskId;
       const toChar = getCharacter(record.toAgentId);
@@ -168,7 +181,7 @@ export function checkHandoffArrivals(): void {
 
     if (record.phase === "RETURNING_TO_DESK") {
       const fromChar = getCharacter(record.fromAgentId);
-      if (fromChar && (fromChar.state !== CharacterState.IDLE || fromChar.path.length !== 0)) continue;
+      if (fromChar && !hasArrived(fromChar)) continue;
 
       // D-04's sequence ends when the sender is home (or gone): a line left
       // painted after that is a stale claim (Pitfall 2).

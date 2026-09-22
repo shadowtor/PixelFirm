@@ -89,6 +89,11 @@ export interface Character {
    *  numeric per-VS-Code-session id. */
   id: string;
   state: CharacterState;
+  /** The pose shown whenever the character is not walking: its latest
+   *  AgentStatus pose, or TYPE once it accepted a handoff. Applied at once
+   *  when not walking and at the end of every walk. Only setRestPose writes
+   *  it (05-19, review CR-01/IN-03). */
+  restPose: CharacterState;
   dir: Direction;
   /** Pixel position */
   x: number;
