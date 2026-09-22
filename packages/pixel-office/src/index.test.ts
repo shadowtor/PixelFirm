@@ -4,13 +4,13 @@ import {
   upsertCharacterFromAgent,
   getCharacter,
   _resetForTests,
-  DEFAULT_ROWS,
   MIN_DISPLAY_SCALE,
   displayScaleFor,
 } from "./index";
 import { CharacterState, Direction } from "./types";
 import { findPath } from "./layout/tileMap";
 import { TileType } from "./types";
+import { FURNITURE_BLOCKED_TILES, OFFICE_TILE_MAP, SEATS, STANDING_SPOTS } from "./layout/officeLayout";
 import { getCharacterSprites } from "./sprites/spriteData";
 
 beforeEach(() => {
@@ -136,76 +136,81 @@ describe("per-agent identity hue (WR-08)", () => {
   });
 });
 
-describe("desk layout headroom (CR-02)", () => {
-  /** Seats n agents through the real layout and returns their desk rows. */
-  function seatRows(n: number): number[] {
+describe("office layout seats (G-05-1e)", () => {
+  const seatOf = (id: string) => {
+    const ch = getCharacter(id)!;
+    return { col: ch.seatCol, row: ch.seatRow };
+  };
+  const seatAgents = (n: number) => {
     for (let i = 0; i < n; i++) upsertCharacterFromAgent(`agent-${i}`, AgentStatus.IDLE);
-    return Array.from({ length: n }, (_, i) => getCharacter(`agent-${i}`)!.seatRow);
-  }
+  };
 
-  it("seats the first desk row at interior row 3 and the next at interior row 6, sharing column 1", () => {
-    const rows = seatRows(19);
-    for (let i = 0; i < 18; i++) expect(rows[i]).toBe(3);
-    expect(rows[18]).toBe(6);
-    expect(getCharacter("agent-0")!.seatCol).toBe(1);
-    expect(getCharacter("agent-18")!.seatCol).toBe(1);
-  });
-
-  it("never seats a desk on interior row 1 or 2, and keeps consecutive desk rows at least 3 apart", () => {
-    const distinct = [...new Set(seatRows(60))].sort((a, b) => a - b);
-    expect(distinct[0]).toBeGreaterThanOrEqual(3);
-    for (let i = 1; i < distinct.length; i++) {
-      expect(distinct[i] - distinct[i - 1]).toBeGreaterThanOrEqual(3);
-    }
-  });
-
-  it("clamps overflow desks to the last interior row rather than seating a character inside the wall border", () => {
-    const rows = seatRows(80);
-    for (const row of rows) expect(row).toBeLessThanOrEqual(DEFAULT_ROWS - 2);
+  it("seats the 1st, 2nd and 9th agents at SEATS[0], SEATS[1] and SEATS[8]", () => {
+    seatAgents(9);
+    expect(SEATS[0]).toEqual({ col: 1, row: 4 });
+    expect(SEATS[1]).toEqual({ col: 3, row: 4 });
+    expect(SEATS[8]).toEqual({ col: 1, row: 8 });
+    expect(seatOf("agent-0")).toEqual(SEATS[0]);
+    expect(seatOf("agent-1")).toEqual(SEATS[1]);
+    expect(seatOf("agent-8")).toEqual(SEATS[8]);
   });
 
   /** "col,row" of every id's seat, asserting no two share a tile. */
   function expectDistinctSeats(ids: string[]): void {
-    const seats = ids.map((id) => {
-      const ch = getCharacter(id)!;
-      return `${ch.seatCol},${ch.seatRow}`;
-    });
+    const seats = ids.map((id) => `${seatOf(id).col},${seatOf(id).row}`);
     expect(new Set(seats).size).toBe(seats.length);
   }
 
-  it("reclaims a despawned agent's desk across heavy offline/online churn (WR-03)", () => {
+  it("reclaims a despawned agent's seat across heavy offline/online churn (WR-03)", () => {
     for (const id of ["agent-a", "agent-b", "agent-c"]) upsertCharacterFromAgent(id, AgentStatus.IDLE);
-    const b = getCharacter("agent-b")!;
-    const original = { col: b.seatCol, row: b.seatRow };
+    const original = seatOf("agent-b");
     for (let i = 0; i < 100; i++) {
       upsertCharacterFromAgent("agent-b", AgentStatus.OFFLINE);
       upsertCharacterFromAgent("agent-b", AgentStatus.IDLE);
     }
-    const after = getCharacter("agent-b")!;
-    expect({ col: after.seatCol, row: after.seatRow }).toEqual(original);
+    expect(seatOf("agent-b")).toEqual(original);
     expectDistinctSeats(["agent-a", "agent-b", "agent-c"]);
   });
 
-  it("never seats two concurrently seated characters on one tile after churn (<= 54 seated)", () => {
-    const ids = Array.from({ length: 37 }, (_, i) => `agent-${i}`);
-    for (const id of ids) upsertCharacterFromAgent(id, AgentStatus.IDLE);
-    expect(getCharacter("agent-36")!.seatRow).toBe(9);
-    expect(getCharacter("agent-36")!.seatCol).toBe(1);
-    for (let i = 0; i < 18; i++) {
-      upsertCharacterFromAgent("agent-0", AgentStatus.OFFLINE);
-      upsertCharacterFromAgent("agent-0", AgentStatus.IDLE);
-    }
-    expectDistinctSeats(ids);
-  });
-
-  it("gives the next new character the lowest-numbered free desk", () => {
-    for (let i = 0; i < 5; i++) upsertCharacterFromAgent(`agent-${i}`, AgentStatus.IDLE);
+  it("gives the next new agent the lowest free seat", () => {
+    seatAgents(5);
     upsertCharacterFromAgent("agent-1", AgentStatus.OFFLINE);
     upsertCharacterFromAgent("agent-3", AgentStatus.OFFLINE);
     upsertCharacterFromAgent("new-1", AgentStatus.IDLE);
     upsertCharacterFromAgent("new-2", AgentStatus.IDLE);
-    expect(getCharacter("new-1")).toMatchObject({ seatCol: 2, seatRow: 3 });
-    expect(getCharacter("new-2")).toMatchObject({ seatCol: 4, seatRow: 3 });
+    expect(seatOf("new-1")).toEqual(SEATS[1]);
+    expect(seatOf("new-2")).toEqual(SEATS[3]);
+  });
+
+  it("stands the 17th agent on STANDING_SPOTS[0] and keeps 20 present agents on 20 distinct tiles", () => {
+    seatAgents(20);
+    expect(seatOf("agent-16")).toEqual(STANDING_SPOTS[0]);
+    const ids = Array.from({ length: 20 }, (_, i) => `agent-${i}`);
+    expectDistinctSeats(ids);
+    for (let i = 0; i < 20; i++) {
+      upsertCharacterFromAgent("agent-4", AgentStatus.OFFLINE);
+      upsertCharacterFromAgent("agent-4", AgentStatus.IDLE);
+    }
+    expectDistinctSeats(ids);
+  });
+
+  it("shares the last standing spot from the 21st agent (the documented ceiling)", () => {
+    seatAgents(21);
+    expect(seatOf("agent-20")).toEqual(STANDING_SPOTS[STANDING_SPOTS.length - 1]);
+    expect(seatOf("agent-19")).toEqual(STANDING_SPOTS[STANDING_SPOTS.length - 1]);
+  });
+
+  it("links every seat and standing spot to every other over the furniture-blocked tiles", () => {
+    const homes = [...SEATS, ...STANDING_SPOTS];
+    const blocked = new Set(FURNITURE_BLOCKED_TILES);
+    for (const a of homes) {
+      for (const b of homes) {
+        if (a === b) continue;
+        const path = findPath(a.col, a.row, b.col, b.row, OFFICE_TILE_MAP, blocked);
+        expect(path.length, `${a.col},${a.row} -> ${b.col},${b.row}`).toBeGreaterThan(0);
+        expect(path[path.length - 1]).toEqual(b);
+      }
+    }
   });
 });
 
