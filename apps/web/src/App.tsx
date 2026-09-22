@@ -4,6 +4,7 @@ import {
   DEFAULT_ROWS,
   MIN_DISPLAY_SCALE,
   TILE_SIZE,
+  WALL_COLOR,
   displayScaleFor,
   startGameLoop,
   upsertCharacterFromAgent,
@@ -17,14 +18,15 @@ import { applyLiveEvent } from "./agent-event-mapper";
 const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL as string;
 const browserToken = import.meta.env.VITE_BROWSER_ACCESS_TOKEN as string;
 
-// 05-21 (G-05-1a): the fixed attribution footer's height, rounded up — at
-// 1920x1080 the office is 1920x1056 (scale 6) with the footer underneath.
-const FOOTER_RESERVE_PX = 24;
-
+// 05-21 (G-05-1a) / 05-31 (G-05-P6): the office is sized from the FULL
+// viewport, with no DOM height reserved for the footer — the footer overlays
+// the office's own bottom wall row instead. Reserving 24px made a 1280x720 OBS
+// source floor to scale 3 (960x528) and left the rest of the frame black; at
+// the full height it is scale 4 (1280x704).
 function currentDisplayScale(): number {
   return typeof window === "undefined"
     ? MIN_DISPLAY_SCALE
-    : displayScaleFor(window.innerWidth, window.innerHeight - FOOTER_RESERVE_PX);
+    : displayScaleFor(window.innerWidth, window.innerHeight);
 }
 
 export function App() {
@@ -114,14 +116,21 @@ export function App() {
 
   return (
     <>
-      <canvas
-        id="office-canvas"
-        ref={canvasRef}
-        width={DEFAULT_COLS * TILE_SIZE * scale}
-        height={DEFAULT_ROWS * TILE_SIZE * scale}
-        // No CSS width/height: the CSS box must equal the backing store.
-        style={{ display: "block", imageRendering: "pixelated" }}
-      />
+      {/* 05-31 (G-05-P6): full-viewport surround in the office's own border
+          colour, so a viewport that is not an exact multiple of 320x176 shows
+          a WALL_COLOR strip continuous with the office border rather than
+          black. margin:auto centres the canvas when it fits; overflow:auto
+          scrolls instead of clipping below MIN_DISPLAY_SCALE. */}
+      <div style={{ position: "fixed", inset: 0, display: "flex", overflow: "auto", background: WALL_COLOR }}>
+        <canvas
+          id="office-canvas"
+          ref={canvasRef}
+          width={DEFAULT_COLS * TILE_SIZE * scale}
+          height={DEFAULT_ROWS * TILE_SIZE * scale}
+          // No CSS width/height: the CSS box must equal the backing store.
+          style={{ display: "block", margin: "auto", imageRendering: "pixelated" }}
+        />
+      </div>
       {disconnected && (
         <div
           role="status"
@@ -153,7 +162,10 @@ export function App() {
           audit rather than asserting a licence over the bytes we ship.
           05-26: the office art (MetroCity Interior, ASSET-LICENSES §1a) is
           credited alongside the character pack — still credit-only, because
-          §1's hair layer is. */}
+          §1's hair layer is.
+          05-31 (G-05-P6): the black strip is gone — the footer is transparent
+          and overlays the office's own bottom wall row (and the WALL_COLOR
+          remainder below it), never the floor. The sentence is unchanged. */}
       <footer
         style={{
           position: "fixed",
@@ -164,7 +176,6 @@ export function App() {
           fontSize: "11px",
           fontFamily: "monospace",
           color: "#cccccc",
-          background: "rgba(0, 0, 0, 0.6)",
         }}
       >
         Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character and

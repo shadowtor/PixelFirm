@@ -5,7 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PixelFirm</title>
   </head>
-  <body style="margin:0;background:#000">
+  <!-- 05-31 (G-05-P6): WALL_COLOR, the office's own border colour — never
+       black, so no black frame shows before React mounts. Kept in sync with
+       packages/pixel-office/src/constants.ts by apps/web/src/App.test.tsx. -->
+  <body style="margin:0;background:#3A3A5C">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
