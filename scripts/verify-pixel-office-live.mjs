@@ -33,8 +33,10 @@
 // Truths: (1) a live agent paints a sprite; (2) a live blocked status paints
 // its glyph; (3) a handoff pair paints the task icon, then clears it; (4) the
 // blocked glyph is owner-bound; (5) the handoff dialogue line is painted
-// owner-bound above the waiting sender and nothing is left once the sequence
-// ends. Dialogue is shown for its sequence only (requested line while the
+// owner-bound above the waiting sender, the receiver's accepted line is
+// positively observed after agent.handoff_completed (05-17, WR-10), and
+// nothing is left once the sequence ends (polled against a walk-home deadline
+// derived from WALK_SPEED_PX_PER_SEC). Dialogue is shown for its sequence only (requested line while the
 // sender waits; accepted line until the sender is home).
 //
 // The harness refuses to run while the API or web port is taken and never
@@ -179,6 +181,7 @@ const DEFAULT_COLS = readNumberConst(constantsSrc, "constants.ts", "DEFAULT_COLS
 const DEFAULT_ROWS = readNumberConst(constantsSrc, "constants.ts", "DEFAULT_ROWS");
 const DESK_ROW_START = readNumberConst(officeIndexSrc, "index.ts", "DESK_ROW_START");
 const DESK_ROW_PITCH = readNumberConst(officeIndexSrc, "index.ts", "DESK_ROW_PITCH");
+const WALK_SPEED_PX_PER_SEC = readNumberConst(constantsSrc, "constants.ts", "WALK_SPEED_PX_PER_SEC");
 const INTERIOR_COLS = DEFAULT_COLS - 2;
 const MAP_W = DEFAULT_COLS * TILE_SIZE;
 const MAP_H = DEFAULT_ROWS * TILE_SIZE;
@@ -505,6 +508,18 @@ async function scanCanvas(page, xRange = null, textAboveY = null) {
   );
 }
 
+/** Re-scans about every 50 ms until `predicate(scan)` holds or `timeoutMs`
+ *  passes; returns the last scan either way. */
+async function pollScan(page, predicate, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let scan = await scanCanvas(page);
+  while (!predicate(scan) && Date.now() < deadline) {
+    await sleep(50);
+    scan = await scanCanvas(page);
+  }
+  return scan;
+}
+
 /** Frames the renderer needs to settle after an event lands (or after load). */
 const RENDER_SETTLE_MS = 1500;
 
@@ -711,8 +726,26 @@ async function main() {
       sourceAgentId: RECEIVER,
       payload: { taskId: HANDOFF_TASK, toAgentId: RECEIVER },
     });
-    await sleep(1500);
-    const clearedScan = await scanCanvas(page);
+    // The sender walks home over the same desk distance it walked out.
+    const senderDesk = claimDesk(SENDER);
+    const walkHomeMs =
+      ((Math.abs(senderDesk.col - receiverDesk.col) + Math.abs(senderDesk.row - receiverDesk.row)) * TILE_SIZE * 1000) /
+      WALK_SPEED_PX_PER_SEC;
+    const handoffEndDeadlineMs = walkHomeMs + RENDER_SETTLE_MS;
+    // Icon gone = the completion was processed, so these px are the accepted
+    // line, never the requested line still painted before the event landed.
+    const acceptedScan = await pollScan(page, (s) => s.handoffHits === 0 && s.dialogueHits > 0, handoffEndDeadlineMs);
+    assert(
+      acceptedScan.handoffHits === 0 && acceptedScan.dialogueHits > 0,
+      `WR-10: the receiver's accepted line was never painted after agent.handoff_completed ` +
+        `(0 dialogue-box px within ${Math.round(handoffEndDeadlineMs)} ms)`,
+    );
+    log(`accepted line painted after handoff_completed: ${acceptedScan.dialogueHits} dialogue-box px`);
+    const clearedScan = await pollScan(
+      page,
+      (s) => s.dialogueHits === 0 && s.handoffHits === 0,
+      handoffEndDeadlineMs,
+    );
     log(`after handoff_completed: sprite=${clearedScan.sprite} blocked=${clearedScan.blockedHits} handoff=${clearedScan.handoffHits}`);
     assert(
       clearedScan.handoffHits === 0,
