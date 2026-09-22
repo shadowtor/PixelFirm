@@ -611,6 +611,25 @@ describe("ClaudeCodeRuntime superseded invocations (one live query() per task)",
     return { iter, signal, isLive: () => !signal.aborted && !state.done };
   }
 
+  // A stream that yields init, then ends cleanly as soon as interrupt() is
+  // called — graceful stop succeeds without any abort.
+  function drainingQuery(signal: AbortSignal, initMsg: unknown) {
+    const state = { done: false };
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    async function* gen() {
+      try {
+        yield initMsg;
+        await gate;
+      } finally {
+        state.done = true;
+      }
+    }
+    const iter = gen() as AsyncGenerator<unknown, void> & { interrupt: Mock };
+    iter.interrupt = vi.fn(async () => release());
+    return { iter, signal, isLive: () => !signal.aborted && !state.done };
+  }
+
   // Records, at the moment each query() is created, how many previously
   // created streams are still live and which ones were aborted.
   function recordingQuery(make: (signal: AbortSignal, index: number) => ReturnType<typeof abortableQuery>) {
@@ -643,6 +662,26 @@ describe("ClaudeCodeRuntime superseded invocations (one live query() per task)",
     expect(rec.streams).toHaveLength(3);
     expect(rec.liveAtStart).toEqual([0, 0, 0]);
     expect(rec.abortedAtStart[2]).toEqual([true, true]);
+  });
+
+  it("Test F: two same-tick sendMessage calls against a cleanly draining stream start exactly one new query()", async () => {
+    const rec = recordingQuery((signal, i) =>
+      i === 0 ? drainingQuery(signal, initMessage("session-0")) : abortableQuery(signal, initMessage(`session-${i}`)),
+    );
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    void runtime.startTask(startInput);
+    await vi.advanceTimersByTimeAsync(0);
+    void runtime.sendMessage("task-1", "second");
+    void runtime.sendMessage("task-1", "third");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(rec.liveAtStart).toEqual(rec.liveAtStart.map(() => 0));
+    expect(rec.streams).toHaveLength(2);
+    expect(rec.streams.filter((s) => s.isLive())).toHaveLength(1);
+    const calls = (query as unknown as Mock).mock.calls;
+    expect(calls[calls.length - 1][0].prompt).toBe("third");
   });
 
   // Yields init, then one message every 10 s forever (ignores abort) — keeps
