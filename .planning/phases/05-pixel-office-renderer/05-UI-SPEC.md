@@ -35,7 +35,7 @@ created: "2026-09-21"
 > icon glyphs the renderer's `STATUS_MAP` (`packages/pixel-office/src/status/status-mapping.ts`)
 > resolves per `AgentStatus` value.
 
-Enumerated by `ls packages/pixel-office/src/sprites/*.json` — 9 files — `pixel-office@0.0.0` (workspace package, `packages/pixel-office/package.json`) — 2026-09-21.
+Enumerated by `ls packages/pixel-office/src/sprites/*.json` — 12 glyph files plus `character-metrocity.json` (the character sheet) — `pixel-office@0.0.0` (workspace package, `packages/pixel-office/package.json`) — re-enumerated 2026-09-22 (05-16; originally 9 files, 2026-09-21).
 
 This is a **non-exhaustive** list — any new `AgentStatus` value or handoff-state icon added later gets its own JSON asset in the same format; checking for one outside this table is expected.
 
@@ -50,16 +50,19 @@ This is a **non-exhaustive** list — any new `AgentStatus` value or handoff-sta
 | `badge-reviewing.json` | `reviewing` | Wide eye | 11×13 `{palette, pixels}` |
 | `badge-discussing.json` | `discussing` | Speech-bubble + dots | 11×13 `{palette, pixels}` |
 | `badge-deploying.json` | `deploying` | Rocket + fins | 11×13 `{palette, pixels}` |
+| `bubble-permission.json` | `waiting_for_ceo` | authored 05-07 (distinct silhouette, `bubbleSprites.test.ts`) | 11×13 `{palette, pixels}` |
+| `bubble-waiting.json` | `waiting_for_agent` | authored 05-07 (distinct silhouette, `bubbleSprites.test.ts`) | 11×13 `{palette, pixels}` |
+| `bubble-handoff-task.json` | handoff task icon (sender, `ICON_VISIBLE`) | authored 05-07 (distinct silhouette, `bubbleSprites.test.ts`) | 11×13 `{palette, pixels}` |
 
 **Asset format contract (lock in for any new icon the closure plan adds):**
 - Exactly 11 columns × 13 rows, `pixels: string[][]` — empty string `""` cells are transparent.
 - `palette: Record<string, hexColor>` — pixel values are palette keys, never raw hex inline.
 - Every glyph must be a **distinct silhouette**, not a recolour of another glyph (OFFICE-03's grayscale/compressed-video legibility requirement — colour alone must never be the only signal).
 
-**Known gap the closure plan must resolve (do not re-invent — author in this same format):**
-- `bubble-permission.json` (for `waiting_for_ceo`) and `bubble-waiting.json` (for `waiting_for_agent`) are referenced by `STATUS_MAP`'s `bubble: "permission"` / `bubble: "waiting"` keys but **do not exist on disk** — `05-02-SUMMARY.md` and `05-VERIFICATION.md` both confirm this. These two states currently resolve to a bubble key with no backing JSON.
-- `engine/renderer.ts` has **no draw pass at all** for `Character.bubbleType`/`bubbleText` — every asset above is data-correct but invisible on screen today (`05-VERIFICATION.md` gap 2).
-- `packages/pixel-office/src/sprites/spriteData.ts`'s `getCharacterSprites()` unconditionally returns fully-transparent placeholder pixel data — no agent silhouette (idle/walk/type pose) is visible on screen at all today (`05-VERIFICATION.md` gap 1). This UI-SPEC does not mandate a specific sourcing tier (D-02's triage — reuse/AI-generation/procedural/commission — already governs that decision); it locks in that whatever pixel data lands here must not be transparent, and must preserve the fork's existing 4-direction × {idle, walk, type} sprite-sheet shape so `engine/characters.ts`/`gameLoop.ts` need no rework.
+**Known gap the closure plan must resolve (do not re-invent — author in this same format):** — all three resolved; each bullet is kept as written with its resolution prefixed.
+- **Resolved by 05-07** (both assets authored; listed in the table above). `bubble-permission.json` (for `waiting_for_ceo`) and `bubble-waiting.json` (for `waiting_for_agent`) are referenced by `STATUS_MAP`'s `bubble: "permission"` / `bubble: "waiting"` keys but **do not exist on disk** — `05-02-SUMMARY.md` and `05-VERIFICATION.md` both confirm this. These two states currently resolve to a bubble key with no backing JSON.
+- **Resolved by 05-07** (glyph draw pass; owner-bound placement 05-12; dialogue pass and glyphs-on-top order 05-13; observed live by TRUTH 2/4/5). `engine/renderer.ts` has **no draw pass at all** for `Character.bubbleType`/`bubbleText` — every asset above is data-correct but invisible on screen today (`05-VERIFICATION.md` gap 2).
+- **Resolved by 05-06** (MetroCity sheet decoded into `character-metrocity.json`; observed live by TRUTH 1). `packages/pixel-office/src/sprites/spriteData.ts`'s `getCharacterSprites()` unconditionally returns fully-transparent placeholder pixel data — no agent silhouette (idle/walk/type pose) is visible on screen at all today (`05-VERIFICATION.md` gap 1). This UI-SPEC does not mandate a specific sourcing tier (D-02's triage — reuse/AI-generation/procedural/commission — already governs that decision); it locks in that whatever pixel data lands here must not be transparent, and must preserve the fork's existing 4-direction × {idle, walk, type} sprite-sheet shape so `engine/characters.ts`/`gameLoop.ts` need no rework.
 
 ---
 
@@ -86,11 +89,13 @@ Declared values (must be multiples of 4) — **applies to the DOM overlay only**
 | Role | Size | Weight | Line Height |
 |------|------|--------|-------------|
 | Body | n/a | n/a | n/a — no body text exists anywhere in this phase's UI |
-| Label | 11px | 400 (regular) | ~1.4 (browser default) — the DOM attribution `<footer>`, the only rendered text in the app (`apps/web/src/App.tsx`) |
+| Label | 11px | 400 (regular) | ~1.4 (browser default) — the DOM attribution `<footer>` (`apps/web/src/App.tsx`) and, on canvas, the handoff dialogue line (below) — the only rendered text in the app |
 | Heading | n/a | n/a | n/a — not used this phase |
 | Display | n/a | n/a | n/a — not used this phase |
 
-Font family for the footer: `monospace` (unstyled system stack, no webfont loaded). Canvas rendering draws pixel sprites only — no `ctx.fillText`/font call exists anywhere in `packages/pixel-office` today. `Character.bubbleText` (handoff dialogue strings, `packages/pixel-office/src/handoff/dialogue-templates.ts`) is real, tested data attached to each `Character`, but is **not drawn to canvas** — this is a documented, deliberately out-of-scope gap (`05-04-SUMMARY.md` Known Stubs), not part of this phase's closure scope (OFFICE-01/03/HANDOFF-01 require the task-icon bubble and pose/overlay to be visible; they do not require dialogue text to render on-canvas). If a future plan renders `bubbleText`, it must reuse this same monospace/11px scale rather than introducing a second type system, and must stay inside the 16px tile grid (Spacing Scale exception above).
+Font family for the footer: `monospace` (unstyled system stack, no webfont loaded).
+
+**Handoff dialogue (shipped 05-13, observed live 05-16):** `Character.bubbleText` (`packages/pixel-office/src/handoff/dialogue-templates.ts`) is drawn by `renderScene`'s dialogue pass (`engine/renderer.ts`, `drawDialogue` / `resolveDialogueBox`) in `DIALOGUE_FONT_PX * zoom` px `monospace` — the reserved 11px scale above, no second type system. The text sits inside an owner-anchored box `DIALOGUE_BOX_HEIGHT_PX` (13) tall with `DIALOGUE_BOX_PAD_X_PX` (2) horizontal padding, horizontally centred on its speaker and shifted only as far as needed to stay on the canvas (so its extent always contains the speaker's centre x), stacked directly above the speaker's glyph slot (`BUBBLE_ICON_GAP_PX` gap), and clamped at y = 0 — which is where a desk-row-3 speaker's box lands (y 0..12). Pass order: all sprites, then all dialogue boxes, then all state glyphs, so a transient line never hides a state signal. **16px-grid interpretation (05-13 assumption A2):** like the 11×13 glyph, the box is anchored to its owner inside the tile-grid canvas rather than tile-aligned; the Spacing Scale exception's "align to the 16px tile grid" is read as "live inside the tile-grid canvas, owner-anchored".
 
 ---
 
@@ -102,6 +107,8 @@ Font family for the footer: `monospace` (unstyled system stack, no webfont loade
 | Secondary (30%) | `#3A3A5C` (`WALL_COLOR`) | Office wall/boundary tiles |
 | Accent (10%) | per-glyph palette colours inside each bubble/badge JSON (e.g. `#ffb703` amber for `permission`-style, `#2a9d8f` green for `completed`) | **Reserved exclusively for the state-signal bubble/badge icon overlay drawn above a character** (D-03) — never applied as a character sprite tint/recolour |
 | Destructive | `#d62828` (red, `bubble-blocked.json`/`bubble-failed.json`) | Reserved for the `blocked` and `failed` state icons only |
+| Dialogue box | `#121212` (`DIALOGUE_BOX_COLOR`) | Handoff dialogue box fill only. Achromatic; never an accent and never a state signal. `renderer.test.ts` "dialogue colours are unambiguous (05-13 guard)" proves no character (all twelve identity hues) or glyph palette, floor or wall paints it |
+| Dialogue text | `#f0f0f0` (`DIALOGUE_TEXT_COLOR`) | Handoff dialogue text only. Achromatic, so antialiased blends with the box stay achromatic; same `renderer.test.ts` guard |
 
 **Accent reserved for:** the bubble/badge icon glyph pixels rendered above a character's head to signal `AgentStatus` (blocked / failed / completed / planning / researching / testing / reviewing / discussing / deploying / waiting_for_ceo / waiting_for_agent). Never for anything else — specifically never for a character's base sprite colour.
 
@@ -120,6 +127,7 @@ Font family for the footer: `monospace` (unstyled system stack, no webfont loade
 | Destructive confirmation | N/A — no destructive actions exist in this phase (Phase 6 CEO Approve/Reject/Discuss workflow is out of scope here) |
 | Handoff dialogue — requested | `Handing off "${taskTitle}" to ${toAgentName}` (`resolveHandoffDialogue("requested", ...)`, `dialogue-templates.ts`) — locked, deterministic, HANDOFF-02 |
 | Handoff dialogue — accepted | `${toAgentName} accepts "${taskTitle}"` (`resolveHandoffDialogue("accepted", ...)`) — locked, deterministic, HANDOFF-02 |
+| Handoff dialogue — length rule (05-13) | `taskTitle` capped at `MAX_DIALOGUE_TITLE_CHARS` (16) and `toAgentName` at `MAX_DIALOGUE_NAME_CHARS` (12) code points, cut by code point and ending in U+2026 `…` when cut (`dialogue-templates.ts`). Templates unchanged. Shown for its sequence only: the requested line while the sender waits at the receiver's desk, the accepted line until the sender is home |
 | Attribution footer | `Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character sprites: MetroCity pack by JIK-A-4 · full audit: references/ASSET-LICENSES.md` (`apps/web/src/App.tsx`) — locked, always-on, never gated behind a menu (OFFICE-02). **Sentence updated 05-12 (WR-09):** the `(CC0)` claim was removed — the pack is CC0 at its publisher's listing (cited, `references/ASSET-LICENSES.md` §1), but that the shipped file is that pack's art rests on the fork's credit alone, a distinction a one-line footer cannot carry. The locked properties — always-on, fixed, ungated, crediting both fork and pack, pointing at the audit — are unchanged, and `apps/web/src/App.test.tsx` pins the complete sentence. |
 
 **Dialogue tone rule (locked, HANDOFF-02):** no exclamation marks, no first-person ("I") framing, no simulated personality — plainly functional strings only, never phrased to imply spontaneous/live AI generation. Only `taskTitle` (plain `TaskState.title`) and `toAgentName` (plain `AgentState.name`) may ever be interpolated — never payload/prompt/diff content. This is mechanically enforced today by a grep-style test asserting zero network/LLM call surface in `dialogue-templates.ts`; the closure plan must not weaken this.
@@ -131,18 +139,18 @@ Font family for the footer: `monospace` (unstyled system stack, no webfont loade
 > Populated from `05-VERIFICATION.md`'s gap analysis and the four plan SUMMARYs' self-disclosed
 > "Known Stubs" — this phase's actual UI-state coverage as shipped, not a fresh probe.
 
-Applicable state considerations resolved: 3 covered, 2 backstop, 3 unresolved
+Applicable state considerations resolved: 7 covered, 1 backstop, 0 unresolved
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
 | populated (data-driven pose) | AgentStatus → pose/bubble mapping | ✅ covered | `STATUS_MAP` has an exhaustive, compile-checked entry for all 15 `AgentStatus` values with no fallback branch (`status-mapping.ts`, unit-proven) |
-| zero-one-many (agents on floor) | office floor / agent roster | ✅ covered | Office correctly shows zero, one, or many characters as `upsertCharacterFromAgent`/despawn-on-`offline` are driven 1:1 by real projection state — no cap, no fabricated placeholder agents |
-| loading (blocked/waiting-for-input) | agent sprite + bubble overlay | ✅ covered | `blocked`/`waiting_for_agent`/`waiting_for_ceo` all resolve to `frozen: true` + a distinct bubble key (OFFICE-03), verified by unit test — data-correct, see rendering caveat below |
-| empty (visual: invisible sprites) | character sprite pixels | ⚠ unresolved | `spriteData.ts` returns fully-transparent placeholder frames for every pose — no agent is visible on screen at all today (`05-VERIFICATION.md` gap 1). Closure plan must wire real, non-transparent pixel data into `getCharacterSprites()` per D-02's tier order; this UI-SPEC locks the format (4-direction × {idle,walk,type}) but not the specific art source |
-| overflow (state signal render) | bubble/badge icon draw pass | ⚠ unresolved | `engine/renderer.ts` has zero draw calls for `Character.bubbleType`/`bubbleText` (`05-VERIFICATION.md` gap 2) — OFFICE-03's "distinguishable at a glance" claim is data-correct but has no on-screen manifestation. Closure plan must add a renderer draw pass reading the sprite JSON assets above the character, z-sorted after the base sprite |
-| overflow (missing assets) | `bubble-permission.json` / `bubble-waiting.json` | ⚠ unresolved | Referenced by `STATUS_MAP` but never authored (05-02's disclosed gap) — must be created in the locked 11×13 `{palette, pixels}` format before the render pass above can resolve `waiting_for_ceo`/`waiting_for_agent` to real pixels |
-| error (WS disconnect) | Broadcast Hub client connection | 🧪 backstop | `ws-client.ts` has no reconnect logic and no user-facing signal on socket close/error — silent failure. Not one of OFFICE-01/02/03/HANDOFF-01/02's five requirements; flagged as a held-out state the closure plan may address but is not required to for this phase's gap-closure scope |
-| long-text (task titles in dialogue) | handoff dialogue string | 🧪 backstop | `resolveHandoffDialogue` interpolates `TaskState.title` with no length cap/truncation — a very long task title would produce a long, uncapped dialogue string. No current renderer draws `bubbleText` at all (see Typography), so this has no visible effect yet, but the closure plan's future text-render work (if any) should cap/truncate rather than assume short titles |
+| zero-one-many (agents on floor) | office floor / agent roster | ✅ covered | 1:1 with real projection state (`upsertCharacterFromAgent` / despawn-on-`offline`), no fabricated placeholder agents, up to 54 concurrently seated desks (rows 3/6/9 × 18 cols); a despawned agent's desk is reclaimed lowest-first (05-14). A 55th+ concurrently seated character stacks on the last valid row — accepted ceiling, `deferred-items.md` |
+| loading (blocked/waiting-for-input) | agent sprite + bubble overlay | ✅ covered | `blocked`/`waiting_for_agent`/`waiting_for_ceo` all resolve to `frozen: true` + a distinct bubble key (OFFICE-03), unit-proven; painted live (TRUTH 2) |
+| empty (visual: invisible sprites) | character sprite pixels | ✅ covered | Resolved by 05-06 (MetroCity sheet decoded into `character-metrocity.json`, 4-direction × {idle,walk,type} shape preserved); observed live by TRUTH 1 (`scripts/verify-pixel-office-live.mjs`) |
+| overflow (state signal render) | bubble/badge icon draw pass | ✅ covered | Resolved by 05-07 (renderer glyph pass, z-sorted after the base sprite; owner-bound 05-12; top layer 05-13); observed live by TRUTH 2 and owner-bound by TRUTH 4 |
+| overflow (missing assets) | `bubble-permission.json` / `bubble-waiting.json` | ✅ covered | Resolved by 05-07 (both authored in the locked 11×13 `{palette, pixels}` format, `bubbleSprites.test.ts`); rendered through the same glyph pass TRUTH 2/4 observe live |
+| error (WS disconnect) | Broadcast Hub client connection | 🧪 backstop | 05-09 added a user-observable disconnect banner (`role="status"`, `apps/web/src/App.tsx`) on socket close/error; 05-VERIFICATION.md observed it in a real browser with the API down. Kept as backstop: no automated evidence in this phase's must_haves beyond that observation |
+| long-text (task titles in dialogue) | handoff dialogue string | ✅ covered | `resolveHandoffDialogue` caps `taskTitle` at 16 and `toAgentName` at 12 code points with U+2026 (05-13 tests); live TRUTH 5 draws a capped line (raw 23-char task id, 19-char agent id) |
 
 <!-- Status vocabulary (locked by probe-core projectTruths):
      ✅ covered   → a plain truth string lifted into must_haves.truths
@@ -150,6 +158,8 @@ Applicable state considerations resolved: 3 covered, 2 backstop, 3 unresolved
                     evidence → insufficient_spec → human_needed (never a silent pass, #1154)
      ⚠ unresolved → an explicit planner assumption (surfaced, never silently dropped)
      Rows are REPLACED (not appended) on a probe re-run — idempotent. -->
+
+**Superseded by 05-16 (2026-09-22):** the earlier Typography statement that drawing `bubbleText` was deliberately out of scope conflicted with 05-CONTEXT.md **D-04** ("Dialogue/text shown during the sequence"). D-04 is a locked user decision and governs. 05-13 implemented the dialogue draw pass; 05-16 observed it live on a real canvas (TRUTH 5). No decision in 05-CONTEXT.md is edited.
 
 ---
 
