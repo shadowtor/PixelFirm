@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-25-PLAN.md
-last_updated: "2026-09-22T11:21:26.356Z"
+stopped_at: Completed 05-26-PLAN.md
+last_updated: "2026-09-22T11:29:51.737Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 05 execution started
-state_head: d96ad1b193f4d6b11e96d30c80b631febde5ff0d
+state_head: 194917985d2bf24ad1e83e1d93175412360dddfd
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 45
-  completed_plans: 40
+  completed_plans: 41
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 6 of 30
+Plan: 7 of 30
 Status: Ready to execute
 Last activity: 2026-09-22 — Phase 05 execution started
 
@@ -100,6 +100,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P23 | 10m | 2 tasks | 4 files |
 | Phase 05 P24 | 20m | 2 tasks | 5 files |
 | Phase 05 P25 | 15m | 2 tasks | 6 files |
+| Phase 05 P26 | 10m | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -202,6 +203,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-24: per-(sprite, zoom) OffscreenCanvas cache with drawImage; fillRect fallback in node tests
 - [Phase 05]: 05-25: seats come from the layout (16 SEATS then 4 STANDING_SPOTS, lowest free first); 21st+ agent shares the last standing spot
 - [Phase 05]: 05-25: sitting offset only for TYPE on own layout seat (isOwnSeat); typing frames kept everywhere (D-01); walk ending at home faces DOWN
+- [Phase 05]: 05-26: footer credits 'character and office sprites: MetroCity packs by JIK-A-4', still no licence assertion
+- [Phase 05]: 05-26: live harness reads seats/standing/furniture and office colours from engine data; agent pixel = pixel in no office colour
 
 ### Pending Todos
 
@@ -230,6 +233,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T11:21:26.053Z
-Stopped at: Completed 05-25-PLAN.md
+Last session: 2026-09-22T11:29:51.590Z
+Stopped at: Completed 05-26-PLAN.md
 Resume file: None
