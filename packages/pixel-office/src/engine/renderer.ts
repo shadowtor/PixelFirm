@@ -279,9 +279,14 @@ export function renderScene(
     const spriteHeight = spriteData.length;
     const spriteWidth = spriteData[0]?.length ?? 0;
 
-    // Sitting offset: only a TYPE character on its own layout seat sinks into
-    // the chair (05-25); elsewhere it keeps typing at standing height (D-01).
-    const sittingOffset = ch.state === CharacterState.TYPE && isOwnSeat(ch) ? CHARACTER_SITTING_OFFSET_PX : 0;
+    // Sitting offset: a character RESTING (anything but walking) on its own
+    // layout seat is drawn seated, whatever its status — the desk then hides
+    // its lower body, so "at the desk" and "standing nearby" read differently
+    // at native scale (05-32 / G-05-P3, superseding 05-25's TYPE-only rule).
+    // Only the offset depends on the seat: the drawn frame still comes from
+    // the pose (D-01) and STATUS_MAP and the FSM are untouched, so a frozen
+    // stuck agent stays frozen while seated (D-03).
+    const sittingOffset = ch.state !== CharacterState.WALK && isOwnSeat(ch) ? CHARACTER_SITTING_OFFSET_PX : 0;
     // Anchor at bottom-center of character
     const drawX = Math.round(offsetX + ch.x * zoom - (spriteWidth * zoom) / 2);
     const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - spriteHeight * zoom);
