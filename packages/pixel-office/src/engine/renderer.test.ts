@@ -8,6 +8,7 @@ import { CHARACTER_SITTING_OFFSET_PX, WALL_COLOR } from "../constants.js";
 import { createCharacter, getCharacterSprite, updateCharacter, walkCharacterTo } from "./characters.js";
 import { getCharacterSprites } from "../sprites/spriteData.js";
 import { BUBBLE_SPRITES } from "../sprites/bubbleSprites.js";
+import { STATUS_MAP } from "../status/status-mapping.js";
 import {
   upsertCharacterFromAgent,
   getCharacter,
@@ -187,12 +188,18 @@ describe("renderScene bubble/badge overlay draw pass", () => {
 const SPRITE_W = 16;
 const SPRITE_H = 32;
 
+/** The sitting offset renderScene applies: a character RESTING (not walking)
+ *  on its own layout seat is sunk into its desk whatever its status
+ *  (05-32 / G-05-P3, superseding 05-25's TYPE-only rule). */
+const sittingOffsetOf = (ch: Character): number =>
+  ch.state !== CharacterState.WALK && isOwnSeat(ch) ? CHARACTER_SITTING_OFFSET_PX : 0;
+
 /** The canvas box renderScene paints a character's base sprite into, at
- *  offset 0,0 / zoom 1 — bottom-center anchored, exactly as renderScene
- *  itself computes drawX/drawY. */
+ *  offset 0,0 / zoom 1 — bottom-center anchored and sunk by the sitting
+ *  offset, exactly as renderScene itself computes drawX/drawY. */
 function spriteBox(ch: Character): { left: number; right: number; top: number; bottom: number } {
   const left = Math.round(ch.x - SPRITE_W / 2);
-  const top = Math.round(ch.y - SPRITE_H);
+  const top = Math.round(ch.y + sittingOffsetOf(ch) - SPRITE_H);
   return { left, right: left + SPRITE_W, top, bottom: top + SPRITE_H };
 }
 
@@ -348,14 +355,18 @@ describe("renderScene over the real desk layout — CR-02 two-character composit
     // ...and it genuinely sits above its OWN head, not merely somewhere else.
     expect(glyphRects.some((g) => g.y < laterBox.top)).toBe(true);
 
-    // Concrete expected geometry, so a silent layout drift is caught too:
-    // seat rows 4 and 8 => sprite boxes y 40..72 and y 104..136. agent-9's
-    // IDLE head ink starts at frame row 3 (y 107); the blocked glyph (ink rows
-    // 0..11) ends 1 px above it, y 94..106 — strictly below agent-1's box (05-30).
-    expect(firstBox).toMatchObject({ top: 40, bottom: 72 });
-    expect(laterBox.top).toBe(104);
-    expect(Math.min(...glyphRects.map((r) => r.y))).toBe(94);
-    expect(Math.max(...glyphRects.map((r) => r.y + r.h))).toBe(106);
+    // Concrete expected geometry, so a silent layout drift is caught too.
+    // Both agents rest IDLE on their own seats, so both are sunk by
+    // CHARACTER_SITTING_OFFSET_PX (6) — 05-32 / G-05-P3, where before this plan
+    // only TYPE sank and these boxes were y 40..72 and y 104..136.
+    // Seat rows 4 and 8 => foot y 72 and 136 => sprite boxes y 46..78 and
+    // y 110..142. agent-9's IDLE head ink starts at frame row 3 (y 113); the
+    // blocked glyph (ink rows 0..11, 12 rows) ends 1 px above it, y 100..112 —
+    // strictly below agent-1's box (05-30).
+    expect(firstBox).toMatchObject({ top: 46, bottom: 78 });
+    expect(laterBox.top).toBe(110);
+    expect(Math.min(...glyphRects.map((r) => r.y))).toBe(100);
+    expect(Math.max(...glyphRects.map((r) => r.y + r.h))).toBe(112);
     expect(Math.min(...glyphRects.map((r) => r.y))).toBeGreaterThan(firstBox.bottom);
   });
 
@@ -402,8 +413,7 @@ function seatReal(n: number): Character[] {
 /** drawY renderScene uses for a character at offset 0 / zoom 1. */
 function ownerDrawY(ch: Character): number {
   const sprite = getCharacterSprite(ch, getCharacterSprites(ch.hueShift));
-  const sitting = ch.state === CharacterState.TYPE && isOwnSeat(ch) ? CHARACTER_SITTING_OFFSET_PX : 0;
-  return Math.round(ch.y + sitting - sprite.length);
+  return Math.round(ch.y + sittingOffsetOf(ch) - sprite.length);
 }
 
 function handoffCompleted(id: string, taskId: string, toAgentId: string): CompanyEvent {
@@ -863,13 +873,132 @@ describe("sprite cache (05-24, T-05-24-01)", () => {
   });
 });
 
-describe("seated only at the own desk (05-25, G-05-1e)", () => {
-  /** Top y of a lone character's painted sprite at zoom 1. */
+describe("seated whenever resting on the own seat (05-25, G-05-P3)", () => {
+  beforeEach(() => {
+    _resetForTests();
+  });
+
+  /** Top y of a lone character's painted sprite at zoom 1, glyph suppressed
+   *  (pass 3 would otherwise paint above the head and win the min). */
   const topY = (ch: Character) => {
+    const prev = ch.bubbleType;
+    ch.bubbleType = null;
     const { ctx, rects } = mockCtx();
     renderScene(ctx, [ch], 0, 0, 1);
+    ch.bubbleType = prev;
     return Math.min(...rects.map((r) => r.y));
   };
+  /** The drawY renderScene actually used — the painted top minus the DRAWN
+   *  frame's own first ink row, so poses with different ink bounds compare. */
+  const drawYOf = (ch: Character) => {
+    const frame = getCharacterSprite(ch, getCharacterSprites(ch.hueShift));
+    return topY(ch) - frame.findIndex((row) => row.some(Boolean));
+  };
+  const standingDrawY = (ch: Character) => ch.y - SPRITE_H;
+  const seatedDrawY = (ch: Character) => ch.y - SPRITE_H + CHARACTER_SITTING_OFFSET_PX;
+  /** The frame the pose alone dictates (D-01: the seat never swaps frames). */
+  const poseFrame = (ch: Character): SpriteData => {
+    const s = getCharacterSprites(ch.hueShift);
+    return ch.state === CharacterState.TYPE ? s.typing[ch.dir][ch.frame % 2] : s.walk[ch.dir][1];
+  };
+  /** Rows on which this character's own paint SURVIVES the composited frame
+   *  (furniture on, glyph and dialogue off): a cell counts when adding the
+   *  character changes the final colour at that cell versus a furniture-only
+   *  control render. The desk is drawn after a seated agent, so its rows are
+   *  genuinely gone rather than merely shifted. */
+  const visibleBodyRows = (ch: Character): Set<number> => {
+    const finalColors = (chars: Character[]) => {
+      const { ctx, rects } = mockCtx();
+      renderScene(ctx, chars, 0, 0, 1, FURNITURE);
+      const m = new Map<string, string>();
+      for (const r of rects) m.set(`${r.x},${r.y}`, r.color.toLowerCase());
+      return m;
+    };
+    const prev = ch.bubbleType;
+    ch.bubbleType = null;
+    const control = finalColors([]);
+    const withCh = finalColors([ch]);
+    ch.bubbleType = prev;
+    const rows = new Set<number>();
+    for (const [cell, color] of withCh) if (control.get(cell) !== color) rows.add(Number(cell.split(",")[1]));
+    return rows;
+  };
+
+  const RESTING_STATUSES = [
+    AgentStatus.IDLE,
+    AgentStatus.BLOCKED,
+    AgentStatus.WAITING_FOR_AGENT,
+    AgentStatus.WAITING_FOR_CEO,
+    AgentStatus.FAILED,
+    AgentStatus.COMPLETED,
+    AgentStatus.CODING,
+  ];
+
+  it.each(RESTING_STATUSES)(
+    "a %s agent resting on its own seat is drawn seated, keeping its pose's own frame (G-05-P3, D-01)",
+    (status) => {
+      _resetForTests();
+      upsertCharacterFromAgent("rest", status);
+      const ch = getCharacter("rest")!;
+      expect(ch.tileCol).toBe(SEATS[0].col);
+      expect(ch.tileRow).toBe(SEATS[0].row);
+      expect(isOwnSeat(ch)).toBe(true);
+      // The real STATUS_MAP pose, frozen flag and glyph are in play.
+      expect(ch.state).toBe(STATUS_MAP[status].pose);
+      expect(ch.bubbleType ?? undefined).toBe(STATUS_MAP[status].bubble);
+      const frame = getCharacterSprite(ch, getCharacterSprites(ch.hueShift));
+      expect(frame, `${status}: the drawn frame must come from the pose`).toBe(poseFrame(ch));
+
+      expect(drawYOf(ch), `${status} on its own seat`).toBe(seatedDrawY(ch));
+
+      // The same character, same tile, same frame — but the seat is elsewhere.
+      ch.seatCol = SEATS[1].col;
+      ch.seatRow = SEATS[1].row;
+      expect(isOwnSeat(ch)).toBe(false);
+      expect(getCharacterSprite(ch, getCharacterSprites(ch.hueShift))).toBe(frame);
+      expect(drawYOf(ch), `${status} off its seat`).toBe(standingDrawY(ch));
+    },
+  );
+
+  it("only an off-seat character stands: walking, on a standing spot, or away from home (G-05-P3)", () => {
+    const walking = createCharacter("w", SEATS[0].col, SEATS[0].row);
+    walking.state = CharacterState.WALK;
+    expect(isOwnSeat(walking)).toBe(true); // on its seat tile, but moving
+    expect(drawYOf(walking), "a walker on its own seat tile").toBe(standingDrawY(walking));
+
+    const onStandingSpot = createCharacter("s", STANDING_SPOTS[0].col, STANDING_SPOTS[0].row);
+    expect(isOwnSeat(onStandingSpot)).toBe(false);
+    expect(drawYOf(onStandingSpot), "a standing spot is never a seat").toBe(standingDrawY(onStandingSpot));
+
+    const visiting = createCharacter("v", SEATS[1].col, SEATS[1].row);
+    visiting.seatCol = SEATS[0].col;
+    visiting.seatRow = SEATS[0].row;
+    expect(isOwnSeat(visiting)).toBe(false);
+    expect(drawYOf(visiting), "resting on someone else's seat").toBe(standingDrawY(visiting));
+  });
+
+  it("a resting agent at its own desk shows at least 8 fewer visible body rows than the same agent standing in the aisle (G-05-P3)", () => {
+    const seated = createCharacter("r", SEATS[0].col, SEATS[0].row);
+    expect(isOwnSeat(seated)).toBe(true);
+    expect(seated.state).toBe(CharacterState.IDLE);
+
+    // Open aisle, no furniture on rows 6-7 and nothing sorts in front there.
+    const standing = createCharacter("r", 2, 6);
+    expect(isOwnSeat(standing)).toBe(false);
+    expect(standing.state).toBe(CharacterState.IDLE);
+    expect(getCharacterSprite(seated, getCharacterSprites(seated.hueShift))).toBe(
+      getCharacterSprite(standing, getCharacterSprites(standing.hueShift)),
+    );
+
+    const seatedRows = visibleBodyRows(seated).size;
+    const standingRows = visibleBodyRows(standing).size;
+    expect(seatedRows).toBeGreaterThan(0);
+    expect(
+      standingRows - seatedRows,
+      `seated shows ${seatedRows} body rows, standing shows ${standingRows}`,
+    ).toBeGreaterThanOrEqual(8);
+  });
+
   const typer = (col: number, row: number) => {
     const ch = createCharacter("t", col, row);
     ch.state = CharacterState.TYPE;
