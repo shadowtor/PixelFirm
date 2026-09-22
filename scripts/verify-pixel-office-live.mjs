@@ -1000,11 +1000,15 @@ async function main() {
     await shot(page, "cohort.png");
     // The front agent types at its own desk, so it sits CHARACTER_SITTING_OFFSET_PX lower.
     const firstRowSpriteBottom = spriteTopY(firstDesk.row) + SPRITE_HEIGHT + CHARACTER_SITTING_OFFSET_PX;
-    const targetSpriteTop = spriteTopY(targetDesk.row);
+    // The blocked owner stands (IDLE = down[1]); its visible head starts at the
+    // frame's first opaque row (05-30, G-05-1c: glyphs anchor on the head).
+    const headRow = CHARACTER_SHEET.down[1].findIndex((r) => r.some((c) => c));
+    const headTop = spriteTopY(targetDesk.row) + headRow;
+    const headGap = bandScan.blockedMaxY === null ? null : headTop - (bandScan.blockedMaxY + 1);
     log(
       `blocked glyph in col ${targetDesk.col} (x ${targetBand.from}..${targetBand.to}): ` +
-        `${bandScan.blockedHits} px, y ${bandScan.blockedMinY}..${bandScan.blockedMaxY} ` +
-        `(expected band ${firstRowSpriteBottom}..${targetSpriteTop}, exclusive)`,
+        `${bandScan.blockedHits} px, y ${bandScan.blockedMinY}..${bandScan.blockedMaxY}, ` +
+        `head top ${headTop}, gap ${headGap} (front sprite ends at ${firstRowSpriteBottom})`,
     );
 
     assert(
@@ -1019,13 +1023,17 @@ async function main() {
         `sprite at (${firstDesk.col},${firstDesk.row}) ends at y ${firstRowSpriteBottom} — the glyph must sit strictly below it (CR-02)`,
     );
     assert(
-      bandScan.blockedMaxY < targetSpriteTop,
-      `the blocked glyph is not above its own sprite: measured y ${bandScan.blockedMinY}..${bandScan.blockedMaxY} ` +
-        `in col ${targetDesk.col}, but the desk-row-${targetDesk.row} sprite starts at y ${targetSpriteTop}`,
+      bandScan.blockedMaxY < headTop && headGap <= 2,
+      `the blocked glyph is not attached to its owner's head: measured y ${bandScan.blockedMinY}..${bandScan.blockedMaxY} ` +
+        `in col ${targetDesk.col}, head top ${headTop}, gap ${headGap} (need 0..2, G-05-1c)`,
+    );
+    assert(
+      bandScan.blockedMinY >= TILE_SIZE,
+      `the blocked glyph straddles the wall: top y ${bandScan.blockedMinY} < ${TILE_SIZE} (G-05-1c)`,
     );
     log(
       `TRUTH 4 PASS — ${bandScan.blockedHits} blocked-glyph px at y ${bandScan.blockedMinY}..${bandScan.blockedMaxY}, ` +
-        `inside ${targetId}'s own headroom (${firstRowSpriteBottom} < y < ${targetSpriteTop}) and in no other agent's`,
+        `${headGap} px above ${targetId}'s head (top ${headTop}), on the floor, below ${frontId} (ends ${firstRowSpriteBottom})`,
     );
   } finally {
     await browser.close();
