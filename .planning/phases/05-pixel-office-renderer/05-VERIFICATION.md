@@ -1,8 +1,8 @@
 ---
 phase: 05-pixel-office-renderer
-verified: 2026-09-22T15:10:00Z
+verified: 2026-09-22T16:30:00Z
 status: gaps_found
-score: 9/10 must-haves verified
+score: 10/11 must-haves verified
 covered_files:
   - ".planning/REQUIREMENTS.md"
   - ".planning/ROADMAP.md"
@@ -42,88 +42,64 @@ covered_files:
   - ".planning/phases/05-pixel-office-renderer/05-17-SUMMARY.md"
   - ".planning/phases/05-pixel-office-renderer/05-18-PLAN.md"
   - ".planning/phases/05-pixel-office-renderer/05-18-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-19-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-19-SUMMARY.md"
   - ".planning/phases/05-pixel-office-renderer/05-REVIEW.md"
   - ".planning/phases/05-pixel-office-renderer/05-UI-SPEC.md"
   - ".planning/phases/05-pixel-office-renderer/deferred-items.md"
-  - "apps/api/src/routes/events.ts"
-  - "apps/api/src/routes/ws-browser.ts"
-  - "apps/api/src/ws/browser-connections.ts"
-  - "apps/web/src/App.test.tsx"
   - "apps/web/src/App.tsx"
-  - "apps/web/src/agent-event-mapper.test.ts"
   - "apps/web/src/agent-event-mapper.ts"
-  - "apps/web/src/ws-client.ts"
-  - "packages/claude-adapter/src/claude-code-runtime.test.ts"
   - "packages/claude-adapter/src/claude-code-runtime.ts"
   - "packages/company-core/src/reducer.ts"
-  - "packages/pixel-office/LICENSE"
-  - "packages/pixel-office/src/constants.ts"
   - "packages/pixel-office/src/engine/characters.ts"
-  - "packages/pixel-office/src/engine/renderer.test.ts"
-  - "packages/pixel-office/src/engine/renderer.ts"
-  - "packages/pixel-office/src/handoff/dialogue-templates.test.ts"
-  - "packages/pixel-office/src/handoff/dialogue-templates.ts"
   - "packages/pixel-office/src/handoff/handoff-choreography.test.ts"
   - "packages/pixel-office/src/handoff/handoff-choreography.ts"
-  - "packages/pixel-office/src/index.test.ts"
   - "packages/pixel-office/src/index.ts"
-  - "packages/pixel-office/src/sprites/bubbleSprites.ts"
-  - "packages/pixel-office/src/sprites/spriteData.ts"
   - "packages/pixel-office/src/status/status-mapping.ts"
   - "packages/pixel-office/src/types.ts"
-  - "references/ASSET-LICENSES.md"
   - "scripts/verify-pixel-office-live.mjs"
-covered_digest: "v1:sha256:be0d0dfe1bce76e474d7c809b0be2ccb14c87468d4dbe01ef9011945febe9c4e"
+covered_digest: "v1:sha256:8503a6856d62d7575347be94a5e0b5a940742a73da5b6b264b3db79f10f2e16b"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
-  previous_score: 8/10
+  previous_score: 9/10
   gaps_closed:
-    - "Gap 2 (overlapping runQuery callers, prior CR-01): token claimed before the preemption await and re-checked after it (claude-code-runtime.ts:144-168); pauseTask/cancelTask claim a fresh token. Named Tests F and G pass (3 passed via -t 'Test F|Test G'); full claude-adapter suite 35 passed, 3 skipped."
-    - "Gap 1 as stated (three named paths): a status mid-path no longer overwrites WALK (index.ts guard), OFFLINE sender retires the record in both phases, a replacement request retires the old record via retireHandoff, frozen characters still walk. The 05-17 robustness tests drive stepOffice and use no finishWalk (grep count 0 in that describe block)."
-  gaps_remaining:
-    - "05-17 prohibition 'MUST NOT leave a character stopped mid-floor or off its own desk because an AgentStatus update ... arrived during a handoff walk' and the phase goal: still violated through writers the 05-17 fix did not cover (review CR-01, reproduced this session)."
-  regressions: []
+    - "Prior gap (05-17 prohibition, CR-01 stranding paths a/b/c): closed. hasArrived (handoff-choreography.ts:49-51) is 'not WALK and empty path' at both tick checks (:180, :194); setRestPose is the only non-walk pose writer (characters.ts) and is used by upsertCharacterFromAgent (index.ts) and the completion handler (:149); walkCharacterTo at the current tile drops the path. Real-loop tests (a), (b), (b2), (c) pass inside the 103/103 pixel-office suite, which I re-ran."
+    - "Prior advisories WR-01 (two records drive one sender), WR-02 (icon lost on glyph-less status), WR-03 (same-frame re-seat inherits arrival), IN-03 (mid-walk pose not replayed): closed with named real-loop tests (WR-01, WR-02, WR-03, a1 flipped to TYPE)."
+  gaps_remaining: []
+  regressions:
+    - "New defect exposed by 05-19 (review CR-01, reproduced this session): a handoff permanently deletes the sender's real status glyph. Before 05-19 the pose was also lost, so the sender at least read as IDLE after every handoff; now the restored pose with no glyph reads as a different real status (TESTING sender reads as CODING; BLOCKED / WAITING_FOR_CEO sender reads as a frozen idle agent with no blocked/permission signal). The erasing line (:185) predates 05-19, so this is an unclosed defect in the gap's own surface rather than a code regression."
 gaps:
-  - truth: "MUST NOT leave a character stopped mid-floor or off its own desk because an AgentStatus update, a frozen status or a despawn arrived during a handoff walk (05-17 prohibition), and the office never shows an agent somewhere it is not (phase goal: never a fabricated animation)"
+  - truth: "The office never shows an agent in a status it is not in, and blocked/waiting agents keep their at-a-glance signal (phase goal 'never a fabricated animation'; ROADMAP SC1/SC2; OFFICE-01, OFFICE-03), including after the agent sends a handoff"
     status: failed
-    reason: "Reproduced this session with a throwaway vitest driving the real stepOffice loop at 60 fps (deleted afterwards; git status clean for packages/, apps/, scripts/). All three of 05-REVIEW.md CR-01's paths are real. (a) One-frame arrival window: updateCharacter empties the path but leaves state WALK until the next frame; a CODING status in that gap passes index.ts's `ch.path.length === 0` guard and writes TYPE. Result: sender {state:type, col:4, seat:1} standing on the receiver's desk, no icon, no line; handoff_completed ignored (record never left WALKING_TO_RECEIVER); a further CODING status changes nothing. It only recovers if a later status happens to have an IDLE pose, and even then the arrival fires late, after the completion was already dropped. (b) Same-sender re-request while waiting at the receiver after a TYPE-pose status: findPath returns [] for start == end, so walkCharacterTo does nothing and the state stays TYPE. Result: sender {state:type, col:4, seat:1}, icon and line cleared, completion ignored. (c) Receiver mid-walk (its own handoff B->C) when A->B completes: handoff-choreography.ts:127 writes TYPE with path still pending. Result: B {state:type, col:3, seat:2, path:2} for good. Worse than (a): index.ts's own guard now blocks every later status from resetting the state (path non-empty), so CODING then IDLE statuses left it unchanged, and the B->C completion was ignored (C never reaches TYPE). Root cause shared by all three: arrival is detected as `state === IDLE && path.length === 0`, and writers guard on `path.length === 0`, but 'path empty' is not 'not walking'."
+    reason: "Reproduced this session with a throwaway vitest (deleted; git status clean for packages/, apps/, scripts/) driving only upsertCharacterFromAgent, handleHandoffEvent and stepOffice(1/60). The reducer never changes the sender's status on a handoff (reducer.ts:101-117, :266-278 touch only toAgentId), so no upsert arrives to repair it. Results, sender a -> receiver b, then completion, then 5 s: TESTING sender before {type, bubble:testing}, home {type, bubble:null} (reads as CODING). BLOCKED sender before {idle, bubble:blocked, frozen}, home {idle, bubble:null, frozen} (blocked signal gone). WAITING_FOR_CEO sender before {idle, bubble:permission, frozen}, home {idle, bubble:null, frozen} (waiting signal gone). The wrong display persists until the agent's next changed status, which may never come while it is blocked."
     artifacts:
       - path: "packages/pixel-office/src/handoff/handoff-choreography.ts"
-        issue: "Line 127 sets toChar.state = TYPE with no WALK/path guard (path c). Lines 157 and 171 detect arrival only via state === IDLE, so a TYPE written in the arrival window or a no-op walk never arrives (paths a, b)."
+        issue: "Line 185 overwrites any status glyph with 'handoff-task' on arrival; lines 140 (completion) and 74 (retireHandoff) set it to null. Nothing restores the status glyph."
       - path: "packages/pixel-office/src/index.ts"
-        issue: "upsertCharacterFromAgent guards the pose write on ch.path.length === 0 rather than ch.state !== WALK, so the final arrival frame is unprotected."
-      - path: "packages/pixel-office/src/engine/characters.ts"
-        issue: "walkCharacterTo returns silently on an empty path (start == target), leaving whatever state the character had."
+        issue: "upsertCharacterFromAgent writes bubbleType directly and keeps no record of the status glyph, so the FSM has nothing to restore from (unlike pose, which now has restPose)."
+      - path: "packages/pixel-office/src/types.ts"
+        issue: "No statusBubble field alongside restPose."
     missing:
-      - "Arrival = `ch.state !== WALK && ch.path.length === 0` at handoff-choreography.ts:157 and :171 (review CR-01 fix)."
-      - "handoff-choreography.ts:127: only set TYPE when toChar.state !== WALK (or defer the pose until its walk ends)."
-      - "index.ts: guard the pose write on ch.state !== WALK, not path length. Preferably store a pending pose and apply it on WALK->IDLE (review IN-03), which also stops a working sender showing IDLE after every handoff."
-      - "Retire every live record whose fromAgentId is the new sender on a new request, not just the same taskId (review WR-01, also reproduced: see advisory)."
-      - "Three stepOffice-driven tests, one per path (a)/(b)/(c), each using a TYPE-pose status (CODING), each ending with the sender IDLE on its own seat, the receiver not frozen mid-path, and every handoff line null."
+      - "Store the status glyph like the pose: Character.statusBubble, written only by upsertCharacterFromAgent; bubbleType = statusBubble ?? (isWaitingHandoffSender(ch) ? 'handoff-task' : null)."
+      - "On arrival (handoff-choreography.ts:185): decide precedence explicitly. Review suggests statusBubble ?? 'handoff-task'. At minimum a frozen status glyph (blocked/permission/waiting) must win or be restored."
+      - "On completion (:140) and retire (:74): restore statusBubble instead of null."
+      - "Real-loop tests: sender TESTING and sender BLOCKED set before the request; after completion + 5 s the sender is home with bubbleType 'testing' / 'blocked'."
 deferred: []
 advisory:
-  - finding: "05-REVIEW.md WR-01 (two records drive one sender): REPRODUCED. A->B (t1) then A->C (t2) while A waits at B. After handoff_completed(t1), A walks home still painting 'Handing off \"t2\" to c' at its own desk with the handoff icon removed; after handoff_completed(t2), C goes TYPE but the accepted line is retired on the next tick because A is already home, so it shows for about one frame."
+  - finding: "05-REVIEW.md WR-01 (new): ICON_VISIBLE has no identity check. REPRODUCED: sender goes OFFLINE while waiting at the receiver; the record stays ICON_VISIBLE for good (isWaitingHandoffSender(oldChar) still true after 1 s). After re-seat and the real completion, b goes TYPE (correct: real event) and paints 'b accepts \"t1\"', which is cleared on the very next frame by the RETURNING identity check."
     category: other
-    reason: "Same root-cause family as the gap (records do not own the character exclusively) and violates 05-17 truth 4's intent (never shown handing off at its own desk). Kept advisory rather than a separate blocker only because the fix is one loop in the same function the gap fix touches; fold it into the gap-closure plan (listed under the gap's missing items)."
+    reason: "An omission (accepted line flashes for one frame; a record leaks if completion never comes), not a false claim: the receiver's TYPE is backed by the real completion and nothing untrue is left on screen. Fold into the gap-closure plan: add an ICON_VISIBLE identity-retire branch and use record.fromChar in the completion handler and retireHandoff."
     evidence_status: "reproduced this session (throwaway stepOffice probe)"
-  - finding: "05-REVIEW.md WR-05 (graceful stop not bounded): CONFIRMED by source. attemptGracefulStop awaits record.handle?.interrupt() before starting the 5 s race (claude-code-runtime.ts:364-373). The installed SDK's interrupt() goes through request(), which has no client-side timeout (sdk.mjs request(e,t): no setTimeout; only an optional abort signal, which is not passed). A CLI that never answers the control request hangs pause, cancel, the watchdog's blocked transition and every waiting preemption; the hard-abort fallback is never reached."
-    category: architectural
-    reason: "Real, but latent for this phase: grep over apps/ and packages/ (tests excluded) finds zero production callers of startTask/sendMessage/resumeTask/pauseTask/cancelTask, so no runtime invocation exists to hang, and the office render path is unaffected. Must be fixed before Phase 6 wires a caller; the review's 4-line race-both fix is sufficient. Not reproduced (every test mock resolves interrupt() immediately)."
-    evidence_status: "source read, SDK source read; not reproduced"
-  - finding: "05-REVIEW.md IN-01: runQuery reads record.controller after the await, so a slow earlier waiter's timeout abort could hit the newest live controller."
+  - finding: "05-REVIEW.md IN-01..IN-06 and carried harness warnings WR-02..WR-05 (accepted-line check not tied to receiver, hue-shift partition, POSIX killChildren leak, API port fallback)."
     category: other
-    reason: "Requires interrupt() latencies to differ between waiters; no caller exists. Capture `prev = record.controller` before the await when WR-05 is fixed."
+    reason: "Comments/latent/cosmetic or harness-only; none makes the office show wrong state on today's paths. IN-01's 'failed re-route continues the old walk' is latent (open floor, no unreachable desk)."
     evidence_status: "source read"
-  - finding: "05-REVIEW.md WR-02 (sender loses the handoff icon for the rest of the wait on any bubble-less status) and WR-03 (OFFLINE+re-seat in one frame inherits a stale arrival): not reproduced this session; source reading agrees with the review."
-    category: other
-    reason: "WR-03 is closed by the same identity-or-retire change; WR-02 is a comment-vs-behaviour mismatch on an OFFICE-03 signal. Fold into the gap-closure plan."
-    evidence_status: "source read"
-  - finding: "Carried: row-3 dialogue overlap (prior WR-01, human item 4), harness WR-06/08/09/10, /ws/browser WR-03/04, snapshot validation WR-09, env strip WR-07 (fix before Phase 6), T-05-11-WR01."
+  - finding: "Carried from the prior round: claude-adapter WR-05/IN-01 (graceful stop awaits interrupt() before the 5 s race), env strip WR-07, /ws/browser WR-03/04, snapshot validation WR-09, T-05-11-WR01, row-3 dialogue attribution."
     category: architectural
-    reason: "None makes the office show wrong state on today's code paths."
-    evidence_status: "source read"
+    reason: "No production caller of the runtime exists; must land before Phase 6 wires one. Not touched by 05-19."
+    evidence_status: "source read (prior round)"
 unverified_prohibitions:
   - statement: "MUST NOT rely solely on colour/hue to distinguish blocked/waiting from active — the distinction must remain legible in a grayscale/colourblind-simulated view"
     requirement_id: OFFICE-03
@@ -136,7 +112,7 @@ unverified_prohibitions:
   - statement: "MUST NOT ship a state-signal overlay that is technically data-correct and mechanically confirmed to paint SOME pixels, but is practically illegible at typical stream/viewing scale"
     requirement_id: OFFICE-03
     verification: judgment
-    disposition: "68 owner-bound blocked-glyph px observed live again. unverified-prohibition — human review recommended (item 1)."
+    disposition: "68 owner-bound blocked-glyph px observed live again this session. unverified-prohibition — human review recommended (item 1)."
   - statement: "MUST NOT treat TaskState.title as inherently safe to interpolate into rendered handoff dialogue/bubble text without limit or filtering"
     requirement_id: HANDOFF-02
     verification: null
@@ -159,28 +135,28 @@ human_verification:
 # Phase 5: Pixel Office Renderer Verification Report
 
 **Phase Goal:** The forked Pixel Agents office renders real company state on screen as a pure consumer of projections — never a fabricated animation.
-**Verified:** 2026-09-22T15:10:00Z
+**Verified:** 2026-09-22T16:30:00Z
 **Status:** gaps_found
-**Re-verification:** Yes, after gap-closure round 4 (plans 05-17 and 05-18).
+**Re-verification:** Yes, after gap-closure round 5 (plan 05-19).
 
 ## Headline
 
-Round 4 closed both gaps as they were written. The adapter race (prior gap 2) is fixed, with named tests. The three handoff paths named in prior gap 1 are fixed, and the tests now drive the real `stepOffice` loop.
+05-19 closes the gap it was written for. The code matches the summary: `hasArrived`, `setRestPose`, the at-target `walkCharacterTo`, retire-by-sender, `fromChar` identity and `isWaitingHandoffSender` are all present and wired. The seven new real-loop tests pass, and so does the live proof.
 
-The review's new CR-01 is **confirmed on all three paths**. I reproduced each one against the real `stepOffice` loop. A handoff can still strand a character in `TYPE`, either standing on another agent's desk or frozen partway along its path. When that happens the completion event is dropped. In path (c) the stuck character ignores every later status, so it stays stuck for good. This is the same failure the phase goal rules out, so the one blocker stays open with a narrower root cause: "path is empty" is being used to mean "not walking".
+The review's new CR-01 is real. I reproduced it on the real loop, and I class it as a **blocker**, not an advisory. A handoff erases the sender's status glyph, and nothing restores it. The reducer never touches the sender's status on a handoff, so no status update comes along to repair it. A BLOCKED or WAITING_FOR_CEO sender comes home frozen with no glyph, which fails OFFICE-03's "clear visual signal at a glance". A TESTING sender comes home typing with no glyph, which reads as CODING, a status the agent is not in. That is the phase goal's "never a fabricated" state. The previous round treated stranding as a blocker even though nothing in the repo produces handoff events yet. This defect has the same reachability, so I classify it the same way.
 
-## Independent reproduction of 05-REVIEW CR-01
+## Independent reproduction of new 05-REVIEW CR-01 and WR-01
 
-I wrote a throwaway probe, `packages/pixel-office/src/handoff/zz-verifier-probe.test.ts`, and deleted it afterwards. `git status` is clean for `packages/`, `apps/` and `scripts/`. It uses only the public API: `upsertCharacterFromAgent`, `handleHandoffEvent` and `stepOffice(1/60)`.
+I wrote a throwaway probe, `packages/pixel-office/src/handoff/zz-verifier-probe.test.ts`, and deleted it afterwards. It touched only the public surface: `upsertCharacterFromAgent`, `handleHandoffEvent` and `stepOffice(1/60)`.
 
-| Path | Setup | Observed end state | Verdict |
-|------|-------|--------------------|---------|
-| (a) Status arrives in the one-frame arrival window | a→d. Step until `path` is empty (state is still WALK), then send CODING. Run 5 s, send `handoff_completed`, run 5 s | Sender `{state:type, col:4, seat:1, path:0, bubbleType:null}` stands on d's desk. d stays `idle` and never accepts. A second CODING changes nothing. | CONFIRMED |
-| (b) Same sender re-requests while standing at the receiver in TYPE | a→d, arrive, send CODING, re-request same task, then completion | Sender `{state:type, col:4, seat:1}`, icon and line cleared, completion ignored | CONFIRMED |
-| (c) Receiver is mid-walk when its incoming handoff completes | a→b arrives. b→c starts, 20 frames pass, then `completed(t1)` | b `{state:type, col:3, seat:2, path:2}`, unchanged after CODING and then IDLE statuses. `completed(t2)` ignored and c never reaches TYPE | CONFIRMED (permanent) |
-| WR-01: two tasks share one sender | a→b (t1), then a→c (t2), then `completed(t1)` | a walks home still painting `Handing off "t2" to c` at its own desk, with no icon. c's accepted line lasts about one frame | CONFIRMED (advisory) |
+| Case | Sender before | At receiver | Home, 5 s after completion | Verdict |
+|------|---------------|-------------|----------------------------|---------|
+| TESTING sender | `type`, `testing` | `type`, `handoff-task` | `type`, bubble `null` (reads as CODING) | CR-01 CONFIRMED |
+| BLOCKED sender | `idle`, `blocked`, frozen | `idle`, `handoff-task`, frozen | `idle`, bubble `null`, frozen (blocked signal gone) | CR-01 CONFIRMED |
+| WAITING_FOR_CEO sender | `idle`, `permission`, frozen | `idle`, `handoff-task`, frozen | `idle`, bubble `null`, frozen | CR-01 CONFIRMED |
+| Sender goes OFFLINE during ICON_VISIBLE, then re-seats, then completion | — | record stays ICON_VISIBLE for good | b `type` + "b accepts" line, cleared on the next frame | WR-01 CONFIRMED (advisory) |
 
-Reachability: (c) does not depend on timing. It only needs a chain handoff where B is walking its own handoff while A→B completes. (a) needs a TYPE-pose status within about 16 ms of an arrival. (b) needs a repeat request event with a new id. There is still no in-repo producer of handoff events. The previous round classed gap 1 as a blocker under the same reachability, and I keep that classification.
+The reducer (`reducer.ts:101-117`, `:266-278`) changes only `toAgentId` on both handoff events. `applyLiveEvent` sends upserts only for agents whose projection object changed. So no status update ever arrives to restore the sender's glyph.
 
 ## Goal Achievement
 
@@ -188,107 +164,105 @@ Reachability: (c) does not depend on timing. It only needs a chain handoff where
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | ROADMAP SC1: sprites and animations match real current state (15 AgentStatus values) | ✓ VERIFIED | Live proof re-run this session: TRUTH 1 PASS, 588 px from relayed events. `STATUS_MAP` is exhaustive with no fallback. |
-| 2 | ROADMAP SC2: blocked or waiting is distinguishable at a glance | ✓ VERIFIED (mechanically) | TRUTH 2 and 4 PASS: 68 owner-bound glyph px. Glance and grayscale checks are human items 1-2. |
-| 3 | ROADMAP SC3: handoff shows the walk, the icon, the accept and template dialogue | ✓ VERIFIED (nominal path) | TRUTH 3 and 5 PASS live. The accepted line was positively observed (2267 px). Robustness is in truth 9. |
-| 4 | ROADMAP SC4: attribution and licence preserved and visible | ✓ VERIFIED | Unchanged since the prior round. `App.test.tsx` passes. |
-| 5 | Two seated agents can be told apart (hue) | ✓ VERIFIED | Regression check: `index.test.ts` green (pixel-office 96/96). |
-| 6 | Seats map 1:1, desks are reclaimed | ✓ VERIFIED | Regression check: same suite. |
-| 7 | A superseded invocation never writes shared state | ✓ VERIFIED | Tests A-E still green. |
-| 8 | Dialogue length is capped | ✓ VERIFIED | Unchanged. Observed live. |
-| 9 | 05-17 prohibition: no character is stranded off its desk or mid-floor by events arriving during a handoff walk, and no line outlives its sequence | ✗ FAILED | The three named paths are fixed, but paths (a), (b) and (c) above reproduce. See the gap. |
-| 10 | 05-18 prohibition: no `query()` starts while another un-aborted, unfinished one is live, including when calls overlap | ✓ VERIFIED | Token claimed before the await and re-checked after it (`claude-code-runtime.ts:144-168`). `vitest -t "Test F\|Test G"`: 3 passed. Caveats (IN-01, WR-05) are advisory, with no caller. |
+| 1 | ROADMAP SC1: sprites and animations match real current state | ✓ VERIFIED (steady state) | Live proof TRUTH 1 PASS (588 px) this session; `STATUS_MAP` exhaustive. Post-handoff glyph loss is truth 11. |
+| 2 | ROADMAP SC2: blocked or waiting is distinguishable at a glance | ✓ VERIFIED (mechanically, steady state) | TRUTH 2/4 PASS (68 owner-bound px). Human items 1-2. Post-handoff loss is truth 11. |
+| 3 | ROADMAP SC3: handoff shows walk, icon, accept, template dialogue | ✓ VERIFIED | TRUTH 3 and TRUTH 5 PASS live (2647 box px + 971 text px). |
+| 4 | ROADMAP SC4: attribution and licence preserved and visible | ✓ VERIFIED | Unchanged; apps/web 18/18 (orchestrator run). |
+| 5 | Identity hue, 1:1 seats, desk reclaim | ✓ VERIFIED | Regression: pixel-office 103/103, re-run by me. |
+| 6 | Superseded adapter invocation never writes shared state; no overlapping `query()` (05-18) | ✓ VERIFIED | Not touched by 05-19 (diff 739887c..HEAD has no claude-adapter files); claude-adapter 35 + 3 skipped (orchestrator). |
+| 7 | 05-19: arrival is `hasArrived` at both checks; no code line keys on IDLE | ✓ VERIFIED | `handoff-choreography.ts:49-51, 180, 194`; no `CharacterState.IDLE` in code lines. |
+| 8 | 05-19: one pose writer never overwrites WALK; every walk ends in `restPose` | ✓ VERIFIED | `setRestPose` in `index.ts` upsert and completion `:149`; tests a1, (a), (b), (c) pass through `stepOffice`. |
+| 9 | 05-19 paths (a), (b), (b2), (c): no stranding, no dropped completion | ✓ VERIFIED | Named real-loop tests pass. 0 `finishWalk` from the 05-17 block onward (per summary; tests read). |
+| 10 | 05-19 WR-01/WR-02/WR-03: one record per sender, identity, icon across glyph-less status | ✓ VERIFIED | `:106-112`, `:176`, `:194`, `:208-213`, `index.ts` bubble line; named tests pass. The ICON_VISIBLE identity hole (new WR-01) is advisory. |
+| 11 | Phase goal + OFFICE-01/03: a handoff never leaves the sender showing a status it is not in or without its blocked/waiting signal | ✗ FAILED | CR-01 reproduced above. |
 
-**Score:** 9/10 truths verified. None are present but behaviour-unverified.
+**Score:** 10/11 truths verified. No truths are present but behaviour-unverified.
 
 ### Required Artifacts
 
 | Artifact | Status | Details |
 |----------|--------|---------|
-| `packages/pixel-office/src/handoff/handoff-choreography.ts` | ⚠️ VERIFIED with defect | `retireHandoff` is the single exit and the OFFLINE retire works. Arrival predicate (:157, :171) and the unguarded TYPE write (:127) cause the gap. |
-| `packages/pixel-office/src/index.ts` | ⚠️ VERIFIED with defect | `stepOffice` is shared with `startGameLoop` (wired). The pose guard is keyed on path length, not WALK. |
-| `packages/pixel-office/src/engine/characters.ts` | ✓ VERIFIED | Frozen characters still walk (tests a2/a3). A no-op `walkCharacterTo` on an empty path contributes to path (b). |
-| `packages/claude-adapter/src/claude-code-runtime.ts` | ✓ VERIFIED | Overlap race closed. WR-05 is advisory. |
-| `scripts/verify-pixel-office-live.mjs` | ✓ VERIFIED | Ran unmodified on the default ports: `LIVE PROOF: PASS`, including the positive accepted-line assertion. |
+| `packages/pixel-office/src/types.ts` | ✓ VERIFIED | `restPose: CharacterState` present. No `statusBubble` (gap). |
+| `packages/pixel-office/src/engine/characters.ts` | ✓ VERIFIED | `setRestPose`, walk end in `restPose`, at-target path drop. |
+| `packages/pixel-office/src/index.ts` | ⚠️ VERIFIED with defect | Pose goes through `setRestPose`. Bubble is written directly, and no status glyph is kept (gap). |
+| `packages/pixel-office/src/handoff/handoff-choreography.ts` | ⚠️ VERIFIED with defect | Stranding is fixed. `:185`, `:140` and `:74` erase the status glyph (gap). ICON_VISIBLE has no identity branch (advisory). |
+| `packages/pixel-office/src/handoff/handoff-choreography.test.ts` | ✓ VERIFIED | 7 new nested tests plus flipped a1. No test sets a glyph before the request. |
+| `scripts/verify-pixel-office-live.mjs` | ✓ VERIFIED | Comment-only change. Ran: `LIVE PROOF: PASS`. |
 
 ### Key Link Verification
 
 | From | To | Via | Status |
 |------|----|-----|--------|
-| `startGameLoop` update | `stepOffice` | same function (`index.ts`) | ✓ WIRED |
-| relayed status | `upsertCharacterFromAgent` | `applyLiveEvent` | ⚠️ WIRED. Still overwrites WALK in the arrival frame (gap) |
-| `handoff_completed` | receiver TYPE | `handleHandoffEvent` :127 | ⚠️ WIRED. Freezes a walking receiver (gap) |
-| `handleHandoffEvent` requested | `retireHandoff(previous)` | same-taskId lookup | ⚠️ WIRED, same taskId only (WR-01) |
-| `runQuery` | `isCurrent()` re-check after preemption | `claude-code-runtime.ts:168` | ✓ WIRED |
+| upsert | `setRestPose` → walk end `restPose` | `index.ts`, `characters.ts` | ✓ WIRED |
+| completion | receiver pose | `setRestPose(toChar, TYPE)` `:149` | ✓ WIRED |
+| requested | retire by taskId or sender | loop `:106-112` | ✓ WIRED |
+| tick checks | identity with `record.fromChar` | `:176`, `:194` | ✓ WIRED. ICON_VISIBLE not covered (advisory) |
+| upsert bubble | `isWaitingHandoffSender` | `index.ts` | ✓ WIRED |
+| arrival/completion | sender's status glyph restored | — | ✗ NOT_WIRED (gap) |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Live proof TRUTH 1-5 | `node scripts/verify-pixel-office-live.mjs` | exit 0, `LIVE PROOF: PASS`, accepted line 2267 px. No listeners left afterwards | ✓ PASS |
-| Overlap and pause-during-preemption | `npx vitest run --root packages/claude-adapter -t "Test F\|Test G"` | 3 passed | ✓ PASS |
-| CR-01 (a) arrival-window status | throwaway `stepOffice` probe | sender stuck TYPE on receiver desk | ✗ FAIL |
-| CR-01 (b) same-sender re-request | same | sender stuck TYPE, completion ignored | ✗ FAIL |
-| CR-01 (c) walking receiver completes | same | receiver frozen with `path:2`, immune to later statuses | ✗ FAIL |
-| WR-01 shared sender | same | stale "Handing off t2" painted at sender's own desk | ✗ FAIL (advisory) |
-| pixel-office / claude-adapter / apps/web suites | `npx vitest run --root <pkg>` | 96 / 35 passed + 3 skipped / 18 | ✓ PASS |
+| pixel-office suite incl. 05-19 tests | `npx vitest run --root packages/pixel-office` | 103 passed (plus 4 probe tests while the probe existed: 107/107) | ✓ PASS |
+| CR-01 glyph after handoff (TESTING/BLOCKED/WAITING_FOR_CEO) | throwaway probe | glyph null at home in all three | ✗ FAIL |
+| WR-01 ICON_VISIBLE OFFLINE | throwaway probe | record leaks; accepted line lasts 1 frame | ✗ FAIL (advisory) |
 
 ### Probe Execution
 
 | Probe | Command | Result | Status |
 |-------|---------|--------|--------|
-| `scripts/verify-pixel-office-live.mjs` | `node scripts/verify-pixel-office-live.mjs` | exit 0, TRUTH 1-5 PASS (run twice) | PASS |
+| `scripts/verify-pixel-office-live.mjs` | `node scripts/verify-pixel-office-live.mjs` | exit 0; TRUTH 1-5 PASS; `LIVE PROOF: PASS`; no listeners left afterwards | PASS |
 
 ### Requirements Coverage
 
 | Requirement | Source Plans | Status | Evidence |
 |-------------|--------------|--------|----------|
-| OFFICE-01 | 05-01..18 | ✓ SATISFIED | Truth 1, observed live. The adapter race is closed. |
-| OFFICE-02 | 05-02/05/06/09/12 | ✓ SATISFIED | Truth 4. Provenance identity is human item 3. |
-| OFFICE-03 | 05-02/07/08/10/12/13/16/17 | ✓ SATISFIED (pending human look) | Truth 2. WR-02 (icon lost during the wait) is advisory. |
-| HANDOFF-01 | 05-03..17 | ✗ PARTIAL | Nominal sequence observed live. Paths (a)/(b)/(c) strand characters and drop completion (gap). |
-| HANDOFF-02 | 05-04/05/10/11/12/13/16 | ✓ SATISFIED | Template-only, capped and painted. Content filtering is Phase 7. |
+| OFFICE-01 | 05-01..18 | ⚠️ SATISFIED in steady state, violated after a handoff | Truth 1; truth 11 (TESTING sender reads as CODING). |
+| OFFICE-02 | 05-02/05/06/09/12 | ✓ SATISFIED | Truth 4. Provenance is human item 3. |
+| OFFICE-03 | 05-02/07/08/10/12/13/16/17 | ✗ BLOCKED after a handoff | Truth 2 holds in steady state. A blocked/waiting sender loses its glyph after a handoff (truth 11). |
+| HANDOFF-01 | 05-03..19 | ✗ PARTIAL | The walk, icon, accept and return sequence is now robust (truths 7-10). The sequence itself corrupts the sender's displayed status (truth 11). **I reverted the executor's `[x]`/Complete to `[ ]`/Gaps Found in REQUIREMENTS.md.** |
+| HANDOFF-02 | 05-04/05/10/11/12/13/16 | ✓ SATISFIED | Template-only, capped, painted live. |
 
-REQUIREMENTS.md maps no other IDs to Phase 5, so nothing is orphaned. Its traceability table shows all five as "Gaps Found". Based on this report, OFFICE-01/02/03 and HANDOFF-02 can move to Complete. HANDOFF-01 stays Gaps Found.
+Every phase ID appears in at least one plan's `requirements`, and REQUIREMENTS.md maps no other IDs to Phase 5, so nothing is orphaned.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `packages/pixel-office/src/handoff/handoff-choreography.ts` | 127 | State write with no walk guard | 🛑 Blocker | Gap path (c) |
-| `packages/pixel-office/src/handoff/handoff-choreography.ts` | 157, 171 | Arrival requires `state === IDLE` | 🛑 Blocker | Gap paths (a) and (b) |
-| `packages/pixel-office/src/index.ts` | pose guard | `path.length === 0` used as "not walking" | 🛑 Blocker | Gap path (a) |
-| `packages/claude-adapter/src/claude-code-runtime.ts` | 364-373 | Unbounded await before the timeout race | ⚠️ Warning | Advisory (WR-05), latent |
+| `packages/pixel-office/src/handoff/handoff-choreography.ts` | 185 | Unconditional overwrite of the status glyph | 🛑 Blocker | Gap |
+| `packages/pixel-office/src/handoff/handoff-choreography.ts` | 140, 74 | Glyph cleared to `null` instead of restored | 🛑 Blocker | Gap |
+| `packages/pixel-office/src/handoff/handoff-choreography.ts` | 170-200 | No ICON_VISIBLE identity branch | ⚠️ Warning | Advisory (WR-01) |
+| `packages/pixel-office/src/index.ts` | `stepOffice` comment | Still says "WALK->IDLE signal" | ℹ️ Info | IN-01 |
 
-No `TBD`/`FIXME`/`XXX` markers in the 7 files changed since `d054c11`.
+There are no `TBD`/`FIXME`/`XXX` markers in the six files 05-19 modified.
 
-**Re-verification evidence gate:** the blocker sites are in `handoff-choreography.ts` and `index.ts`. Both were git-modified in this round (commit aeb5355 and its siblings), and each has a deterministic reproduction from this session. The gap is also carried forward from the prior report's gap 1, under the same truth. It blocks.
+**Re-verification evidence gate:** the blocker sites are in `handoff-choreography.ts`, which was git-modified this round (af8a0b0, b3b76c5). The blocker also has a deterministic reproduction from this session, so it blocks.
 
 ### Human Verification Required
 
-1. **Legibility at stream scale.** Do the glance test at OBS size.
-2. **Grayscale and colourblind view.** Check the same frame with the filters.
+1. **Legibility at stream scale.** Do the one-second glance test at OBS size.
+2. **Grayscale and colourblind view.** Check the same frame through the filters.
 3. **MetroCity provenance, link 2.** Compare a rendered figure against the source art.
 4. **Row-3 dialogue attribution.** Decide whether the current layout reads as the right speaker, or move desks to row 4.
 
+These are carried over unchanged. They do not affect the status, which is `gaps_found`.
+
 ### Gaps Summary
 
-There is one gap, and all its paths share a root cause. The handoff FSM and the status upsert treat "path is empty" as "not walking". That misses two cases:
+One gap remains, and it is a new one. The stranding gap is closed.
 
-- the final frame of a walk, where the state is still WALK;
-- a walk that never started because start and target were the same tile.
+05-19 made the pose a stored value that every walk returns to. The status glyph got no such treatment. The handoff FSM overwrites the glyph with `handoff-task` when the sender arrives and sets it to `null` on completion or retire. Because a handoff never changes the sender's status in the projection, nothing ever puts the glyph back. A blocked or waiting sender therefore comes home without its OFFICE-03 signal, and a TESTING/REVIEWING/DEPLOYING sender reads as CODING.
 
-The completion handler is also a third writer that 05-17 never guarded. The review's CR-01 fix covers all three:
+The fix mirrors `restPose`:
+- add a `statusBubble` field that only the status upsert writes;
+- derive the displayed bubble from it, with the handoff icon as the fallback;
+- restore `statusBubble` instead of writing `null` at `:140` and `:74`;
+- choose explicitly what wins on arrival at `:185`.
 
-- test arrival with `state !== WALK && path.length === 0`;
-- skip the TYPE write for a walking receiver;
-- key the upsert guard on WALK.
-
-Fold WR-01 into the same plan: retire records by sender, not only by taskId. It is the same "one character, one walk" invariant. The fix also needs three tests driven by `stepOffice` that use a TYPE-pose status.
-
-**WR-05** is real but latent. No production code calls the runtime, so it goes before Phase 6 rather than into this phase.
+Add two real-loop tests where the glyph is set before the request (TESTING and BLOCKED). The same plan should add an ICON_VISIBLE identity branch and make the completion handler and `retireHandoff` act through `record.fromChar` (new WR-01).
 
 ---
 
-_Verified: 2026-09-22T15:10:00Z_
+_Verified: 2026-09-22T16:30:00Z_
 _Verifier: Claude (gsd-verifier)_
