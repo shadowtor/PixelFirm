@@ -167,7 +167,7 @@ Plans:
   3. When one agent hands off work to another, the office shows the first agent walking over, a task icon appearing, and the second agent accepting it and moving to work — using deterministic, template-based dialogue, never LLM-generated at render time.
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
 
-**Plans:** 17/18 plans executed (gaps found a fourth time — 2 further gap-closure plans added 2026-09-22 per fourth --gaps re-plan)
+**Plans:** 18/18 plans executed (gaps found a fourth time — 2 further gap-closure plans added 2026-09-22 per fourth --gaps re-plan)
 
 Plans:
 
@@ -188,7 +188,7 @@ Plans:
 - [x] 05-15-PLAN.md — Gap closure 3: per-invocation ownership token in ClaudeCodeRuntime.runQuery (gap 4, review CR-02)
 - [x] 05-16-PLAN.md — Gap closure 3: live-canvas TRUTH 5 for handoff dialogue + UI-SPEC dialogue contract (gap 1 pixel evidence)
 - [x] 05-17-PLAN.md — Gap closure 4: handoff robustness — status updates never stop a walk, every record exit retires its lines, real-loop tests + positive accepted-line live assertion (gap 1 / WR-02, WR-10)
-- [ ] 05-18-PLAN.md — Gap closure 4: runQuery claims its token before the preemption await; pause/cancel claim a fresh token (gap 2 / CR-01)
+- [x] 05-18-PLAN.md — Gap closure 4: runQuery claims its token before the preemption await; pause/cancel claim a fresh token (gap 2 / CR-01)
 
 **Wave 1**
 
@@ -235,7 +235,7 @@ Plans:
 
 **Wave 10** *(fourth gap-closure round — no file overlap; sequential on main since use_worktrees=false)*
 
-- [ ] 05-17-PLAN.md — Handoff robustness under interruption (real update loop) + accepted-line live assertion
+- [x] 05-17-PLAN.md — Handoff robustness under interruption (real update loop) + accepted-line live assertion
 - [ ] 05-18-PLAN.md — runQuery claim-before-await + pause/cancel token
 
 **UI hint**: yes
@@ -295,7 +295,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 17/18 | In Progress|  |
+| 5. Pixel Office Renderer | 18/18 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |

@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-17-PLAN.md
-last_updated: "2026-09-22T04:23:30.557Z"
+stopped_at: Completed 05-18-PLAN.md
+last_updated: "2026-09-22T04:30:32.019Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 05 execution started
-state_head: 38859ebd8f823b111ad40beafef65579f627311c
+state_head: 7a92136964ebd3e0d2197566ed7e6a3eee38f21b
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 33
-  completed_plans: 32
+  completed_plans: 33
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 2 of 18
+Plan: 3 of 18
 Status: Ready to execute
 Last activity: 2026-09-22 — Phase 05 execution started
 
@@ -92,6 +92,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P15 | 4 min | 2 tasks | 2 files |
 | Phase 05 P16 | 7 min | 2 tasks | 2 files |
 | Phase 05 P17 | 6min | 3 tasks | 5 files |
+| Phase 05 P18 | 5min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -180,6 +181,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-16: live-proof harness refuses to run while API/web port is taken (TCP preflight before any reset); servers always spawned, never reused (WR-06)
 - [Phase 05]: 05-17: status pose deferred while a handoff path is pending; frozen holds only the frame, never position
 - [Phase 05]: 05-17: retireHandoff is the single exit for a handoff record (home, vanished sender, replaced record)
+- [Phase 05]: 05-18: runQuery claims currentRun before the preemption await and re-checks after; superseded waiter returns without query() (last caller wins)
+- [Phase 05]: 05-18: pauseTask/cancelTask claim a fresh token before graceful stop so a pending preemption cannot undo a human stop
 
 ### Pending Todos
 
@@ -208,6 +211,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T04:23:30.403Z
-Stopped at: Completed 05-17-PLAN.md
+Last session: 2026-09-22T04:30:31.896Z
+Stopped at: Completed 05-18-PLAN.md
 Resume file: None
