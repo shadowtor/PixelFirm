@@ -167,7 +167,7 @@ Plans:
   3. When one agent hands off work to another, the office shows the first agent walking over, a task icon appearing, and the second agent accepting it and moving to work — using deterministic, template-based dialogue, never LLM-generated at render time.
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
 
-**Plans:** 12/16 plans executed (gaps found a third time — 4 further gap-closure plans added 2026-09-22 per third --gaps re-plan)
+**Plans:** 13/16 plans executed (gaps found a third time — 4 further gap-closure plans added 2026-09-22 per third --gaps re-plan)
 
 Plans:
 
@@ -183,7 +183,7 @@ Plans:
 - [x] 05-10-PLAN.md — Gap closure 2: owner-bound glyph placement + desk headroom (CR-02) + per-agent identity pixels (WR-08) + IN-04/IN-06
 - [x] 05-11-PLAN.md — Gap closure 2: role-vs-agent-id at the producer (CR-04) + buffered browser-socket registration (CR-03) + WR-01 accepted threat *(not autonomous — opens with a `checkpoint:decision` on D-04 scope impact)*
 - [x] 05-12-PLAN.md — Gap closure 2: honest live proof (no reload, no pre-seed) + licence-audit/footer claim correction (WR-09)
-- [ ] 05-13-PLAN.md — Gap closure 3: handoff dialogue draw pass (owner-bound, glyphs on top) + title/name caps + FSM clears dialogue and ignores re-delivered requests (gap 1, CR-01 advisory)
+- [x] 05-13-PLAN.md — Gap closure 3: handoff dialogue draw pass (owner-bound, glyphs on top) + title/name caps + FSM clears dialogue and ignores re-delivered requests (gap 1, CR-01 advisory)
 - [ ] 05-14-PLAN.md — Gap closure 3: desk reclamation on despawn + collision-avoiding identity hue + corrected deferral record and unowned HANDOFF-01 trigger pointer (gaps 2, 3, advisory 4)
 - [ ] 05-15-PLAN.md — Gap closure 3: per-invocation ownership token in ClaudeCodeRuntime.runQuery (gap 4, review CR-02)
 - [ ] 05-16-PLAN.md — Gap closure 3: live-canvas TRUTH 5 for handoff dialogue + UI-SPEC dialogue contract (gap 1 pixel evidence)
@@ -288,7 +288,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 12/16 | In Progress|  |
+| 5. Pixel Office Renderer | 13/16 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
