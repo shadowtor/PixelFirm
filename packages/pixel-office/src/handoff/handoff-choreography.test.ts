@@ -3,12 +3,18 @@ import type { CompanyEvent } from "event-schema";
 import { AgentStatus } from "event-schema";
 import { upsertCharacterFromAgent, getCharacter, getTileMap, _resetForTests } from "../index";
 import { CharacterState } from "../types";
+import type { Character } from "../types";
 import { findPath } from "../layout/tileMap";
 import { handleHandoffEvent, checkHandoffArrivals } from "./handoff-choreography";
 
-function requestedEvent(taskId: string, fromAgentId: string, toAgentId: string): CompanyEvent {
+function requestedEvent(
+  taskId: string,
+  fromAgentId: string,
+  toAgentId: string,
+  id = "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+): CompanyEvent {
   return {
-    id: "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    id,
     version: 1,
     occurredAt: "2026-09-21T00:00:00.000Z",
     companyId: "company-1",
@@ -19,9 +25,9 @@ function requestedEvent(taskId: string, fromAgentId: string, toAgentId: string):
   } as CompanyEvent;
 }
 
-function completedEvent(taskId: string, toAgentId: string): CompanyEvent {
+function completedEvent(taskId: string, toAgentId: string, id = "4fa85f64-5717-4562-b3fc-2c963f66afa6"): CompanyEvent {
   return {
-    id: "4fa85f64-5717-4562-b3fc-2c963f66afa6",
+    id,
     version: 1,
     occurredAt: "2026-09-21T00:01:00.000Z",
     companyId: "company-1",
@@ -135,5 +141,83 @@ describe("handleHandoffEvent — agent.handoff_completed", () => {
 
     expect(() => handleHandoffEvent(completedEvent("no-such-task", "agent-b"))).not.toThrow();
     expect(toChar.state).toBe(priorState);
+  });
+});
+
+describe("handoff sequence end + re-delivery idempotence (05-13, CR-01)", () => {
+  /** Seats a/b, drives requested -> arrival -> completed. Returns both characters. */
+  function toReturning(): { fromChar: Character; toChar: Character } {
+    upsertCharacterFromAgent("agent-a", AgentStatus.IDLE);
+    upsertCharacterFromAgent("agent-b", AgentStatus.IDLE);
+    const fromChar = getCharacter("agent-a")!;
+    const toChar = getCharacter("agent-b")!;
+    handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+    finishWalk(fromChar);
+    checkHandoffArrivals();
+    handleHandoffEvent(completedEvent("task-1", "agent-b"));
+    return { fromChar, toChar };
+  }
+
+  it("clears both dialogue lines once the sender is back at its own desk", () => {
+    const { fromChar, toChar } = toReturning();
+    expect(toChar.bubbleText).toBeTruthy();
+    finishWalk(fromChar);
+    checkHandoffArrivals();
+    expect(toChar.bubbleText).toBeNull();
+    expect(fromChar.bubbleText).toBeNull();
+  });
+
+  it("leaves the receiver's line alone if it was replaced by a different string before the sequence ended", () => {
+    const { fromChar, toChar } = toReturning();
+    toChar.bubbleText = "a newer line";
+    finishWalk(fromChar);
+    checkHandoffArrivals();
+    expect(toChar.bubbleText).toBe("a newer line");
+  });
+
+  it("never re-drives the walk when the same requested event is re-delivered after the sequence finished", () => {
+    const { fromChar, toChar } = toReturning();
+    finishWalk(fromChar);
+    checkHandoffArrivals();
+
+    handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+    expect(fromChar.path).toEqual([]);
+    expect(fromChar.state).not.toBe(CharacterState.WALK);
+    checkHandoffArrivals();
+    expect(fromChar.bubbleType).not.toBe("handoff-task");
+
+    const before = JSON.stringify([fromChar, toChar]);
+    handleHandoffEvent(completedEvent("task-1", "agent-b"));
+    expect(JSON.stringify([fromChar, toChar])).toBe(before);
+  });
+
+  it("a duplicate requested event mid-sequence does not strand the sender holding the task icon", () => {
+    upsertCharacterFromAgent("agent-a", AgentStatus.IDLE);
+    upsertCharacterFromAgent("agent-b", AgentStatus.IDLE);
+    const fromChar = getCharacter("agent-a")!;
+    const toChar = getCharacter("agent-b")!;
+    handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+    finishWalk(fromChar);
+    checkHandoffArrivals();
+    expect(fromChar.bubbleType).toBe("handoff-task");
+
+    handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+    handleHandoffEvent(completedEvent("task-1", "agent-b"));
+
+    expect(toChar.state).toBe(CharacterState.TYPE);
+    expect(toChar.bubbleText).toContain("accepts");
+    expect(fromChar.bubbleType).toBeNull();
+    expect(fromChar.state).toBe(CharacterState.WALK);
+    expect(fromChar.path[fromChar.path.length - 1]).toEqual({ col: fromChar.seatCol, row: fromChar.seatRow });
+  });
+
+  it("a different requested event (new id) for the same task still animates after the first sequence finished", () => {
+    const { fromChar } = toReturning();
+    finishWalk(fromChar);
+    checkHandoffArrivals();
+
+    handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b", "7fa85f64-5717-4562-b3fc-2c963f66afa6"));
+    expect(fromChar.state).toBe(CharacterState.WALK);
+    expect(fromChar.path.length).toBeGreaterThan(0);
   });
 });
