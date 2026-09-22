@@ -151,4 +151,8 @@ export interface Character {
    *  an owner-bound box beneath state glyphs (05-13). Carries only strings
    *  produced by resolveHandoffDialogue (length-capped). */
   bubbleText?: string | null;
+  /** The other participant bubbleText connects to (the receiver for the
+   *  requested line), null for a line spoken alone (05-28, G-05-4). Written
+   *  only by handoff-choreography.ts, together with bubbleText. */
+  bubbleTextPartnerId?: string | null;
 }

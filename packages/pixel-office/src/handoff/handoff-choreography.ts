@@ -140,7 +140,10 @@ function retireHandoff(record: HandoffRecord, sendSenderHome: boolean): void {
   }
   if (senderIsCurrent(record)) {
     const fromChar = record.fromChar;
-    if (record.requestedText !== null && fromChar.bubbleText === record.requestedText) fromChar.bubbleText = null;
+    if (record.requestedText !== null && fromChar.bubbleText === record.requestedText) {
+      fromChar.bubbleText = null;
+      fromChar.bubbleTextPartnerId = null;
+    }
     applyBubble(fromChar);
     const last = fromChar.path[fromChar.path.length - 1];
     const headingHome = last !== undefined && last.col === fromChar.seatCol && last.row === fromChar.seatRow;
@@ -216,7 +219,10 @@ export function handleHandoffEvent(event: CompanyEvent): void {
 
     // The sender's own status glyph comes back (05-20, review CR-01).
     applyBubble(fromChar);
-    if (fromChar.bubbleText === record.requestedText) fromChar.bubbleText = null;
+    if (fromChar.bubbleText === record.requestedText) {
+      fromChar.bubbleText = null;
+      fromChar.bubbleTextPartnerId = null;
+    }
     const seat = { col: fromChar.seatCol, row: fromChar.seatRow };
     walkCharacterTo(fromChar, seat.col, seat.row, getTileMap(), blockedTilesFor(fromChar, seat));
     if (toChar) {
@@ -229,6 +235,7 @@ export function handleHandoffEvent(event: CompanyEvent): void {
       const toAgentName = toChar.name ?? record.toAgentId;
       record.acceptedText = resolveHandoffDialogue("accepted", taskTitle, toAgentName);
       toChar.bubbleText = record.acceptedText;
+      toChar.bubbleTextPartnerId = null;
     }
     return;
   }
@@ -270,6 +277,7 @@ export function checkHandoffArrivals(): void {
       }
       record.requestedText = resolveHandoffDialogue("requested", taskTitle, toAgentName);
       fromChar.bubbleText = record.requestedText;
+      fromChar.bubbleTextPartnerId = record.toAgentId;
       record.phase = "ICON_VISIBLE";
       applyBubble(fromChar);
       continue;

@@ -21,18 +21,18 @@
 // fork's furniture/floor/wall packs, which stay deferred (D-05).
 //
 // renderScene draws three ordered passes: (1) base sprites and furniture in
-// one z-sorted list, (2) handoff dialogue boxes, (3) state glyphs.
+// one z-sorted list, (2) handoff speech bubbles, (3) state glyphs.
 
 import {
   BUBBLE_ICON_GAP_PX,
   CHARACTER_SITTING_OFFSET_PX,
-  BUBBLE_ICON_HEIGHT_PX,
   CHARACTER_Z_SORT_OFFSET,
   DEFAULT_COLS,
   DIALOGUE_BOX_COLOR,
   DIALOGUE_BOX_HEIGHT_PX,
   DIALOGUE_BOX_PAD_X_PX,
   DIALOGUE_FONT_PX,
+  DIALOGUE_TAIL_PX,
   DIALOGUE_TEXT_COLOR,
   TILE_SIZE,
   WALL_COLOR,
@@ -146,35 +146,40 @@ export function resolveBubbleY(drawY: number, bubbleHeight: number, zoom: number
 }
 
 /**
- * Placement for a character's handoff dialogue box — owner-bound, like the
- * glyph (05-13, closes VERIFICATION gap 1). @internal
+ * Placement for a handoff speech bubble (05-28, closes G-05-4). @internal
  *
- * Centred on and stacked above its owner: the box sits directly above the
- * owner's glyph SLOT (reserved whether or not a glyph is showing), clamped at
- * y = 0, and is shifted horizontally only as far as needed to stay on the
- * canvas — so its extent always contains the owner's centre x. A box wider
- * than the canvas is clipped, never relocated.
+ * Layout-free contract: the bubble hangs from the speaker's foot line (a
+ * DIALOGUE_TAIL_PX tail, then the box directly under it), is centred on the
+ * midpoint of the speaker and its partner (the speaker alone when there is
+ * none), and is clamped only into the floor interior [floorLeft, floorRight]
+ * — never against the canvas edge. With the pair on one row and the box
+ * narrower than the floor, its extent contains both centres, so the line is
+ * attributed to exactly the two agents it connects. It never reads the glyph
+ * slot or desk rows.
  *
- * Geometry at zoom 1 on the 320x176 office: desk rows 3/6/9 leave no position
- * for an 11px line that overlaps nothing. A row-3 owner's box lands at y 0..12
- * on the top wall strip (over the top 4 rows of its own glyph slot); a row-6
- * owner's at y 42..54, over the lower half of the desk row in front. It never
- * overlaps its OWN sprite. Because it can overlap glyph rows, renderScene
- * draws state glyphs after dialogue.
+ * Whether that band is clear of other agents is a property of the layout
+ * data, proven by renderer.test.ts's "layout guard: every speaker row's
+ * bubble band is clear" (handoff speakers stand only on seat rows, 05-27).
+ *
+ * Replaced: 05-13's box stacked above the glyph slot (clamped to y = 0 over
+ * every row-3 glyph) and centred-then-clamped into [0, canvasWidth - w],
+ * which pinned it at x = 0 for left-side speakers.
  */
 export function resolveDialogueBox(
-  ownerCenterX: number,
-  drawY: number,
+  speakerCenterX: number,
+  partnerCenterX: number | null,
+  footY: number,
   textWidth: number,
   zoom: number,
-  canvasWidth: number,
-): { x: number; y: number; w: number; h: number } {
+  floorLeft: number,
+  floorRight: number,
+): { x: number; y: number; w: number; h: number; tailX: number } {
+  const w = Math.ceil(textWidth) + 2 * (DIALOGUE_BOX_PAD_X_PX + 1) * zoom;
   const h = DIALOGUE_BOX_HEIGHT_PX * zoom;
-  const w = Math.ceil(textWidth) + 2 * DIALOGUE_BOX_PAD_X_PX * zoom;
-  const glyphSlotY = resolveBubbleY(drawY, BUBBLE_ICON_HEIGHT_PX, zoom);
-  const y = Math.max(0, glyphSlotY - BUBBLE_ICON_GAP_PX * zoom - h);
-  const x = Math.min(Math.max(0, Math.round(ownerCenterX - w / 2)), Math.max(0, canvasWidth - w));
-  return { x, y, w, h };
+  const y = footY + DIALOGUE_TAIL_PX * zoom;
+  const mid = partnerCenterX === null ? speakerCenterX : (speakerCenterX + partnerCenterX) / 2;
+  const x = Math.max(floorLeft, Math.min(Math.round(mid - w / 2), floorRight - w));
+  return { x, y, w, h, tailX: speakerCenterX };
 }
 
 function drawGlyph(ctx: CanvasRenderingContext2D, l: CharacterLayout, zoom: number): void {
@@ -196,19 +201,35 @@ function drawGlyph(ctx: CanvasRenderingContext2D, l: CharacterLayout, zoom: numb
 function drawDialogue(
   ctx: CanvasRenderingContext2D,
   l: CharacterLayout,
+  partner: CharacterLayout | undefined,
   offsetX: number,
+  offsetY: number,
   zoom: number,
-  canvasWidth: number,
 ): void {
   const text = l.ch.bubbleText;
   if (!text) return;
   ctx.font = `${DIALOGUE_FONT_PX * zoom}px monospace`;
   ctx.textBaseline = "top";
-  const box = resolveDialogueBox(offsetX + l.ch.x * zoom, l.drawY, ctx.measureText(text).width, zoom, canvasWidth);
+  const footY = offsetY + l.ch.y * zoom;
+  const box = resolveDialogueBox(
+    offsetX + l.ch.x * zoom,
+    partner ? offsetX + partner.ch.x * zoom : null,
+    footY,
+    ctx.measureText(text).width,
+    zoom,
+    offsetX + TILE_SIZE * zoom,
+    offsetX + (DEFAULT_COLS - 1) * TILE_SIZE * zoom,
+  );
+  // fillRect/fillText only: fill, then a 1px ink border, then the tail.
   ctx.fillStyle = DIALOGUE_BOX_COLOR;
   ctx.fillRect(box.x, box.y, box.w, box.h);
   ctx.fillStyle = DIALOGUE_TEXT_COLOR;
-  ctx.fillText(text, box.x + DIALOGUE_BOX_PAD_X_PX * zoom, box.y + zoom);
+  ctx.fillRect(box.x, box.y, box.w, zoom);
+  ctx.fillRect(box.x, box.y + box.h - zoom, box.w, zoom);
+  ctx.fillRect(box.x, box.y, zoom, box.h);
+  ctx.fillRect(box.x + box.w - zoom, box.y, zoom, box.h);
+  ctx.fillRect(Math.round(box.tailX - zoom / 2), footY, zoom, box.y - footY);
+  ctx.fillText(text, box.x + (DIALOGUE_BOX_PAD_X_PX + 1) * zoom, box.y + 2 * zoom);
 }
 
 /** @internal */
@@ -218,7 +239,6 @@ export function renderScene(
   offsetX: number,
   offsetY: number,
   zoom: number,
-  canvasWidth = DEFAULT_COLS * TILE_SIZE * zoom,
   furniture: readonly PlacedFurniture[] = [],
 ): void {
   const layouts: CharacterLayout[] = characters.map((ch) => {
@@ -252,8 +272,13 @@ export function renderScene(
   ];
   pass1.sort((a, b) => a.zY - b.zY);
   for (const d of pass1) drawSpriteData(ctx, d.sprite, d.x, d.y, zoom);
-  // Pass 2: handoff dialogue (05-13).
-  for (const l of layouts) drawDialogue(ctx, l, offsetX, zoom, canvasWidth);
+  // Pass 2: handoff speech bubbles (05-13, 05-28): each spans its speaker and
+  // the partner named by bubbleTextPartnerId (the speaker alone if absent).
+  for (const l of layouts) {
+    const partnerId = l.ch.bubbleTextPartnerId;
+    const partner = partnerId ? layouts.find((p) => p.ch.id === partnerId) : undefined;
+    drawDialogue(ctx, l, partner, offsetX, offsetY, zoom);
+  }
   // Pass 3: state glyphs (OFFICE-03, D-03) are the TOP layer, drawn after
   // every sprite and every dialogue box, so a transient handoff line can never
   // hide a blocked/waiting/failed signal. A glyph now sorts behind nothing at
@@ -283,7 +308,7 @@ export function renderFrame(
   const offsetY = Math.round((canvasHeight - rows * TILE_SIZE * zoom) / 2);
 
   renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom);
-  renderScene(ctx, characters, offsetX, offsetY, zoom, canvasWidth, furniture);
+  renderScene(ctx, characters, offsetX, offsetY, zoom, furniture);
 
   return { offsetX, offsetY };
 }
