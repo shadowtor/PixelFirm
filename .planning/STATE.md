@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
-status: executing
-stopped_at: Completed 05-15-PLAN.md
-last_updated: "2026-09-22T02:08:04.749Z"
+status: verifying
+stopped_at: Completed 05-16-PLAN.md
+last_updated: "2026-09-22T02:18:32.906Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 05 execution started
-state_head: dd3182cbda2e580d4c895a1a58de72a48d1ca7a1
+state_head: 0a50b648eafcd3809565d3da58f63781bdb8de0d
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 31
-  completed_plans: 30
+  completed_plans: 31
   percent: 50
 ---
 
@@ -27,9 +27,9 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 
 ## Current Position
 
-Phase: 05 (Pixel Office Renderer) — EXECUTING
+Phase: 05 (Pixel Office Renderer) — VERIFYING
 Plan: 16 of 16
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-22 — Phase 05 execution started
 
 Progress: [█████░░░░░] 50%
@@ -90,6 +90,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P13 | 8 min | 3 tasks | 8 files |
 | Phase 05 P14 | 4 min | 3 tasks | 5 files |
 | Phase 05 P15 | 4 min | 2 tasks | 2 files |
+| Phase 05 P16 | 7 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -175,6 +176,7 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-13: dialogue colours #121212/#f0f0f0 (planned #1a1a1a/#ffffff are in the sprite palette); render order sprites -> dialogue -> glyphs; request-event dedup lives in the handoff FSM
 - [Phase 05]: 05-14: desks and identity hues derived from seated characters (lowest free desk; hashed hue then next free bucket) — collisions start at the 13th concurrently seated agent
 - [Phase 05]: 05-15: runQuery ownership token (TaskRecord.currentRun + isCurrent()) guards every per-invocation writer; guard sits in the callbacks, not the public requestReview
+- [Phase 05]: 05-16: live-proof harness refuses to run while API/web port is taken (TCP preflight before any reset); servers always spawned, never reused (WR-06)
 
 ### Pending Todos
 
@@ -203,6 +205,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T02:08:04.501Z
-Stopped at: Completed 05-15-PLAN.md
+Last session: 2026-09-22T02:18:32.643Z
+Stopped at: Completed 05-16-PLAN.md
 Resume file: None
