@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE } from "pixel-office";
+import { DEFAULT_COLS, DEFAULT_ROWS, MIN_DISPLAY_SCALE, TILE_SIZE } from "pixel-office";
 // The audit document the in-app credit points at. ?raw is a build-time
 // filesystem read, so a missing file fails this module outright — and it
 // needs no jsdom/@types/node, neither of which this package depends on.
@@ -46,8 +46,15 @@ describe("App attribution", () => {
 });
 
 describe("App canvas", () => {
-  it("sizes the canvas from pixel-office's own grid constants, not hardcoded numbers", () => {
-    expect(markup).toContain(`width="${DEFAULT_COLS * TILE_SIZE}"`);
-    expect(markup).toContain(`height="${DEFAULT_ROWS * TILE_SIZE}"`);
+  // 05-21 (G-05-1a): never native 320x176 — SSR (no window) falls back to
+  // the minimum integer display scale.
+  it("sizes the canvas from pixel-office's own grid constants at the minimum display scale", () => {
+    expect(markup).toContain(`width="${DEFAULT_COLS * TILE_SIZE * MIN_DISPLAY_SCALE}"`);
+    expect(markup).toContain(`height="${DEFAULT_ROWS * TILE_SIZE * MIN_DISPLAY_SCALE}"`);
+  });
+
+  it("keeps integer pixels crisp under browser/OBS scaling", () => {
+    const canvasMarkup = markup.slice(markup.indexOf("<canvas"), markup.indexOf(">", markup.indexOf("<canvas")));
+    expect(canvasMarkup).toContain("image-rendering:pixelated");
   });
 });

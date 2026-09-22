@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { AgentStatus } from "event-schema";
-import { upsertCharacterFromAgent, getCharacter, _resetForTests, DEFAULT_ROWS } from "./index";
+import {
+  upsertCharacterFromAgent,
+  getCharacter,
+  _resetForTests,
+  DEFAULT_ROWS,
+  MIN_DISPLAY_SCALE,
+  displayScaleFor,
+} from "./index";
 import { CharacterState, Direction } from "./types";
 import { findPath } from "./layout/tileMap";
 import { TileType } from "./types";
@@ -209,5 +216,26 @@ describe("layout/tileMap findPath (forked, sanity check)", () => {
       [TileType.FLOOR_1, TileType.FLOOR_1],
     ];
     expect(findPath(0, 0, 0, 0, tileMap, new Set())).toEqual([]);
+  });
+});
+
+describe("display scale (G-05-1a)", () => {
+  it("never presents the office below 3x", () => {
+    expect(MIN_DISPLAY_SCALE).toBe(3);
+  });
+
+  it("picks the largest integer scale that fits, floored at the minimum", () => {
+    const cases: [number, number, number][] = [
+      [1920, 1056, 6],
+      [1280, 696, 3],
+      [3840, 2136, 12],
+      [800, 600, 3],
+      [1400, 900, 4],
+    ];
+    for (const [w, h, n] of cases) {
+      const got = displayScaleFor(w, h);
+      expect(got).toBe(n);
+      expect(Number.isInteger(got)).toBe(true);
+    }
   });
 });
