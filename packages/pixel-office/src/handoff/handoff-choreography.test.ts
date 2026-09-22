@@ -578,4 +578,68 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       expect(b.state).not.toBe(CharacterState.TYPE);
     });
   });
+
+  describe("status glyph survives a handoff (05-20, review CR-01): real update loop", () => {
+    it.each([
+      { status: AgentStatus.TESTING, atReceiver: "handoff-task", pose: CharacterState.TYPE, home: "testing" },
+      { status: AgentStatus.BLOCKED, atReceiver: "blocked", pose: CharacterState.IDLE, home: "blocked" },
+      { status: AgentStatus.WAITING_FOR_CEO, atReceiver: "permission", pose: CharacterState.IDLE, home: "permission" },
+    ])("CR-01: a $status sender comes home with its own glyph", ({ status, atReceiver, pose, home }) => {
+      seatAll();
+      upsertCharacterFromAgent("agent-a", status);
+      const a = getCharacter("agent-a")!;
+      const b = getCharacter("agent-b")!;
+      handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+      run(3);
+      expect(onSeatOf(a, b)).toBe(true);
+      expect(a.bubbleType).toBe(atReceiver);
+      expect(a.bubbleText).toContain("Handing off");
+
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      expect(b.state).toBe(CharacterState.TYPE);
+
+      run(5);
+      expectHome(a, pose);
+      expect(a.bubbleType).toBe(home);
+      expect(a.bubbleText ?? null).toBeNull();
+      expect(b.bubbleText ?? null).toBeNull();
+    });
+
+    it("CR-01 retire: a TESTING sender superseded at the receiver goes home with its glyph", () => {
+      seatAll();
+      upsertCharacterFromAgent("agent-a", AgentStatus.TESTING);
+      const a = getCharacter("agent-a")!;
+      const b = getCharacter("agent-b")!;
+      const c = getCharacter("agent-c")!;
+      handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+      run(3);
+      expect(a.bubbleType).toBe("handoff-task");
+
+      handleHandoffEvent(requestedEvent("task-1", "agent-c", "agent-b", NEW_REQUEST_ID));
+      expect(a.bubbleType).toBe("testing");
+
+      run(5);
+      expectHome(a, CharacterState.TYPE);
+      expect(a.bubbleType).toBe("testing");
+      expect(a.bubbleText ?? null).toBeNull();
+      expect(onSeatOf(c, b)).toBe(true);
+      expect(c.bubbleType).toBe("handoff-task");
+    });
+
+    it("CR-01 order: a status that lands while waiting follows the same rule as one set before the walk", () => {
+      const { a, b } = toIconVisible();
+      upsertCharacterFromAgent("agent-a", AgentStatus.TESTING);
+      expect(a.bubbleType).toBe("handoff-task");
+      upsertCharacterFromAgent("agent-a", AgentStatus.WAITING_FOR_CEO);
+      expect(a.bubbleType).toBe("permission");
+
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      expect(b.state).toBe(CharacterState.TYPE);
+
+      run(5);
+      expectHome(a, CharacterState.IDLE);
+      expect(a.bubbleType).toBe("permission");
+      expect(a.bubbleText ?? null).toBeNull();
+    });
+  });
 });
