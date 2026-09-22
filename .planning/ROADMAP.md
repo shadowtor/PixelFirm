@@ -167,7 +167,7 @@ Plans:
   3. When one agent hands off work to another, the office shows the first agent walking over, a task icon appearing, and the second agent accepting it and moving to work — using deterministic, template-based dialogue, never LLM-generated at render time.
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
 
-**Plans:** 20/30 plans executed (UAT 2026-09-22 diagnosed 7 gaps — 10 further gap-closure plans added 2026-09-22 per seventh --gaps re-plan, revised after plan check)
+**Plans:** 21/30 plans executed (UAT 2026-09-22 diagnosed 7 gaps — 10 further gap-closure plans added 2026-09-22 per seventh --gaps re-plan, revised after plan check)
 
 Plans:
 
@@ -191,7 +191,7 @@ Plans:
 - [x] 05-18-PLAN.md — Gap closure 4: runQuery claims its token before the preemption await; pause/cancel claim a fresh token (gap 2 / CR-01)
 - [x] 05-19-PLAN.md — Gap closure 5: arrival = not walking, single rest-pose writer that never interrupts WALK, at-target walk (review CR-01 paths a/b/c, IN-03) + one record per sender, sender identity, icon across glyph-less statuses (WR-01/WR-03/WR-02)
 - [x] 05-20-PLAN.md — Gap closure 6: stored status glyph (statusBubble) + single display writer applyBubble (frozen glyph > task icon while waiting > status glyph), restored on completion/retire (review CR-01) + sender identity in every phase incl. ICON_VISIBLE and completion (WR-01)
-- [ ] 05-21-PLAN.md — UAT gap closure: minimum integer display scale (>= 3x) via engine zoom, pixelated, live scale truth (G-05-1a)
+- [x] 05-21-PLAN.md — UAT gap closure: minimum integer display scale (>= 3x) via engine zoom, pixelated, live scale truth (G-05-1a)
 - [ ] 05-22-PLAN.md — UAT gap closure: MetroCity Interior sheets committed + reproducible decode to office-metrocity.json + ASSET-LICENSES provenance/credit and link-2 outfit-layer upgrade (G-05-1e)
 - [ ] 05-23-PLAN.md — UAT gap closure: frozen-state glyphs re-authored with closed black outline + contrast/shape guard tests (G-05-2)
 - [ ] 05-24-PLAN.md — UAT gap closure: furnished office render — layout file, MetroCity floor/wall/desks/monitors/decor z-sorted with characters, sprite cache (G-05-1e)
@@ -349,7 +349,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 20/30 | In Progress|  |
+| 5. Pixel Office Renderer | 21/30 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
