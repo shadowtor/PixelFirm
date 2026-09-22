@@ -35,11 +35,21 @@ interface RecordedText {
   font: string;
 }
 
-type RecordedOp = ({ kind: "rect" } & RecordedRect) | ({ kind: "text" } & RecordedText);
+type RecordedOp =
+  | ({ kind: "rect" } & RecordedRect)
+  | ({ kind: "text" } & RecordedText)
+  | { kind: "image"; image: unknown; x: number; y: number };
 
 /** Minimal CanvasRenderingContext2D stand-in recording every painted cell,
  *  every text draw, and one ordered log of both (layering tests need order). */
-function mockCtx(): { ctx: CanvasRenderingContext2D; rects: RecordedRect[]; texts: RecordedText[]; ops: RecordedOp[] } {
+function mockCtx(): {
+  ctx: CanvasRenderingContext2D;
+  rects: RecordedRect[];
+  texts: RecordedText[];
+  ops: RecordedOp[];
+  images: Array<{ image: unknown; x: number; y: number }>;
+} {
+  const images: Array<{ image: unknown; x: number; y: number }> = [];
   const rects: RecordedRect[] = [];
   const texts: RecordedText[] = [];
   const ops: RecordedOp[] = [];
@@ -61,8 +71,12 @@ function mockCtx(): { ctx: CanvasRenderingContext2D; rects: RecordedRect[]; text
       return { width: Array.from(text).length * 7 };
     },
     clearRect() {},
+    drawImage(image: unknown, x: number, y: number) {
+      images.push({ image, x, y });
+      ops.push({ kind: "image", image, x, y });
+    },
   };
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, rects, texts, ops };
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, rects, texts, ops, images };
 }
 
 /** Colours used by a bubble/badge glyph and by NO base sprite pixel of any
@@ -623,5 +637,47 @@ describe("furnished office (G-05-1e)", () => {
     const own = createCharacter("s", 1, 4);
     expect(isOwnSeat(own)).toBe(true);
     expect(isOwnSeat(createCharacter("t", 2, 6))).toBe(false);
+  });
+});
+
+describe("sprite cache (05-24, T-05-24-01)", () => {
+  it("sprites are rasterised once per (sprite, zoom) when OffscreenCanvas exists", () => {
+    const made: Array<{ width: number; height: number; rects: number }> = [];
+    class FakeOffscreenCanvas {
+      rec: { width: number; height: number; rects: number };
+      constructor(width: number, height: number) {
+        this.rec = { width, height, rects: 0 };
+        made.push(this.rec);
+      }
+      getContext() {
+        const rec = this.rec;
+        return { fillStyle: "", fillRect() { rec.rects++; } };
+      }
+    }
+    const g = globalThis as { OffscreenCanvas?: unknown };
+    const prev = g.OffscreenCanvas;
+    g.OffscreenCanvas = FakeOffscreenCanvas;
+    try {
+      // A zoom no other test uses, so the module-level cache starts cold for it.
+      const zoom = 3;
+      const chars = [createCharacter("a", 1, 4), createCharacter("b", 2, 6, 150)];
+      const f1 = mockCtx();
+      renderFrame(f1.ctx, 960, 528, OFFICE_TILE_MAP, chars, zoom, FURNITURE);
+      const distinct = new Set(f1.images.map((i) => i.image));
+      expect(f1.images.length).toBeGreaterThan(200);
+      expect(made.length).toBe(distinct.size);
+      // Only wall-colour tile fills remain on the fillRect path.
+      expect(f1.rects.every((r) => r.w === 16 * zoom && r.h === 16 * zoom)).toBe(true);
+      for (const m of made) expect(m.rects).toBeGreaterThan(0);
+
+      const before = made.length;
+      const f2 = mockCtx();
+      renderFrame(f2.ctx, 960, 528, OFFICE_TILE_MAP, chars, zoom, FURNITURE);
+      expect(made.length).toBe(before);
+      expect(f2.images.length).toBe(f1.images.length);
+    } finally {
+      if (prev === undefined) delete g.OffscreenCanvas;
+      else g.OffscreenCanvas = prev;
+    }
   });
 });
