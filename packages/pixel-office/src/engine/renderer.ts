@@ -3,8 +3,8 @@
 // Forked under MIT — see packages/pixel-office/LICENSE
 //
 // Trimmed to the tile-grid + character draw calls this package needs.
-// Dropped from the fork's original ~1050-line renderer.ts: furniture/wall/
-// carpet/area/pet layers, the floor-sprite-PNG pipeline (getColorizedFloor
+// Dropped from the fork's original ~1050-line renderer.ts: the fork's
+// furniture/wall/carpet/area/pet layers, the floor-sprite-PNG pipeline (getColorizedFloor
 // Sprite/hasFloorSprites — no asset-loading pipeline exists in this repo),
 // the matrix spawn/despawn effect, the fork's own speech-bubble renderer
 // (replaced by this repo's state-glyph and handoff-dialogue passes below),
@@ -13,10 +13,14 @@
 // sprite-cache module (spriteCache.ts — drawing each SpriteData pixel
 // directly via fillRect is simpler and correct at this scale). Re-add the
 // relevant layer here (not a fresh guess) once a later plan actually needs
-// furniture/carpets/areas/pets.
+// carpets/areas/pets.
 //
-// renderScene draws three ordered passes over one z-sorted layout list:
-// (1) base sprites, (2) handoff dialogue boxes, (3) state glyphs.
+// 05-24 (G-05-1e) re-added the tile-sprite and furniture layer, drawn from
+// the MetroCity Interior pack (05-22, layout/officeLayout.ts) — not the
+// fork's furniture/floor/wall packs, which stay deferred (D-05).
+//
+// renderScene draws three ordered passes: (1) base sprites and furniture in
+// one z-sorted list, (2) handoff dialogue boxes, (3) state glyphs.
 
 import {
   BUBBLE_ICON_GAP_PX,
@@ -29,10 +33,10 @@ import {
   DIALOGUE_BOX_PAD_X_PX,
   DIALOGUE_FONT_PX,
   DIALOGUE_TEXT_COLOR,
-  FALLBACK_FLOOR_COLOR,
   TILE_SIZE,
   WALL_COLOR,
 } from "../constants.js";
+import { type PlacedFurniture, tileSpriteAt } from "../layout/officeLayout.js";
 import { resolveBubbleSprite } from "../sprites/bubbleSprites.js";
 import { getCharacterSprites } from "../sprites/spriteData.js";
 import type { Character, SpriteData, TileType as TileTypeVal } from "../types.js";
@@ -65,7 +69,12 @@ export function renderTileGrid(
     for (let c = 0; c < tileMap[r].length; c++) {
       const tile = tileMap[r][c];
       if (tile === TileType.VOID) continue;
-      ctx.fillStyle = tile === TileType.WALL ? WALL_COLOR : FALLBACK_FLOOR_COLOR;
+      const sprite = tileSpriteAt(c, r);
+      if (sprite) {
+        drawSpriteData(ctx, sprite, offsetX + c * s, offsetY + r * s, zoom);
+        continue;
+      }
+      ctx.fillStyle = WALL_COLOR;
       ctx.fillRect(offsetX + c * s, offsetY + r * s, s, s);
     }
   }
@@ -179,6 +188,7 @@ export function renderScene(
   offsetY: number,
   zoom: number,
   canvasWidth = DEFAULT_COLS * TILE_SIZE * zoom,
+  furniture: readonly PlacedFurniture[] = [],
 ): void {
   const layouts: CharacterLayout[] = characters.map((ch) => {
     const sprites = getCharacterSprites(ch.hueShift);
@@ -201,8 +211,15 @@ export function renderScene(
   // comment claimed the opposite, which is exactly the ordering a future
   // reader reasons about when chasing an overlay-placement bug.)
   layouts.sort((a, b) => a.zY - b.zY);
-  // Pass 1: base sprites only.
-  for (const l of layouts) drawSpriteData(ctx, l.spriteData, l.drawX, l.drawY, zoom);
+  // Pass 1: base sprites and furniture, one z-sorted list (05-24): a desk
+  // hides the lower body of the agent seated behind it, an agent in the lane
+  // in front of a desk is drawn over it, wall decor is behind everyone.
+  const pass1: Array<{ zY: number; sprite: SpriteData; x: number; y: number }> = [
+    ...layouts.map((l) => ({ zY: l.zY, sprite: l.spriteData, x: l.drawX, y: l.drawY })),
+    ...furniture.map((f) => ({ zY: f.zY, sprite: f.sprite, x: offsetX + f.x * zoom, y: offsetY + f.y * zoom })),
+  ];
+  pass1.sort((a, b) => a.zY - b.zY);
+  for (const d of pass1) drawSpriteData(ctx, d.sprite, d.x, d.y, zoom);
   // Pass 2: handoff dialogue (05-13).
   for (const l of layouts) drawDialogue(ctx, l, offsetX, zoom, canvasWidth);
   // Pass 3: state glyphs (OFFICE-03, D-03) are the TOP layer, drawn after
@@ -221,6 +238,7 @@ export function renderFrame(
   tileMap: TileTypeVal[][],
   characters: Character[],
   zoom = 1,
+  furniture: readonly PlacedFurniture[] = [],
 ): { offsetX: number; offsetY: number } {
   ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
@@ -233,7 +251,7 @@ export function renderFrame(
   const offsetY = Math.round((canvasHeight - rows * TILE_SIZE * zoom) / 2);
 
   renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom);
-  renderScene(ctx, characters, offsetX, offsetY, zoom, canvasWidth);
+  renderScene(ctx, characters, offsetX, offsetY, zoom, canvasWidth, furniture);
 
   return { offsetX, offsetY };
 }

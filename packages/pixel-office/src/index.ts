@@ -33,27 +33,15 @@ import { renderFrame } from "./engine/renderer.js";
 // file (below) is a safe circular reference.
 export { handleHandoffEvent, checkHandoffArrivals } from "./handoff/handoff-choreography.js";
 import { _resetHandoffsForTests, applyBubble, checkHandoffArrivals } from "./handoff/handoff-choreography.js";
+import { FURNITURE, OFFICE_TILE_MAP } from "./layout/officeLayout.js";
 import { resolveStatusVisual } from "./status/status-mapping.js";
 import type { Character } from "./types.js";
 import { TileType } from "./types.js";
 
-// Simple default office floor: a wall border around an open floor interior.
-// No furniture/desks this plan (05-01) — agents are placed at sequential
-// interior tiles as they come online.
-function buildDefaultTileMap(): TileType[][] {
-  const tiles: TileType[][] = [];
-  for (let r = 0; r < DEFAULT_ROWS; r++) {
-    const row: TileType[] = [];
-    for (let c = 0; c < DEFAULT_COLS; c++) {
-      const isBorder = r === 0 || r === DEFAULT_ROWS - 1 || c === 0 || c === DEFAULT_COLS - 1;
-      row.push(isBorder ? TileType.WALL : TileType.FLOOR_1);
-    }
-    tiles.push(row);
-  }
-  return tiles;
-}
-
-const tileMap = buildDefaultTileMap();
+// 05-24 (G-05-1e): the furnished office grid from layout/office-layout.json —
+// the same wall border / open floor shape the old default map had, so the
+// desk-row seating below is unaffected (05-25 moves agents onto SEATS).
+const tileMap = OFFICE_TILE_MAP;
 const characters = new Map<string, Character>();
 const interiorCols = DEFAULT_COLS - 2;
 
@@ -224,7 +212,7 @@ export function startGameLoop(canvas: HTMLCanvasElement): () => void {
       // The host sizes the backing store at an integer multiple of the grid
       // (05-21); the engine reads that multiple back, never guesses a scale.
       const zoom = Math.max(1, Math.floor(canvas.width / (DEFAULT_COLS * TILE_SIZE)));
-      renderFrame(ctx, canvas.width, canvas.height, tileMap, [...characters.values()], zoom);
+      renderFrame(ctx, canvas.width, canvas.height, tileMap, [...characters.values()], zoom, FURNITURE);
     },
   });
 }
