@@ -277,7 +277,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     run(4);
     expect(besideReceiver(a, b)).toBe(true);
     expect(a.bubbleType).toBe("handoff-task");
-    expect(a.bubbleText).toContain("Handing off");
+    expect(a.bubbleText).toContain(" → ");
     return { a, b };
   }
 
@@ -315,7 +315,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
 
     run(3);
     expect(besideReceiver(a, b)).toBe(true);
-    expect(a.bubbleText).toContain("Handing off");
+    expect(a.bubbleText).toContain(" → ");
 
     handleHandoffEvent(completedEvent("task-1", "agent-b"));
     expect(b.state).toBe(CharacterState.TYPE);
@@ -403,7 +403,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     run(0.5);
     expect(besideReceiver(a, b)).toBe(true);
     expect(a.bubbleType).toBe("handoff-task");
-    expect(a.bubbleText).toContain("Handing off");
+    expect(a.bubbleText).toContain(" → ");
 
     handleHandoffEvent(completedEvent("task-1", "agent-b"));
     run(5);
@@ -439,7 +439,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       run(5);
       expect(besideReceiver(a, b)).toBe(true);
       expect(a.bubbleType).toBe("handoff-task");
-      expect(a.bubbleText).toContain("Handing off");
+      expect(a.bubbleText).toContain(" → ");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       expect(b.state).toBe(CharacterState.TYPE);
@@ -459,7 +459,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       run(0.5);
       expect(besideReceiver(a, b)).toBe(true);
       expect(a.bubbleType).toBe("handoff-task");
-      expect(a.bubbleText).toContain("Handing off");
+      expect(a.bubbleText).toContain(" → ");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       expect(b.state).toBe(CharacterState.TYPE);
@@ -481,7 +481,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       run(3);
       expect(besideReceiver(a, b)).toBe(true);
       expect(a.bubbleType).toBe("handoff-task");
-      expect(a.bubbleText).toContain("Handing off");
+      expect(a.bubbleText).toContain(" → ");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b", "5fa85f64-5717-4562-b3fc-2c963f66afa6"));
       expect(b.bubbleText).toContain("accepts");
@@ -610,7 +610,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       run(4); // 05-27: 9-step detour, 3.0 s
       expect(besideReceiver(a, b)).toBe(true);
       expect(a.bubbleType).toBe(atReceiver);
-      expect(a.bubbleText).toContain("Handing off");
+      expect(a.bubbleText).toContain(" → ");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       expect(b.state).toBe(CharacterState.TYPE);

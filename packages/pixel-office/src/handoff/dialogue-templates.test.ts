@@ -3,20 +3,21 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { resolveHandoffDialogue } from "./dialogue-templates";
+import { DIALOGUE_FONT_PX, DIALOGUE_BOX_PAD_X_PX } from "../constants";
 
 const dir = dirname(fileURLToPath(import.meta.url));
 
 describe("resolveHandoffDialogue", () => {
   it("interpolates taskTitle and toAgentName into the 'requested' template", () => {
-    const text = resolveHandoffDialogue("requested", "Fix login bug", "reviewer-bot");
-    expect(text).toContain("Fix login bug");
-    expect(text).toContain("reviewer-bot");
+    const text = resolveHandoffDialogue("requested", "Fix login", "reviewer");
+    expect(text).toContain("Fix login");
+    expect(text).toContain("reviewer");
   });
 
   it("interpolates taskTitle and toAgentName into the 'accepted' template", () => {
-    const text = resolveHandoffDialogue("accepted", "Fix login bug", "reviewer-bot");
-    expect(text).toContain("Fix login bug");
-    expect(text).toContain("reviewer-bot");
+    const text = resolveHandoffDialogue("accepted", "Fix login", "reviewer");
+    expect(text).toContain("Fix login");
+    expect(text).toContain("reviewer");
   });
 
   it("never phrases dialogue with exclamation marks or first-person framing (kept transparency prohibition)", () => {
@@ -29,32 +30,33 @@ describe("resolveHandoffDialogue", () => {
   });
 });
 
-describe("resolveHandoffDialogue — length caps (05-13, T-05-13-01)", () => {
-  const titleSegment = (text: string): string => text.split('"')[1];
+describe("resolveHandoffDialogue — short label templates and caps (05-29, G-05-1b)", () => {
+  it("renders the exact short templates", () => {
+    expect(resolveHandoffDialogue("requested", "Fix login", "Ada")).toBe("Fix login → Ada");
+    expect(resolveHandoffDialogue("accepted", "Fix login", "Ada")).toBe("Ada accepts Fix login");
+  });
 
-  it("cuts a 200-character title to MAX_DIALOGUE_TITLE_CHARS code points ending in U+2026", async () => {
+  it("cuts a 30-code-point title to 12 code points ending in U+2026", async () => {
     const { MAX_DIALOGUE_TITLE_CHARS } = await import("./dialogue-templates");
-    expect(MAX_DIALOGUE_TITLE_CHARS).toBe(16);
-    const seg = titleSegment(resolveHandoffDialogue("requested", "a".repeat(200), "agent-x"));
-    expect(Array.from(seg).length).toBe(MAX_DIALOGUE_TITLE_CHARS);
+    expect(MAX_DIALOGUE_TITLE_CHARS).toBe(12);
+    const seg = resolveHandoffDialogue("requested", "a".repeat(30), "Ada").split(" → ")[0];
+    expect(Array.from(seg).length).toBe(12);
     expect(seg.endsWith("…")).toBe(true);
   });
 
-  it("cuts a 40-character agent name to MAX_DIALOGUE_NAME_CHARS code points ending in U+2026", async () => {
+  it("cuts a 20-code-point agent name to 10 code points ending in U+2026", async () => {
     const { MAX_DIALOGUE_NAME_CHARS } = await import("./dialogue-templates");
-    expect(MAX_DIALOGUE_NAME_CHARS).toBe(12);
-    const name = "n".repeat(40);
-    const text = resolveHandoffDialogue("requested", "Fix login bug", name);
-    const cutName = text.slice(text.lastIndexOf(" to ") + 4);
-    expect(Array.from(cutName).length).toBe(MAX_DIALOGUE_NAME_CHARS);
-    expect(cutName.endsWith("…")).toBe(true);
-    const accepted = resolveHandoffDialogue("accepted", "Fix login bug", name);
-    expect(Array.from(accepted.split(" accepts ")[0]).length).toBe(MAX_DIALOGUE_NAME_CHARS);
+    expect(MAX_DIALOGUE_NAME_CHARS).toBe(10);
+    const name = resolveHandoffDialogue("accepted", "Fix login", "n".repeat(20)).split(" accepts ")[0];
+    expect(Array.from(name).length).toBe(10);
+    expect(name.endsWith("…")).toBe(true);
   });
 
-  it("passes values at or under the caps through byte-identical", () => {
-    expect(resolveHandoffDialogue("requested", "Fix login bug", "reviewer-bot")).toBe('Handing off "Fix login bug" to reviewer-bot');
-    expect(resolveHandoffDialogue("accepted", "Fix login bug", "reviewer-bot")).toBe('reviewer-bot accepts "Fix login bug"');
+  it("the longest possible line fits the label budget (<= 100 world px in 05-28's bubble)", () => {
+    const longest = resolveHandoffDialogue("accepted", "t".repeat(50), "n".repeat(50));
+    const cps = Array.from(longest).length;
+    expect(cps).toBe(31);
+    expect(cps * 0.6 * DIALOGUE_FONT_PX + 2 * (DIALOGUE_BOX_PAD_X_PX + 1)).toBeLessThanOrEqual(100);
   });
 
   it("never splits a surrogate pair (cut by code point)", () => {
