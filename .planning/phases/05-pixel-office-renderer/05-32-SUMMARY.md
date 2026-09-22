@@ -56,7 +56,7 @@ patterns-established:
   - "Occlusion-based legibility test: assert a pose difference in SURVIVING pixels, not in draw coordinates"
   - "Glyph silhouette contract: a glyph whose identity depends on a specific shape feature carries a 1x test for that feature, beyond being merely distinct from the other eleven"
 
-requirements-completed: []  # OFFICE-01/OFFICE-03 held by the shared-ID gate — siblings 05-33..05-35 also declare them and have no SUMMARY yet
+requirements-completed: [OFFICE-01, OFFICE-03]  # shared-ID gate clear: 05-32 is the LAST plan in this phase declaring either (05-33..05-35 declare only HANDOFF-01/02). Both were already checked off by earlier plans; this plan closes their two outstanding UAT gaps. The judgment half still routes to a human via coverage D3/D5.
 
 coverage:
   - id: D1
@@ -261,7 +261,7 @@ None — no external service configuration required.
 ## Next Phase Readiness
 
 - **G-05-P3 and G-05-P5 are closed** and proven both in unit tests and on the live composited canvas.
-- **OFFICE-01 and OFFICE-03 stay held open by the shared-ID gate**: sibling gap-closure plans 05-33..05-35 also declare them and have no SUMMARY yet. They flip when the last declaring plan finishes.
+- **OFFICE-01 and OFFICE-03's shared-ID gate is now clear.** Contrary to 05-31-SUMMARY.md's note, siblings 05-33/34/35 declare only `HANDOFF-01`/`HANDOFF-02` — **05-32 is the last plan in this phase declaring either OFFICE id** (`requirements.ready-ids` returns 2/2 ready). Both were already checked off in REQUIREMENTS.md by earlier plans, so `mark-complete` was a no-op; what this plan actually changes is that their last two outstanding UAT gaps are closed. The judgment half of each still routes to a human through coverage D3/D5 — the requirement checkbox is not a substitute for that.
 - Nothing in the event path, layout data, `STATUS_MAP` or the pose FSM was touched, so the remaining gap-closure plans are unaffected. `05-33` (G-05-P4, the handoff read path) and the interaction-slot gap G-05-P2 both remain open and independent of this change.
 - One knock-on worth knowing when planning G-05-P2: with resting agents seated, a *standing* sender beside a seated receiver is now the tallest thing on its row, which makes the shoulder-to-shoulder spacing defect G-05-P2 describes more visually prominent, not less.
 

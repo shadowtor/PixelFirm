@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-31-PLAN.md
-last_updated: "2026-09-22T22:42:57.076Z"
+stopped_at: Completed 05-32-PLAN.md
+last_updated: "2026-09-22T23:10:47.655Z"
 last_activity: 2026-09-23
 last_activity_desc: Phase 05 execution started
-state_head: 8594605f6f9d8e11c54e6e9e097a3225461b9c36
+state_head: 867675666c3685a1ace177e709e30e922d5afd9b
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 50
-  completed_plans: 46
+  completed_plans: 47
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 2 of 35
+Plan: 3 of 35
 Status: Ready to execute
 Last activity: 2026-09-23 — Phase 05 execution started
 
@@ -106,6 +106,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P29 | 6min | 2 tasks | 4 files |
 | Phase 05 P30 | 9min | 2 tasks | 5 files |
 | Phase 05 P31 | 9 min | 2 tasks | 6 files |
+| Phase 05 P32 | 12 min | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -216,6 +217,10 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-30: state glyphs anchor on the owner's visible head (lowest ink row 1 px above the frame's first opaque row, per frame; G-05-1c)
 - [Phase 05]: 05-31: the office is sized from the FULL viewport (no footer allowance) and centred on a WALL_COLOR surround; the attribution footer is transparent and overlays the office's own bottom wall row
 - [Phase 05]: 05-31: the no-black guarantee is asserted on a pngjs-decoded full-viewport screenshot, not canvas getImageData — the defect lived in host-page background the canvas cannot see
+- [Phase 05]: 05-32: a character resting (not walking) on its own seat is drawn seated whatever its status, superseding 05-25's TYPE-only rule; only walkers, handoff senders at an interaction tile and standing spots stand
+- [Phase 05]: 05-32: the sitting rule is expressed negatively (state !== WALK) so a future CharacterState defaults to seated at its own desk rather than silently reopening G-05-P3
+- [Phase 05]: 05-32: seated-vs-standing legibility is measured by compositing difference (visible body rows: 17 seated vs 28 standing), not by sprite geometry — only a two-render diff proves the desk removed rows rather than shifting them
+- [Phase 05]: 05-32: bubble-waiting redrawn as a true hourglass (widths 11/9/7/5/3/5/7/9/11, 1 px-fill waist, sand in the lower bulb) with its palette frozen, so every existing contrast test and the live harness colour sets stay valid
 
 ### Pending Todos
 
@@ -244,6 +249,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T22:42:56.914Z
-Stopped at: Completed 05-31-PLAN.md
+Last session: 2026-09-22T23:10:47.463Z
+Stopped at: Completed 05-32-PLAN.md
 Resume file: None
