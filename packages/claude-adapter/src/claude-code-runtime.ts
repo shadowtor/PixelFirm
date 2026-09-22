@@ -22,8 +22,16 @@ interface TaskRecord {
   // in flight (set right before the stream starts, cleared in its finally
   // block). Distinct from `controller`/`handle`, which are set once and
   // never reset — this is the one field that reflects "is there something
-  // to stop right now."
+  // to stop right now." The field is shared but its writer is per-
+  // invocation, so only the invocation that owns `currentRun` may clear it.
   inFlight?: boolean;
+  // Ownership token of the invocation that currently owns this record (a
+  // fresh object per runQuery call). Per-invocation code compares against it
+  // before writing shared fields, because attemptGracefulStop can return on
+  // timeout before the superseded stream has drained — its teardown, watchdog,
+  // late messages, role poll and query() callbacks would otherwise write the
+  // successor's state (05-VERIFICATION.md gap 4 / review CR-02).
+  currentRun?: object;
 }
 
 // CR-02: once a task reaches one of these, its controller/handle are stale
@@ -127,14 +135,21 @@ export function createClaudeCodeRuntime(options: {
     // interval, leaving pauseTask/cancelTask unable to control it. Properly
     // stop the existing invocation first, via the same graceful-then-hard-
     // abort path pauseTask/cancelTask use, before taking over the record.
+    // The stop can return on timeout, before the old stream drains, so the
+    // old invocation's finally runs later — it must not clear the flag this
+    // invocation sets below, or a third call would skip this branch and run
+    // concurrently (gap 4 / CR-02; see TaskRecord.currentRun).
     if (record.inFlight) {
       const exitedCleanly = await attemptGracefulStop(record);
       if (!exitedCleanly) record.controller?.abort();
     }
 
     const controller = new AbortController();
+    const invocation = {};
     record.controller = controller;
+    record.currentRun = invocation;
     record.inFlight = true;
+    const isCurrent = () => record.currentRun === invocation;
 
     const stream = query({
       prompt,
@@ -296,7 +311,8 @@ export function createClaudeCodeRuntime(options: {
         if (rolePoll) clearInterval(rolePoll);
         // CR-03: this invocation is no longer in flight — safe for a
         // subsequent runQuery call (resumeTask/sendMessage) to take over.
-        record.inFlight = false;
+        // Only its owner may clear it (TaskRecord.currentRun).
+        if (isCurrent()) record.inFlight = false;
       }
     })();
     record.runPromise = runPromise;
