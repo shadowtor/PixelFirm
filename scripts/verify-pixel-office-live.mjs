@@ -696,8 +696,9 @@ async function main() {
       `bubble-handoff-task's distinctive colour(s) ${HANDOFF_COLORS.join(", ")} never appeared on canvas during the walk (0 px)`,
     );
 
-    // TRUTH 5 (during) — the sender stands IDLE on the receiver's desk tile
-    // and speaks the requested line. No task.created is posted and the
+    // TRUTH 5 (during) — the sender stands on the receiver's desk tile in its
+    // own status pose (TYPE for this running, so CODING, sender; 05-19) and
+    // speaks the requested line. No task.created is posted and the
     // receiver has no name, so the line interpolates the raw 23-char task id
     // and 19-char agent id — both over 05-13's caps: the pixels counted are a
     // capped line.

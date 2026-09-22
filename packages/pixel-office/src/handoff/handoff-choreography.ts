@@ -30,6 +30,9 @@ interface HandoffRecord {
   acceptedText: string | null;
   /** The sender's requested line, set at ICON_VISIBLE; null before (05-17). */
   requestedText: string | null;
+  /** The sender Character this record walks, compared by identity (05-19,
+   *  WR-03): a re-seated sender is a new object and never inherits it. */
+  fromChar: Character;
 }
 
 // No blocked-tile tracking exists anywhere in this repo yet (no furniture —
@@ -97,10 +100,16 @@ export function handleHandoffEvent(event: CompanyEvent): void {
     // Marked only once acted on: a request that arrived before its
     // participants existed was never acted on, so it is not marked.
     handledHandoffRequestIds.add(event.id);
-    const previous = handoffs.get(taskId);
-    // Same sender is not sent home: it is re-pathed below, and a leftover home
-    // path would fire the new record's arrival at its own desk.
-    if (previous) retireHandoff(previous, previous.fromAgentId !== fromAgentId);
+    // A character can be in only one walk, so a newer request from the same
+    // sender supersedes its older record, and that record's later completion
+    // is a no-op (05-04's defensive contract; 05-19, WR-01).
+    for (const previous of [...handoffs.values()]) {
+      // Same sender is not sent home: it is re-pathed below, and a leftover home
+      // path would fire the new record's arrival at its own desk.
+      if (previous.taskId === taskId || previous.fromAgentId === fromAgentId) {
+        retireHandoff(previous, previous.fromAgentId !== fromAgentId);
+      }
+    }
     walkCharacterTo(fromChar, toChar.seatCol, toChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
     handoffs.set(taskId, {
       taskId,
@@ -109,6 +118,7 @@ export function handleHandoffEvent(event: CompanyEvent): void {
       phase: "WALKING_TO_RECEIVER",
       acceptedText: null,
       requestedText: null,
+      fromChar,
     });
     return;
   }
@@ -161,9 +171,9 @@ export function checkHandoffArrivals(): void {
   for (const record of handoffs.values()) {
     if (record.phase === "WALKING_TO_RECEIVER") {
       const fromChar = getCharacter(record.fromAgentId);
-      // A vanished sender ends the sequence: a re-seated one must never
-      // inherit a stale arrival.
-      if (!fromChar) {
+      // A vanished or re-seated sender ends the sequence: a re-seated sender
+      // is a new character and must never inherit a stale arrival (WR-03).
+      if (fromChar !== record.fromChar) {
         retireHandoff(record, false);
         continue;
       }
@@ -181,13 +191,25 @@ export function checkHandoffArrivals(): void {
 
     if (record.phase === "RETURNING_TO_DESK") {
       const fromChar = getCharacter(record.fromAgentId);
-      if (fromChar && !hasArrived(fromChar)) continue;
+      if (fromChar === record.fromChar && !hasArrived(fromChar)) continue;
 
       // D-04's sequence ends when the sender is home (or gone): a line left
       // painted after that is a stale claim (Pitfall 2).
       retireHandoff(record, false);
     }
   }
+}
+
+/**
+ * True while `ch` waits at a receiver (ICON_VISIBLE). The handoff-task icon is
+ * derived from the record, so a glyph-less status never removes it for the
+ * rest of the wait (05-19, WR-02).
+ */
+export function isWaitingHandoffSender(ch: Character): boolean {
+  for (const record of handoffs.values()) {
+    if (record.phase === "ICON_VISIBLE" && record.fromChar === ch) return true;
+  }
+  return false;
 }
 
 /** Test-only reset — mirrors index.ts's _resetForTests. */

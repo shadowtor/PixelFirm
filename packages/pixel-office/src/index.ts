@@ -17,7 +17,7 @@ import { renderFrame } from "./engine/renderer.js";
 // for why importing getCharacter/getTileMap/getTaskTitle back from this
 // file (below) is a safe circular reference.
 export { handleHandoffEvent, checkHandoffArrivals } from "./handoff/handoff-choreography.js";
-import { _resetHandoffsForTests, checkHandoffArrivals } from "./handoff/handoff-choreography.js";
+import { _resetHandoffsForTests, checkHandoffArrivals, isWaitingHandoffSender } from "./handoff/handoff-choreography.js";
 import { resolveStatusVisual } from "./status/status-mapping.js";
 import type { Character } from "./types.js";
 import { TileType } from "./types.js";
@@ -170,9 +170,10 @@ export function upsertCharacterFromAgent(agentId: string, status: AgentStatus, n
   }
   // The pose goes through setRestPose, so it never interrupts a handoff walk
   // (05-VERIFICATION.md gap, review CR-01) and a status that lands mid-walk
-  // is applied when the walk ends (IN-03).
+  // is applied when the walk ends (IN-03). A waiting handoff sender keeps its
+  // task icon through a glyph-less status; a real glyph still wins (WR-02).
   setRestPose(ch, visual.pose);
-  ch.bubbleType = visual.bubble ?? null;
+  ch.bubbleType = visual.bubble ?? (isWaitingHandoffSender(ch) ? "handoff-task" : null);
   ch.frozen = visual.frozen ?? false;
   ch.frameSpeedMultiplier = visual.frameSpeedMultiplier ?? 1;
   if (name) ch.name = name;
