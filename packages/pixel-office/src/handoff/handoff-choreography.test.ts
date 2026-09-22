@@ -5,7 +5,7 @@ import { upsertCharacterFromAgent, getCharacter, getTileMap, stepOffice, _resetF
 import { CharacterState } from "../types";
 import type { Character } from "../types";
 import { findPath } from "../layout/tileMap";
-import { handleHandoffEvent, checkHandoffArrivals } from "./handoff-choreography";
+import { handleHandoffEvent, checkHandoffArrivals, isWaitingHandoffSender } from "./handoff-choreography";
 
 function requestedEvent(
   taskId: string,
@@ -640,6 +640,42 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       expectHome(a, CharacterState.IDLE);
       expect(a.bubbleType).toBe("permission");
       expect(a.bubbleText ?? null).toBeNull();
+    });
+  });
+
+  describe("sender identity in every phase (05-20, review WR-01): real update loop", () => {
+    it("WR-01 tick: a sender that goes OFFLINE while waiting at the receiver retires its record", () => {
+      const { a, b } = toIconVisible();
+      upsertCharacterFromAgent("agent-a", AgentStatus.OFFLINE);
+      run(0.1);
+      expect(isWaitingHandoffSender(a)).toBe(false);
+      expect(b.bubbleText ?? null).toBeNull();
+
+      upsertCharacterFromAgent("agent-a", AgentStatus.IDLE);
+      run(1);
+      const a2 = getCharacter("agent-a")!;
+      expectHomeIdle(a2);
+      expect(a2.bubbleType).not.toBe("handoff-task");
+      expect(a2.bubbleText ?? null).toBeNull();
+
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      expect(b.state).not.toBe(CharacterState.TYPE);
+      expect(b.bubbleText ?? null).toBeNull();
+    });
+
+    it("WR-01 same frame: OFFLINE, re-seat and completion with no step between paint no accepted line", () => {
+      const { b } = toIconVisible();
+      upsertCharacterFromAgent("agent-a", AgentStatus.OFFLINE);
+      upsertCharacterFromAgent("agent-a", AgentStatus.IDLE);
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      expect(b.state).not.toBe(CharacterState.TYPE);
+      expect(b.bubbleText ?? null).toBeNull();
+
+      run(1);
+      const a2 = getCharacter("agent-a")!;
+      expectHomeIdle(a2);
+      expect(a2.bubbleType).not.toBe("handoff-task");
+      expect(a2.bubbleText ?? null).toBeNull();
     });
   });
 });
