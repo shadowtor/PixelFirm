@@ -42,7 +42,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Handoffs
 
-- [ ] **HANDOFF-01**: When an agent completes work destined for another agent, the pixel office shows a physical handoff: the first agent walks over, a task icon appears, the second agent accepts it and moves to work
+- [x] **HANDOFF-01**: When an agent completes work destined for another agent, the pixel office shows a physical handoff: the first agent walks over, a task icon appears, the second agent accepts it and moves to work
 - [ ] **HANDOFF-02**: Handoff dialogue is deterministic/template-based, never LLM-generated at render time
 
 ### GSD Adapter
@@ -134,7 +134,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | OFFICE-01 | Phase 5 | Gaps Found |
 | OFFICE-02 | Phase 5 | Gaps Found |
 | OFFICE-03 | Phase 5 | Gaps Found |
-| HANDOFF-01 | Phase 5 | Gaps Found |
+| HANDOFF-01 | Phase 5 | Complete |
 | HANDOFF-02 | Phase 5 | Gaps Found |
 | CEO-01 | Phase 6 | Pending |
 | CEO-02 | Phase 6 | Pending |

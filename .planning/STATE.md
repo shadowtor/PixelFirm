@@ -2,17 +2,17 @@
 gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: pixel-office-renderer
-status: executing
-stopped_at: Completed 05-18-PLAN.md
-last_updated: "2026-09-22T05:29:06.974Z"
+status: verifying
+stopped_at: Completed 05-19-PLAN.md
+last_updated: "2026-09-22T05:59:10.325Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 05 execution started
-state_head: 1ccf9011f955b07f2a5978eaf99b6b48fa67777f
+state_head: 527b244479254f2ca8d41eb5b946caec93951978
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 34
-  completed_plans: 33
+  completed_plans: 34
   percent: 50
 ---
 
@@ -29,7 +29,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 
 Phase: 05 (pixel-office-renderer) — READY TO EXECUTE
 Plan: 18 of 18
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-09-22 — Phase 05 execution started
 
 Progress: [█████░░░░░] 50%
@@ -93,6 +93,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P16 | 7 min | 2 tasks | 2 files |
 | Phase 05 P17 | 6min | 3 tasks | 5 files |
 | Phase 05 P18 | 5min | 2 tasks | 2 files |
+| Phase 05 P19 | 5min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -183,6 +184,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-17: retireHandoff is the single exit for a handoff record (home, vanished sender, replaced record)
 - [Phase 05]: 05-18: runQuery claims currentRun before the preemption await and re-checks after; superseded waiter returns without query() (last caller wins)
 - [Phase 05]: 05-18: pauseTask/cancelTask claim a fresh token before graceful stop so a pending preemption cannot undo a human stop
+- [Phase 05]: 05-19: arrival = not WALK and empty path (hasArrived); setRestPose is the only pose writer and never interrupts WALK; walks end in restPose (IN-03)
+- [Phase 05]: 05-19: a new handoff request retires every record of the same taskId or sender (WR-01); records compare the sender by Character identity (WR-03); handoff-task icon survives glyph-less statuses (WR-02)
 
 ### Pending Todos
 
@@ -211,6 +214,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T04:30:31.896Z
-Stopped at: Completed 05-18-PLAN.md
+Last session: 2026-09-22T05:59:10.103Z
+Stopped at: Completed 05-19-PLAN.md
 Resume file: None
