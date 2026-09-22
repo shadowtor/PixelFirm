@@ -29,7 +29,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Pixel Office
 
 - [x] **OFFICE-01**: The Pixel Agents renderer is forked/extended (not rebuilt) to render one floor with agents whose sprites/animations reflect their current state (offline/idle/planning/researching/coding/reading/testing/reviewing/discussing/deploying/blocked/waiting_for_agent/waiting_for_ceo/failed/completed)
-- [ ] **OFFICE-02**: Attribution and licence notices from the Pixel Agents fork are preserved
+- [x] **OFFICE-02**: Attribution and licence notices from the Pixel Agents fork are preserved
 - [x] **OFFICE-03**: Blocked or waiting-for-input agents show a clear visual signal at a glance
 
 ### CEO Approval
@@ -132,7 +132,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RUNTIME-01 | Phase 4 | Complete |
 | RUNTIME-02 | Phase 4 | Complete |
 | OFFICE-01 | Phase 5 | Complete |
-| OFFICE-02 | Phase 5 | Gaps Found |
+| OFFICE-02 | Phase 5 | Complete |
 | OFFICE-03 | Phase 5 | Complete |
 | HANDOFF-01 | Phase 5 | Complete |
 | HANDOFF-02 | Phase 5 | Gaps Found |
