@@ -124,8 +124,14 @@ export interface Character {
   frame: number;
   /** Time accumulator for animation */
   frameTimer: number;
-  /** Active speech bubble type, or null if none showing (D-03 icon overlay, wired up 05-02). */
+  /** Active speech bubble type, or null if none showing (D-03 icon overlay, wired up 05-02).
+   *  Derived, written only by applyBubble (05-20). */
   bubbleType: BubbleType | null;
+  /** The glyph implied by the latest AgentStatus, null when that status has
+   *  none. Only upsertCharacterFromAgent writes it; the displayed bubbleType is
+   *  derived from it by applyBubble, so a handoff never erases it (05-20,
+   *  review CR-01). */
+  statusBubble: BubbleType | null;
   /** True while status/status-mapping.ts's STATUS_MAP marks this status frozen
    *  (blocked/waiting_for_agent/waiting_for_ceo, D-03) — suppresses animation
    *  frame advance in engine/characters.ts's updateCharacter regardless of

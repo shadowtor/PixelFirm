@@ -69,6 +69,7 @@ export function createCharacter(id: string, tileCol = 1, tileRow = 1, hueShift =
     frame: 0,
     frameTimer: 0,
     bubbleType: null,
+    statusBubble: null,
     frozen: false,
     frameSpeedMultiplier: 1,
   };

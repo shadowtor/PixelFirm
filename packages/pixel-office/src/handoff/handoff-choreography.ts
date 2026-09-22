@@ -61,9 +61,12 @@ const handledHandoffRequestIds = new Set<string>();
 /**
  * The only place a handoff record ends (D-04: the sequence ends when the
  * sender is home; 05-13: no line outlives its sequence). Clears only what is
- * still this record's, so a newer line or a real status glyph survives.
+ * still this record's, so a newer line or a real status glyph survives, and
+ * puts back the sender's status glyph (05-20, review CR-01).
  */
 function retireHandoff(record: HandoffRecord, sendSenderHome: boolean): void {
+  // First, so applyBubble below no longer sees this record as waiting.
+  handoffs.delete(record.taskId);
   const toChar = getCharacter(record.toAgentId);
   if (toChar && record.acceptedText !== null && toChar.bubbleText === record.acceptedText) {
     toChar.bubbleText = null;
@@ -71,7 +74,7 @@ function retireHandoff(record: HandoffRecord, sendSenderHome: boolean): void {
   const fromChar = getCharacter(record.fromAgentId);
   if (fromChar) {
     if (record.requestedText !== null && fromChar.bubbleText === record.requestedText) fromChar.bubbleText = null;
-    if (fromChar.bubbleType === "handoff-task") fromChar.bubbleType = null;
+    applyBubble(fromChar);
     const last = fromChar.path[fromChar.path.length - 1];
     const headingHome = last !== undefined && last.col === fromChar.seatCol && last.row === fromChar.seatRow;
     const atHome = fromChar.tileCol === fromChar.seatCol && fromChar.tileRow === fromChar.seatRow;
@@ -79,7 +82,6 @@ function retireHandoff(record: HandoffRecord, sendSenderHome: boolean): void {
       walkCharacterTo(fromChar, fromChar.seatCol, fromChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
     }
   }
-  handoffs.delete(record.taskId);
 }
 
 /**
@@ -133,11 +135,11 @@ export function handleHandoffEvent(event: CompanyEvent): void {
 
     const fromChar = getCharacter(record.fromAgentId);
     const toChar = getCharacter(record.toAgentId);
+    record.phase = "RETURNING_TO_DESK";
 
     if (fromChar) {
-      // Clear only what the handoff put on the sender: a real status glyph
-      // set meanwhile (e.g. blocked) survives the return walk (05-17).
-      if (fromChar.bubbleType === "handoff-task") fromChar.bubbleType = null;
+      // The sender's own status glyph comes back (05-20, review CR-01).
+      applyBubble(fromChar);
       if (fromChar.bubbleText === record.requestedText) fromChar.bubbleText = null;
       walkCharacterTo(fromChar, fromChar.seatCol, fromChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
     }
@@ -152,8 +154,6 @@ export function handleHandoffEvent(event: CompanyEvent): void {
       record.acceptedText = resolveHandoffDialogue("accepted", taskTitle, toAgentName);
       toChar.bubbleText = record.acceptedText;
     }
-
-    record.phase = "RETURNING_TO_DESK";
     return;
   }
 }
@@ -182,10 +182,10 @@ export function checkHandoffArrivals(): void {
       const taskTitle = getTaskTitle(record.taskId) ?? record.taskId;
       const toChar = getCharacter(record.toAgentId);
       const toAgentName = toChar?.name ?? record.toAgentId;
-      fromChar.bubbleType = "handoff-task";
       record.requestedText = resolveHandoffDialogue("requested", taskTitle, toAgentName);
       fromChar.bubbleText = record.requestedText;
       record.phase = "ICON_VISIBLE";
+      applyBubble(fromChar);
       continue;
     }
 
@@ -210,6 +210,19 @@ export function isWaitingHandoffSender(ch: Character): boolean {
     if (record.phase === "ICON_VISIBLE" && record.fromChar === ch) return true;
   }
   return false;
+}
+
+/**
+ * The only writer of bubbleType, so the order in which a status and a handoff
+ * land never changes what is shown (05-20, review CR-01). Precedence:
+ * - a frozen status's glyph always shows (D-03, OFFICE-03: a stuck agent's
+ *   signal is never hidden);
+ * - otherwise the task icon shows while the character waits at a receiver
+ *   (D-04, HANDOFF-01);
+ * - otherwise the status glyph shows.
+ */
+export function applyBubble(ch: Character): void {
+  ch.bubbleType = isWaitingHandoffSender(ch) && !ch.frozen ? "handoff-task" : ch.statusBubble;
 }
 
 /** Test-only reset — mirrors index.ts's _resetForTests. */
