@@ -167,7 +167,7 @@ Plans:
   3. When one agent hands off work to another, the office shows the first agent walking over, a task icon appearing, and the second agent accepting it and moving to work — using deterministic, template-based dialogue, never LLM-generated at render time.
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
 
-**Plans:** 20/28 plans executed (UAT 2026-09-22 diagnosed 7 gaps — 8 further gap-closure plans added 2026-09-22 per seventh --gaps re-plan)
+**Plans:** 20/30 plans executed (UAT 2026-09-22 diagnosed 7 gaps — 10 further gap-closure plans added 2026-09-22 per seventh --gaps re-plan, revised after plan check)
 
 Plans:
 
@@ -194,11 +194,13 @@ Plans:
 - [ ] 05-21-PLAN.md — UAT gap closure: minimum integer display scale (>= 3x) via engine zoom, pixelated, live scale truth (G-05-1a)
 - [ ] 05-22-PLAN.md — UAT gap closure: MetroCity Interior sheets committed + reproducible decode to office-metrocity.json + ASSET-LICENSES provenance/credit and link-2 outfit-layer upgrade (G-05-1e)
 - [ ] 05-23-PLAN.md — UAT gap closure: frozen-state glyphs re-authored with closed black outline + contrast/shape guard tests (G-05-2)
-- [ ] 05-24-PLAN.md — UAT gap closure: furnished office — layout file, MetroCity floor/wall/desks/monitors/decor z-sorted with characters, pod seats + standing overflow, seated offset only at own desk, sprite cache (G-05-1e)
-- [ ] 05-25-PLAN.md — UAT gap closure: live harness rebased on layout/office data + furnished and frame-rate truths, floor-texture glyph contrast, UI-SPEC/ROADMAP/footer credit sync (G-05-1e, G-05-2)
-- [ ] 05-26-PLAN.md — UAT gap closure: handoff interaction tile beside the receiver + occupancy/furniture-aware walks, sender faces receiver, live sender-visible check (G-05-1d, G-05-1e)
-- [ ] 05-27-PLAN.md — UAT gap closure: compact tailed speech bubble under the pair spanning sender to receiver, floor-clamped, short templates, live TRUTH 5 (G-05-4, G-05-1b)
-- [ ] 05-28-PLAN.md — UAT gap closure: status glyphs anchored 1 px above the owner's visible head, on the floor, live TRUTH 4 (G-05-1c)
+- [ ] 05-24-PLAN.md — UAT gap closure: furnished office render — layout file, MetroCity floor/wall/desks/monitors/decor z-sorted with characters, sprite cache (G-05-1e)
+- [ ] 05-25-PLAN.md — UAT gap closure: seat model — agents take layout desk seats, standing overflow, rebased seat tests, seated offset only at own desk (G-05-1e)
+- [ ] 05-26-PLAN.md — UAT gap closure: live harness rebased on layout/office data + furnished and frame-rate truths, floor-texture glyph contrast, UI-SPEC/ROADMAP/footer credit sync (G-05-1e, G-05-2)
+- [ ] 05-27-PLAN.md — UAT gap closure: handoff interaction tile on the receiver's seat row + occupancy/furniture-aware walks, sender faces receiver, live sender-visible check (G-05-1d, G-05-1e)
+- [ ] 05-28-PLAN.md — UAT gap closure: compact tailed speech bubble under the speaker spanning sender to receiver, floor-clamped, layout-data guard, live TRUTH 5 (G-05-4, G-05-1b)
+- [ ] 05-29-PLAN.md — UAT gap closure: short deterministic handoff templates + caps, UI-SPEC typography/colour/copy (G-05-1b)
+- [ ] 05-30-PLAN.md — UAT gap closure: status glyphs anchored 1 px above the owner's visible head, on the floor, live TRUTH 4 (G-05-1c)
 
 **Wave 1**
 
@@ -264,23 +266,31 @@ Plans:
 **Wave 14** *(blocked on Wave 13 — parallel, no file overlap, neither runs the live harness)*
 
 - [ ] 05-23-PLAN.md — Frozen-glyph outline and contrast (G-05-2)
-- [ ] 05-24-PLAN.md — Furnished office engine (G-05-1e)
+- [ ] 05-24-PLAN.md — Furnished office render + sprite cache (G-05-1e)
 
-**Wave 15** *(blocked on 05-23 and 05-24)*
+**Wave 15** *(blocked on 05-24)*
 
-- [ ] 05-25-PLAN.md — Live harness rebase + furnished truths + docs (G-05-1e, G-05-2)
+- [ ] 05-25-PLAN.md — Seat model + seated offset (G-05-1e)
 
-**Wave 16** *(blocked on 05-25)*
+**Wave 16** *(blocked on 05-23 and 05-25)*
 
-- [ ] 05-26-PLAN.md — Handoff interaction tile + blocked walks (G-05-1d, G-05-1e)
+- [ ] 05-26-PLAN.md — Live harness rebase + furnished truths + docs (G-05-1e, G-05-2)
 
 **Wave 17** *(blocked on 05-26)*
 
-- [ ] 05-27-PLAN.md — Attributed compact handoff bubble (G-05-4, G-05-1b)
+- [ ] 05-27-PLAN.md — Handoff interaction tile + blocked walks (G-05-1d, G-05-1e)
 
 **Wave 18** *(blocked on 05-27)*
 
-- [ ] 05-28-PLAN.md — Head-anchored status glyphs (G-05-1c)
+- [ ] 05-28-PLAN.md — Attributed compact handoff bubble + layout guard (G-05-4, G-05-1b)
+
+**Wave 19** *(blocked on 05-28)*
+
+- [ ] 05-29-PLAN.md — Short handoff templates + UI-SPEC (G-05-1b)
+
+**Wave 20** *(blocked on 05-29)*
+
+- [ ] 05-30-PLAN.md — Head-anchored status glyphs (G-05-1c)
 
 **UI hint**: yes
 
@@ -339,7 +349,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 20/28 | In Progress|  |
+| 5. Pixel Office Renderer | 20/30 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
