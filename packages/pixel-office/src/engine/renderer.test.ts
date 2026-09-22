@@ -14,6 +14,7 @@ import {
   registerTaskTitle,
   handleHandoffEvent,
   checkHandoffArrivals,
+  stepOffice,
   _resetForTests,
 } from "../index.js";
 import type { Character, SpriteData } from "../types.js";
@@ -67,8 +68,9 @@ function mockCtx(): {
       texts.push(t);
       ops.push({ kind: "text", ...t });
     },
+    // Monospace model tied to the font actually set (05-28): 0.6 em per code point.
     measureText(text: string) {
-      return { width: Array.from(text).length * 7 };
+      return { width: Array.from(text).length * 0.6 * parseFloat(this.font) };
     },
     clearRect() {},
     drawImage(image: unknown, x: number, y: number) {
@@ -332,48 +334,22 @@ function ownerDrawY(ch: Character): number {
   return Math.round(ch.y + sitting - sprite.length);
 }
 
-describe("renderScene dialogue pass — handoff text reaches the canvas, owner-bound (05-13)", () => {
+function handoffCompleted(id: string, taskId: string, toAgentId: string): CompanyEvent {
+  return {
+    id,
+    version: 1,
+    occurredAt: "2026-09-21T00:01:00.000Z",
+    companyId: "company-1",
+    taskId,
+    visibility: "INTERNAL",
+    type: "agent.handoff_completed",
+    payload: { taskId, toAgentId },
+  } as CompanyEvent;
+}
+
+describe("renderScene dialogue pass — nothing to say, nothing drawn (05-13)", () => {
   beforeEach(() => {
     _resetForTests();
-  });
-
-  it("tracer: a real handoff's capped 'requested' line is drawn once, in a box containing the sender's centre x and entirely above its sprite", async () => {
-    const { DIALOGUE_BOX_COLOR } = await import("../constants.js");
-    upsertCharacterFromAgent("sender", AgentStatus.IDLE);
-    upsertCharacterFromAgent("receiver", AgentStatus.IDLE);
-    const sender = getCharacter("sender")!;
-    const receiver = getCharacter("receiver")!;
-    const title = "Refactor the entire authentication subsystem for tenancy now"; // 60 chars
-    expect(Array.from(title).length).toBe(60);
-    registerTaskTitle("task-1", title);
-
-    handleHandoffEvent(handoffRequested("5fa85f64-5717-4562-b3fc-2c963f66afa6", "task-1", "sender", "receiver"));
-    for (let i = 0; i < 200 && !(sender.path.length === 0 && sender.state === CharacterState.IDLE); i++) {
-      updateCharacter(sender, 0.05);
-    }
-    expect(sender.state).toBe(CharacterState.IDLE);
-    checkHandoffArrivals();
-
-    const { ctx, rects, texts } = mockCtx();
-    renderScene(ctx, [sender, receiver], 0, 0, 1);
-
-    expect(texts.length).toBe(1);
-    const t = texts[0];
-    expect(t.text).toBe(sender.bubbleText);
-    const titleSegment = t.text.split('"')[1];
-    expect(titleSegment.endsWith("\u2026")).toBe(true);
-    expect(Array.from(t.text).length).toBeLessThanOrEqual(46);
-
-    const boxes = rects.filter((r) => r.color.toLowerCase() === DIALOGUE_BOX_COLOR.toLowerCase());
-    expect(boxes.length).toBe(1);
-    const box = boxes[0];
-    expect(box.x).toBeLessThanOrEqual(sender.x);
-    expect(box.x + box.w).toBeGreaterThanOrEqual(sender.x);
-    expect(box.y + box.h).toBeLessThanOrEqual(sender.y - 32);
-    expect(t.x).toBeGreaterThanOrEqual(box.x);
-    expect(t.x).toBeLessThan(box.x + box.w);
-    expect(t.y).toBeGreaterThanOrEqual(box.y);
-    expect(t.y).toBeLessThan(box.y + box.h);
   });
 
   it("draws no text and no dialogue box when bubbleText is null, undefined or empty", async () => {
@@ -388,60 +364,189 @@ describe("renderScene dialogue pass — handoff text reaches the canvas, owner-b
       expect(rects.filter((r) => r.color.toLowerCase() === DIALOGUE_BOX_COLOR.toLowerCase()).length).toBe(0);
     }
   });
+});
 
-  it("stacks a row-8 owner's box directly above its own glyph slot", async () => {
-    const { DIALOGUE_BOX_COLOR } = await import("../constants.js");
-    const chars = seatReal(9);
-    const owner = chars[8];
-    expect(owner.seatRow).toBe(8);
-    owner.bubbleText = "Handing off \"Fix login bug\" to agent-2";
+// ── 05-28: partner-spanning speech bubble under the speaker's feet ────────
+// New symbols (DIALOGUE_TAIL_PX, the new resolveDialogueBox signature) are
+// imported with await import(...) so RED is a failing assertion, not a load crash.
 
-    const { ctx, rects } = mockCtx();
-    renderScene(ctx, chars, 0, 0, 1);
+type Box = { x: number; y: number; w: number; h: number };
+const overlaps = (a: Box, b: Box): boolean => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+const spansX = (b: Box, x: number): boolean => b.x <= x && x <= b.x + b.w;
+/** Sprite box renderScene paints a character into (offset 0, zoom 1). */
+const spriteRect = (ch: Character): Box => ({ x: Math.round(ch.x - SPRITE_W / 2), y: ownerDrawY(ch), w: SPRITE_W, h: SPRITE_H });
+const TILE = 16;
+const FLOOR_LEFT = 16;
+const FLOOR_RIGHT = 304;
 
-    const drawY = ownerDrawY(owner);
-    expect(drawY).toBe(104);
-    const glyphSlotTop = resolveBubbleY(drawY, 13, 1);
-    const box = rects.find((r) => r.color.toLowerCase() === DIALOGUE_BOX_COLOR.toLowerCase())!;
-    expect(box).toBeDefined();
-    expect(box.y).toBe(glyphSlotTop - 2 - 13);
-    expect(box.y).toBe(74);
-    expect(box.y + box.h).toBeLessThanOrEqual(glyphSlotTop);
+/** Renders one frame and splits the op log: the bubble fill, its text, the ink
+ *  rects, and pass 3 (every rect after the last text op is a state glyph). */
+async function renderBubbleFrame(chars: Character[]) {
+  const { DIALOGUE_BOX_COLOR, DIALOGUE_TEXT_COLOR } = await import("../constants.js");
+  const { ctx, ops, texts } = mockCtx();
+  renderScene(ctx, chars, 0, 0, 1, FURNITURE);
+  const rectOps = (list: RecordedOp[]) => list.filter((op): op is { kind: "rect" } & RecordedRect => op.kind === "rect");
+  const fills = rectOps(ops).filter((r) => r.color.toLowerCase() === DIALOGUE_BOX_COLOR.toLowerCase());
+  const ink = rectOps(ops).filter((r) => r.color.toLowerCase() === DIALOGUE_TEXT_COLOR.toLowerCase());
+  let lastText = -1;
+  ops.forEach((op, i) => op.kind === "text" && (lastText = i));
+  const glyphs = lastText < 0 ? [] : rectOps(ops.slice(lastText + 1));
+  return { fills, ink, texts, glyphs };
+}
+
+/** Requests from -> to through the public API and steps the real loop until the sender waits. */
+function requestAndWait(from: Character, to: Character): void {
+  registerTaskTitle("task-1", "Fix login bug");
+  handleHandoffEvent(handoffRequested("7fa85f64-5717-4562-b3fc-2c963f66afa6", "task-1", from.id, to.id));
+  for (let i = 0; i < 3600 && !from.bubbleText; i++) stepOffice(1 / 60);
+  expect(from.bubbleText, `${from.id} never started talking`).toBeTruthy();
+}
+
+describe("handoff speech bubble (05-28, G-05-4 / G-05-1b)", () => {
+  beforeEach(() => {
+    _resetForTests();
   });
 
-  it("clamps a wide box into the canvas horizontally while still containing its owner's centre x", async () => {
-    const { DIALOGUE_BOX_COLOR } = await import("../constants.js");
-    const chars = seatReal(18);
-    const left = chars.reduce((a, b) => (b.seatCol < a.seatCol ? b : a));
-    const right = chars.reduce((a, b) => (b.seatCol > a.seatCol ? b : a));
-    expect(left.seatCol).toBe(1);
-    expect(right.seatCol).toBe(18);
-    const wide = "x".repeat(30); // 210px at the mock's 7px/char — wider than half of 320
+  it("tracer: the requested line is a bubble under the sender's feet spanning sender and receiver, tail at the sender", async () => {
+    const { DIALOGUE_TAIL_PX } = await import("../constants.js");
+    const chars = seatReal(3);
+    const [sender, , receiver] = chars;
+    requestAndWait(sender, receiver);
+    expect(sender.tileRow).toBe(receiver.tileRow);
 
-    for (const [owner, edge] of [
-      [left, "left"],
-      [right, "right"],
-    ] as const) {
-      for (const c of chars) c.bubbleText = null;
-      owner.bubbleText = wide;
-      const { ctx, rects } = mockCtx();
-      renderScene(ctx, chars, 0, 0, 1);
-      const box = rects.find((r) => r.color.toLowerCase() === DIALOGUE_BOX_COLOR.toLowerCase())!;
-      expect(box).toBeDefined();
-      expect(box.w).toBeGreaterThan(160);
-      if (edge === "left") expect(box.x).toBe(0);
-      else expect(box.x + box.w).toBe(320);
-      expect(box.x).toBeLessThanOrEqual(owner.x);
-      expect(box.x + box.w).toBeGreaterThanOrEqual(owner.x);
+    const { fills, ink, texts } = await renderBubbleFrame(chars);
+    expect(fills).toHaveLength(1);
+    const box = fills[0];
+    expect(spansX(box, sender.x), `box ${JSON.stringify(box)} misses the sender (${sender.x})`).toBe(true);
+    expect(spansX(box, receiver.x), `box ${JSON.stringify(box)} misses the receiver (${receiver.x})`).toBe(true);
+    expect(box.y).toBeGreaterThanOrEqual(sender.y + DIALOGUE_TAIL_PX);
+    const tail = ink.find((r) => r.y >= sender.y && r.y + r.h <= box.y && spansX(r, sender.x));
+    expect(tail, `no ink tail at x ${sender.x} between y ${sender.y} and ${box.y}`).toBeDefined();
+    expect(texts).toHaveLength(1);
+    expect(texts[0].text).toBe(sender.bubbleText);
+    expect(texts[0].font).toBe("5px monospace");
+    expect(box.h).toBe(9);
+    expect(overlaps({ x: texts[0].x, y: texts[0].y, w: 1, h: 1 }, box)).toBe(true);
+  });
+
+  it("layout guard: every speaker row's bubble band is clear", async () => {
+    const { resolveDialogueBox } = await import("./renderer.js");
+    const { DIALOGUE_BOX_PAD_X_PX: DIALOGUE_PAD } = await import("../constants.js");
+    const positions = [...SEATS, ...STANDING_SPOTS];
+    const speakerRows = [...new Set(positions.map((p) => p.row))];
+    const fullWidthText = FLOOR_RIGHT - FLOOR_LEFT - 2 * (DIALOGUE_PAD + 1);
+    for (const r of speakerRows) {
+      const footY = r * TILE + TILE / 2;
+      const band = resolveDialogueBox(FLOOR_LEFT + TILE / 2, null, footY, fullWidthText, 1, FLOOR_LEFT, FLOOR_RIGHT);
+      expect(band.x).toBe(FLOOR_LEFT);
+      expect(band.x + band.w).toBe(FLOOR_RIGHT);
+      // The first all-wall row below the speaker row ends the floor.
+      const wallRow = OFFICE_TILE_MAP.findIndex((line, i) => i > r && line.every((t) => t === TileType.WALL));
+      expect(band.y + band.h, `row ${r} band runs into the bottom wall`).toBeLessThanOrEqual(wallRow * TILE);
+      for (const p of positions.filter((q) => q.row !== r)) {
+        const poses: Character[] = [];
+        const standing = createCharacter("guard", p.col, p.row);
+        standing.state = CharacterState.IDLE;
+        standing.bubbleType = "blocked";
+        poses.push(standing);
+        if (SEATS.some((s) => s.col === p.col && s.row === p.row)) {
+          const seated = createCharacter("guard", p.col, p.row);
+          seated.state = CharacterState.TYPE;
+          seated.bubbleType = "blocked";
+          expect(isOwnSeat(seated)).toBe(true);
+          poses.push(seated);
+        }
+        for (const ch of poses) {
+          const { ctx, rects } = mockCtx();
+          renderScene(ctx, [ch], 0, 0, 1);
+          for (const rect of rects) {
+            expect(
+              overlaps(rect, band),
+              `row ${r} speaker band ${JSON.stringify(band)} is hit by the ${ch.state} agent at (${p.col},${p.row}): ${JSON.stringify(rect)}`,
+            ).toBe(false);
+          }
+        }
+      }
     }
   });
 
-  it("resolveDialogueBox: centred, stacked above the glyph slot, clamped at y = 0", async () => {
+  it("attributed at every position: all 16 seats and 4 standing spots as receiver", async () => {
+    const positions = [...SEATS, ...STANDING_SPOTS];
+    expect(positions).toHaveLength(20);
+    for (const p of positions) {
+      _resetForTests();
+      const chars = seatReal(20);
+      const receiver = chars.find((c) => c.seatCol === p.col && c.seatRow === p.row)!;
+      const sender = chars.find((c) => c.seatRow !== p.row)!;
+      for (const c of chars) if (c !== sender && c !== receiver) upsertCharacterFromAgent(c.id, AgentStatus.BLOCKED);
+      requestAndWait(sender, receiver);
+
+      const where = `receiver (${p.col},${p.row}), sender at (${sender.tileCol},${sender.tileRow})`;
+      const { fills, glyphs } = await renderBubbleFrame(chars);
+      expect(fills, where).toHaveLength(1);
+      const box = fills[0];
+      expect(box.x, where).toBeGreaterThanOrEqual(FLOOR_LEFT);
+      expect(box.x + box.w, where).toBeLessThanOrEqual(FLOOR_RIGHT);
+      expect(spansX(box, sender.x) && spansX(box, receiver.x), `${where}: box ${JSON.stringify(box)}`).toBe(true);
+      expect(glyphs.length, where).toBeGreaterThan(0);
+      for (const g of glyphs) expect(overlaps(g, box), `${where}: glyph ${JSON.stringify(g)} under box ${JSON.stringify(box)}`).toBe(false);
+      for (const c of chars) {
+        if (c === sender || c === receiver || c.tileRow === sender.tileRow) continue;
+        expect(overlaps(spriteRect(c), box), `${where}: ${c.id} at (${c.tileCol},${c.tileRow}) under box ${JSON.stringify(box)}`).toBe(false);
+      }
+    }
+  });
+
+  it("the accepted bubble belongs to the receiver alone", async () => {
+    const chars = seatReal(3);
+    const [sender, , receiver] = chars;
+    requestAndWait(sender, receiver);
+    handleHandoffEvent(handoffCompleted("8fa85f64-5717-4562-b3fc-2c963f66afa6", "task-1", receiver.id));
+    expect(receiver.bubbleText).toContain("accepts");
+    expect(receiver.bubbleTextPartnerId ?? null).toBeNull();
+    expect(sender.bubbleText ?? null).toBeNull();
+    expect(sender.bubbleTextPartnerId ?? null).toBeNull();
+
+    const { fills, ink } = await renderBubbleFrame(chars);
+    expect(fills).toHaveLength(1);
+    const box = fills[0];
+    expect(spansX(box, receiver.x)).toBe(true);
+    const tail = ink.find((r) => r.y >= receiver.y && r.y + r.h <= box.y && spansX(r, receiver.x));
+    expect(tail, `no tail at the receiver's centre ${receiver.x}`).toBeDefined();
+  });
+
+  it("resolveDialogueBox: centred on the pair, clamped only to the floor interior, x3 at zoom 3", async () => {
     const { resolveDialogueBox } = await import("./renderer.js");
-    // Row-3 owner: glyph slot at 9, box would be at -6 -> clamped to 0.
-    expect(resolveDialogueBox(100, 24, 50, 1, 320)).toEqual({ x: 73, y: 0, w: 54, h: 13 });
-    // Row-6 owner: glyph slot at 57, box at 42.
-    expect(resolveDialogueBox(100, 72, 50, 1, 320).y).toBe(42);
+    const { DIALOGUE_BOX_HEIGHT_PX, DIALOGUE_TAIL_PX, DIALOGUE_BOX_PAD_X_PX } = await import("../constants.js");
+    const cx = (col: number) => col * TILE + TILE / 2;
+    for (const zoom of [1, 3]) {
+      const ox = 7; // any offsetX: the floor edges carry it
+      const left = ox + TILE * zoom;
+      const right = ox + 19 * TILE * zoom;
+      const text = 60 * zoom;
+      const w = text + 2 * (DIALOGUE_BOX_PAD_X_PX + 1) * zoom;
+      const at = (col: number) => ox + cx(col) * zoom;
+      // Room to spare: centred on the pair's midpoint, under the feet, tail at the speaker.
+      const mid = resolveDialogueBox(at(8), at(10), 72 * zoom, text, zoom, left, right);
+      expect(mid).toEqual({
+        x: Math.round((at(8) + at(10)) / 2 - w / 2),
+        y: 72 * zoom + DIALOGUE_TAIL_PX * zoom,
+        w,
+        h: DIALOGUE_BOX_HEIGHT_PX * zoom,
+        tailX: at(8),
+      });
+      // Pair at cols 1-2: clamped to the left floor edge, never x = 0, still containing both.
+      const l = resolveDialogueBox(at(1), at(2), 72 * zoom, text, zoom, left, right);
+      expect(l.x).toBe(left);
+      expect(spansX(l, at(1)) && spansX(l, at(2))).toBe(true);
+      // Pair at cols 16-17: clamped to the right floor edge.
+      const r = resolveDialogueBox(at(17), at(16), 72 * zoom, text, zoom, left, right);
+      expect(r.x + r.w).toBe(right);
+      expect(spansX(r, at(16)) && spansX(r, at(17))).toBe(true);
+      expect(r.tailX).toBe(at(17));
+      // No partner: centred on the speaker alone.
+      expect(resolveDialogueBox(at(8), null, 72 * zoom, text, zoom, left, right).x).toBe(Math.round(at(8) - w / 2));
+    }
   });
 });
 
@@ -539,6 +644,9 @@ describe("dialogue colours are unambiguous (05-13 guard)", () => {
       expect(c.toLowerCase()).not.toBe(FALLBACK_FLOOR_COLOR.toLowerCase());
       expect(c.toLowerCase()).not.toBe(WALL_COLOR.toLowerCase());
     }
+    // 05-28 (G-05-1b): a light speech bubble with dark ink, not a black banner.
+    expect(rgb(DIALOGUE_BOX_COLOR)[0]).toBeGreaterThanOrEqual(0xc0);
+    expect(rgb(DIALOGUE_TEXT_COLOR)[0]).toBeLessThanOrEqual(0x40);
   });
 });
 
@@ -558,7 +666,7 @@ describe("furnished office (G-05-1e)", () => {
     });
   const charKeys = (ch: Character): Set<string> => {
     const { ctx, rects } = mockCtx();
-    renderScene(ctx, [ch], 0, 0, 1, 320);
+    renderScene(ctx, [ch], 0, 0, 1);
     return new Set(rects.map((r) => `${r.x},${r.y},${r.color.toLowerCase()}`));
   };
 
@@ -593,7 +701,7 @@ describe("furnished office (G-05-1e)", () => {
     const aKeys = charKeys(seated);
     const bKeys = charKeys(walker);
     const { ctx, ops } = mockCtx();
-    renderScene(ctx, [walker, seated], 0, 0, 1, 320, FURNITURE);
+    renderScene(ctx, [walker, seated], 0, 0, 1, FURNITURE);
     const a = indicesOf(ops, aKeys, deskKeys, bKeys);
     const b = indicesOf(ops, bKeys, deskKeys, aKeys);
     const d = indicesOf(ops, deskKeys, aKeys, bKeys);
@@ -609,7 +717,7 @@ describe("furnished office (G-05-1e)", () => {
     expect(paintings).toHaveLength(2);
     const paintKeys = new Set(paintings.flatMap((p) => [...cellKeys(p.sprite, p.x, p.y)]));
     const { ctx, ops } = mockCtx();
-    renderScene(ctx, chars, 0, 0, 1, 320, FURNITURE);
+    renderScene(ctx, chars, 0, 0, 1, FURNITURE);
     const p = indicesOf(ops, paintKeys, charSet);
     const c = indicesOf(ops, charSet, paintKeys);
     expect(p.length && c.length).toBeTruthy();
