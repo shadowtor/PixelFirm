@@ -50,14 +50,15 @@ This is a **non-exhaustive** list — any new `AgentStatus` value or handoff-sta
 | `badge-reviewing.json` | `reviewing` | Wide eye | 11×13 `{palette, pixels}` |
 | `badge-discussing.json` | `discussing` | Speech-bubble + dots | 11×13 `{palette, pixels}` |
 | `badge-deploying.json` | `deploying` | Rocket + fins | 11×13 `{palette, pixels}` |
-| `bubble-permission.json` | `waiting_for_ceo` | authored 05-07 (distinct silhouette, `bubbleSprites.test.ts`) | 11×13 `{palette, pixels}` |
-| `bubble-waiting.json` | `waiting_for_agent` | authored 05-07 (distinct silhouette, `bubbleSprites.test.ts`) | 11×13 `{palette, pixels}` |
+| `bubble-permission.json` | `waiting_for_ceo` | Amber '?' (hook, 2 px stem, 2x2 dot) with a closed 1 px black outline — re-authored 05-23 (G-05-2) | 11×13 `{palette, pixels}` |
+| `bubble-waiting.json` | `waiting_for_agent` | Blue hourglass, 3 px neck (>= 2 px), closed 1 px black outline — re-authored 05-23 (G-05-2) | 11×13 `{palette, pixels}` |
 | `bubble-handoff-task.json` | handoff task icon (sender, `ICON_VISIBLE`) | authored 05-07 (distinct silhouette, `bubbleSprites.test.ts`) | 11×13 `{palette, pixels}` |
 
 **Asset format contract (lock in for any new icon the closure plan adds):**
 - Exactly 11 columns × 13 rows, `pixels: string[][]` — empty string `""` cells are transparent.
 - `palette: Record<string, hexColor>` — pixel values are palette keys, never raw hex inline.
 - Every glyph must be a **distinct silhouette**, not a recolour of another glyph (OFFICE-03's grayscale/compressed-video legibility requirement — colour alone must never be the only signal).
+- Every glyph used by a frozen status (`STATUS_MAP` `frozen: true`) has a closed 1 px near-black outline (relative luminance <= 0.03), every other cell >= 3:1 against it, the outline >= 3:1 against the office floor, and frozen glyph masks differ pairwise in >= 20 cells; enforced by `bubbleSprites.test.ts` (05-23, G-05-2).
 
 **Known gap the closure plan must resolve (do not re-invent — author in this same format):** — all three resolved; each bullet is kept as written with its resolution prefixed.
 - **Resolved by 05-07** (both assets authored; listed in the table above). `bubble-permission.json` (for `waiting_for_ceo`) and `bubble-waiting.json` (for `waiting_for_agent`) are referenced by `STATUS_MAP`'s `bubble: "permission"` / `bubble: "waiting"` keys but **do not exist on disk** — `05-02-SUMMARY.md` and `05-VERIFICATION.md` both confirm this. These two states currently resolve to a bubble key with no backing JSON.
