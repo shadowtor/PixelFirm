@@ -1,8 +1,8 @@
 ---
 phase: 05-pixel-office-renderer
-verified: 2026-09-22T16:30:00Z
-status: gaps_found
-score: 10/11 must-haves verified
+verified: 2026-09-22T17:20:00Z
+status: human_needed
+score: 16/16 must-haves verified
 covered_files:
   - ".planning/REQUIREMENTS.md"
   - ".planning/ROADMAP.md"
@@ -44,12 +44,12 @@ covered_files:
   - ".planning/phases/05-pixel-office-renderer/05-18-SUMMARY.md"
   - ".planning/phases/05-pixel-office-renderer/05-19-PLAN.md"
   - ".planning/phases/05-pixel-office-renderer/05-19-SUMMARY.md"
+  - ".planning/phases/05-pixel-office-renderer/05-20-PLAN.md"
+  - ".planning/phases/05-pixel-office-renderer/05-20-SUMMARY.md"
   - ".planning/phases/05-pixel-office-renderer/05-REVIEW.md"
   - ".planning/phases/05-pixel-office-renderer/05-UI-SPEC.md"
   - ".planning/phases/05-pixel-office-renderer/deferred-items.md"
   - "apps/web/src/App.tsx"
-  - "apps/web/src/agent-event-mapper.ts"
-  - "packages/claude-adapter/src/claude-code-runtime.ts"
   - "packages/company-core/src/reducer.ts"
   - "packages/pixel-office/src/engine/characters.ts"
   - "packages/pixel-office/src/handoff/handoff-choreography.test.ts"
@@ -58,48 +58,32 @@ covered_files:
   - "packages/pixel-office/src/status/status-mapping.ts"
   - "packages/pixel-office/src/types.ts"
   - "scripts/verify-pixel-office-live.mjs"
-covered_digest: "v1:sha256:8503a6856d62d7575347be94a5e0b5a940742a73da5b6b264b3db79f10f2e16b"
+covered_digest: "v1:sha256:c9f99bc26051221841a6c400f3ea0aed377a3b1b0d3c8631a027ad7ff778be8f"
 behavior_unverified: 0
 overrides_applied: 0
 re_verification:
   previous_status: gaps_found
-  previous_score: 9/10
+  previous_score: 10/11
   gaps_closed:
-    - "Prior gap (05-17 prohibition, CR-01 stranding paths a/b/c): closed. hasArrived (handoff-choreography.ts:49-51) is 'not WALK and empty path' at both tick checks (:180, :194); setRestPose is the only non-walk pose writer (characters.ts) and is used by upsertCharacterFromAgent (index.ts) and the completion handler (:149); walkCharacterTo at the current tile drops the path. Real-loop tests (a), (b), (b2), (c) pass inside the 103/103 pixel-office suite, which I re-ran."
-    - "Prior advisories WR-01 (two records drive one sender), WR-02 (icon lost on glyph-less status), WR-03 (same-frame re-seat inherits arrival), IN-03 (mid-walk pose not replayed): closed with named real-loop tests (WR-01, WR-02, WR-03, a1 flipped to TYPE)."
+    - "Truth 11 (review CR-01, sender status glyph lost after a handoff): closed. Character.statusBubble (types.ts:134) is written only by upsertCharacterFromAgent (index.ts:178). applyBubble (handoff-choreography.ts:240-242) is the only production writer of bubbleType (grep across packages/pixel-office/src and apps/web/src). It is called at upsert (index.ts:180), arrival (:205), completion (:157) and retire (:86). Named real-loop tests pass: it.each TESTING/BLOCKED/WAITING_FOR_CEO, 'CR-01 retire', 'CR-01 order'. My own probe of the reducer-shaped path (receiver WAITING_FOR_AGENT on request, CODING after completion, TESTING sender) ends with the sender home in TYPE with bubble 'testing', no lines, no live record."
+    - "Prior advisory WR-01 (sender identity missing in ICON_VISIBLE and completion): closed. senderIsCurrent (:58-60) is checked at the loop top for every phase (:190), in the completion handler before any receiver write (:147-150) and in retireHandoff (:83). getCharacter(record.fromAgentId) appears only inside senderIsCurrent. Tests 'WR-01 tick' and 'WR-01 same frame' pass."
   gaps_remaining: []
-  regressions:
-    - "New defect exposed by 05-19 (review CR-01, reproduced this session): a handoff permanently deletes the sender's real status glyph. Before 05-19 the pose was also lost, so the sender at least read as IDLE after every handoff; now the restored pose with no glyph reads as a different real status (TESTING sender reads as CODING; BLOCKED / WAITING_FOR_CEO sender reads as a frozen idle agent with no blocked/permission signal). The erasing line (:185) predates 05-19, so this is an unclosed defect in the gap's own surface rather than a code regression."
-gaps:
-  - truth: "The office never shows an agent in a status it is not in, and blocked/waiting agents keep their at-a-glance signal (phase goal 'never a fabricated animation'; ROADMAP SC1/SC2; OFFICE-01, OFFICE-03), including after the agent sends a handoff"
-    status: failed
-    reason: "Reproduced this session with a throwaway vitest (deleted; git status clean for packages/, apps/, scripts/) driving only upsertCharacterFromAgent, handleHandoffEvent and stepOffice(1/60). The reducer never changes the sender's status on a handoff (reducer.ts:101-117, :266-278 touch only toAgentId), so no upsert arrives to repair it. Results, sender a -> receiver b, then completion, then 5 s: TESTING sender before {type, bubble:testing}, home {type, bubble:null} (reads as CODING). BLOCKED sender before {idle, bubble:blocked, frozen}, home {idle, bubble:null, frozen} (blocked signal gone). WAITING_FOR_CEO sender before {idle, bubble:permission, frozen}, home {idle, bubble:null, frozen} (waiting signal gone). The wrong display persists until the agent's next changed status, which may never come while it is blocked."
-    artifacts:
-      - path: "packages/pixel-office/src/handoff/handoff-choreography.ts"
-        issue: "Line 185 overwrites any status glyph with 'handoff-task' on arrival; lines 140 (completion) and 74 (retireHandoff) set it to null. Nothing restores the status glyph."
-      - path: "packages/pixel-office/src/index.ts"
-        issue: "upsertCharacterFromAgent writes bubbleType directly and keeps no record of the status glyph, so the FSM has nothing to restore from (unlike pose, which now has restPose)."
-      - path: "packages/pixel-office/src/types.ts"
-        issue: "No statusBubble field alongside restPose."
-    missing:
-      - "Store the status glyph like the pose: Character.statusBubble, written only by upsertCharacterFromAgent; bubbleType = statusBubble ?? (isWaitingHandoffSender(ch) ? 'handoff-task' : null)."
-      - "On arrival (handoff-choreography.ts:185): decide precedence explicitly. Review suggests statusBubble ?? 'handoff-task'. At minimum a frozen status glyph (blocked/permission/waiting) must win or be restored."
-      - "On completion (:140) and retire (:74): restore statusBubble instead of null."
-      - "Real-loop tests: sender TESTING and sender BLOCKED set before the request; after completion + 5 s the sender is home with bubbleType 'testing' / 'blocked'."
+  regressions: []
+gaps: []
 deferred: []
 advisory:
-  - finding: "05-REVIEW.md WR-01 (new): ICON_VISIBLE has no identity check. REPRODUCED: sender goes OFFLINE while waiting at the receiver; the record stays ICON_VISIBLE for good (isWaitingHandoffSender(oldChar) still true after 1 s). After re-seat and the real completion, b goes TYPE (correct: real event) and paints 'b accepts \"t1\"', which is cleared on the very next frame by the RETURNING identity check."
+  - finding: "05-REVIEW.md WR-01 (new): the identity rule does not cover the receiver. REPRODUCED this session with a throwaway stepOffice probe (deleted; git status clean for packages/, apps/, scripts/): TESTING sender a hands off to b; after 0.2 s b goes OFFLINE and agent-z is seated; after 30 s a is at (5,3) (its seat is (1,3)), z's seat is (5,3), a.bubbleType is 'handoff-task' (not 'testing'), the requested line is still painted, isWaitingHandoffSender(a) is true."
     category: other
-    reason: "An omission (accepted line flashes for one frame; a record leaks if completion never comes), not a false claim: the receiver's TYPE is backed by the real completion and nothing untrue is left on screen. Fold into the gap-closure plan: add an ICON_VISIBLE identity-retire branch and use record.fromChar in the completion handler and retireHandoff."
-    evidence_status: "reproduced this session (throwaway stepOffice probe)"
-  - finding: "05-REVIEW.md IN-01..IN-06 and carried harness warnings WR-02..WR-05 (accepted-line check not tied to receiver, hue-shift partition, POSIX killChildren leak, API port fallback)."
+    reason: "Not reachable on any path the product has today. The only way a character leaves or is replaced on the floor is upsertCharacterFromAgent(..., OFFLINE) (index.ts:161). No producer yields OFFLINE: deriveAgentStatus never returns it (agent-status-derivation.ts:11-14), the reducer writes only IDLE / CODING / WAITING_FOR_AGENT / derived statuses, and no event carries a raw AgentStatus payload. This is the same classification the previous round gave the sender-side WR-01, and unlike the prior CR-01 (which fired on every handoff) it cannot be triggered by today's event stream. It must be fixed before anything emits OFFLINE (worker liveness, agent removal). Fix per review: store toChar in the record and retire (sending the sender home) when the receiver is not current during WALKING_TO_RECEIVER / ICON_VISIBLE; add the receiver-OFFLINE real-loop test."
+    evidence_status: "reproduced this session (throwaway stepOffice probe); unreachability established by source read"
+  - finding: "05-REVIEW.md IN-01..IN-04: stale comments (isWaitingHandoffSender doc, stepOffice 'WALK->IDLE', walkCharacterTo no-op), same-sender supersede clears the prior receiver's accepted line, mid-step re-route snaps back a tile, identityHueFor documented as 'Pure'."
     category: other
-    reason: "Comments/latent/cosmetic or harness-only; none makes the office show wrong state on today's paths. IN-01's 'failed re-route continues the old walk' is latent (open floor, no unreachable desk)."
+    reason: "Comments or cosmetic; none makes the office show a wrong status on today's paths."
     evidence_status: "source read"
-  - finding: "Carried from the prior round: claude-adapter WR-05/IN-01 (graceful stop awaits interrupt() before the 5 s race), env strip WR-07, /ws/browser WR-03/04, snapshot validation WR-09, T-05-11-WR01, row-3 dialogue attribution."
+  - finding: "Carried: harness warnings WR-02..WR-05 in scripts/verify-pixel-office-live.mjs; claude-adapter WR-05/IN-01, env strip WR-07, /ws/browser WR-03/04, snapshot validation WR-09, T-05-11-WR01."
     category: architectural
-    reason: "No production caller of the runtime exists; must land before Phase 6 wires one. Not touched by 05-19."
-    evidence_status: "source read (prior round)"
+    reason: "Not touched by 05-20. Adapter items have no production caller yet and must land before Phase 6 wires one."
+    evidence_status: "source read (prior rounds)"
 unverified_prohibitions:
   - statement: "MUST NOT rely solely on colour/hue to distinguish blocked/waiting from active — the distinction must remain legible in a grayscale/colourblind-simulated view"
     requirement_id: OFFICE-03
@@ -135,28 +119,31 @@ human_verification:
 # Phase 5: Pixel Office Renderer Verification Report
 
 **Phase Goal:** The forked Pixel Agents office renders real company state on screen as a pure consumer of projections — never a fabricated animation.
-**Verified:** 2026-09-22T16:30:00Z
-**Status:** gaps_found
-**Re-verification:** Yes, after gap-closure round 5 (plan 05-19).
+**Verified:** 2026-09-22T17:20:00Z
+**Status:** human_needed
+**Re-verification:** Yes, after gap-closure round 6 (plan 05-20).
 
 ## Headline
 
-05-19 closes the gap it was written for. The code matches the summary: `hasArrived`, `setRestPose`, the at-target `walkCharacterTo`, retire-by-sender, `fromChar` identity and `isWaitingHandoffSender` are all present and wired. The seven new real-loop tests pass, and so does the live proof.
+05-20 closes the one open gap. The code matches the summary. The sender's status glyph is now stored (`statusBubble`), the displayed bubble has one writer (`applyBubble`), and all four transition sites go through it. Every automated truth holds, including on a reducer-shaped handoff I drove myself.
 
-The review's new CR-01 is real. I reproduced it on the real loop, and I class it as a **blocker**, not an advisory. A handoff erases the sender's status glyph, and nothing restores it. The reducer never touches the sender's status on a handoff, so no status update comes along to repair it. A BLOCKED or WAITING_FOR_CEO sender comes home frozen with no glyph, which fails OFFICE-03's "clear visual signal at a glance". A TESTING sender comes home typing with no glyph, which reads as CODING, a status the agent is not in. That is the phase goal's "never a fabricated" state. The previous round treated stranding as a blocker even though nothing in the repo produces handoff events yet. This defect has the same reachability, so I classify it the same way.
+The review's new WR-01 (receiver goes OFFLINE mid-walk) is real; I reproduced it. It is **advisory, not a blocker**. The only way a character leaves the floor is an OFFLINE status, and nothing in the repo produces one today. The prior CR-01 fired on every handoff; this one cannot be triggered by today's event stream. It must be fixed before anything emits OFFLINE.
 
-## Independent reproduction of new 05-REVIEW CR-01 and WR-01
+Status is `human_needed` only because the four carried human items (legibility, colourblind view, provenance, row-3 attribution) are still open.
 
-I wrote a throwaway probe, `packages/pixel-office/src/handoff/zz-verifier-probe.test.ts`, and deleted it afterwards. It touched only the public surface: `upsertCharacterFromAgent`, `handleHandoffEvent` and `stepOffice(1/60)`.
+## Independent checks this session
 
-| Case | Sender before | At receiver | Home, 5 s after completion | Verdict |
-|------|---------------|-------------|----------------------------|---------|
-| TESTING sender | `type`, `testing` | `type`, `handoff-task` | `type`, bubble `null` (reads as CODING) | CR-01 CONFIRMED |
-| BLOCKED sender | `idle`, `blocked`, frozen | `idle`, `handoff-task`, frozen | `idle`, bubble `null`, frozen (blocked signal gone) | CR-01 CONFIRMED |
-| WAITING_FOR_CEO sender | `idle`, `permission`, frozen | `idle`, `handoff-task`, frozen | `idle`, bubble `null`, frozen | CR-01 CONFIRMED |
-| Sender goes OFFLINE during ICON_VISIBLE, then re-seats, then completion | — | record stays ICON_VISIBLE for good | b `type` + "b accepts" line, cleared on the next frame | WR-01 CONFIRMED (advisory) |
-
-The reducer (`reducer.ts:101-117`, `:266-278`) changes only `toAgentId` on both handoff events. `applyLiveEvent` sends upserts only for agents whose projection object changed. So no status update ever arrives to restore the sender's glyph.
+| Check | Result |
+|-------|--------|
+| `npx vitest run --root packages/pixel-office` | 110/110 pass (7 files) |
+| `pnpm --filter web test` / `typecheck` | 18/18 pass / exit 0 |
+| `node scripts/verify-pixel-office-live.mjs` | exit 0, TRUTH 1-5 PASS, `LIVE PROOF: PASS` |
+| `git diff ba5d203 -- handoff-choreography.test.ts` | Only additions, plus the line-8 import extension; no existing test edited |
+| Grep: `bubbleType =` writers outside tests | One: `handoff-choreography.ts:241` (`applyBubble`) |
+| Grep: `statusBubble =` writers | One: `index.ts:178` |
+| Probe A (throwaway, deleted): reducer-shaped path, TESTING sender, receiver WAITING_FOR_AGENT then CODING | At receiver: a `handoff-task` + "Handing off" line, b `waiting` frozen. Home after 5 s: a TYPE, bubble `testing`, no line, no live record; b TYPE, bubble null, no line |
+| Probe B (throwaway, deleted): review WR-01, receiver OFFLINE at 0.2 s, agent-z seated | After 30 s: a at (5,3) = z's seat, bubble `handoff-task`, requested line painted, `isWaitingHandoffSender(a)` true. Confirmed, unreachable today |
+| `git status --short packages apps scripts` after probes | clean |
 
 ## Goal Achievement
 
@@ -164,80 +151,85 @@ The reducer (`reducer.ts:101-117`, `:266-278`) changes only `toAgentId` on both 
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | ROADMAP SC1: sprites and animations match real current state | ✓ VERIFIED (steady state) | Live proof TRUTH 1 PASS (588 px) this session; `STATUS_MAP` exhaustive. Post-handoff glyph loss is truth 11. |
-| 2 | ROADMAP SC2: blocked or waiting is distinguishable at a glance | ✓ VERIFIED (mechanically, steady state) | TRUTH 2/4 PASS (68 owner-bound px). Human items 1-2. Post-handoff loss is truth 11. |
-| 3 | ROADMAP SC3: handoff shows walk, icon, accept, template dialogue | ✓ VERIFIED | TRUTH 3 and TRUTH 5 PASS live (2647 box px + 971 text px). |
-| 4 | ROADMAP SC4: attribution and licence preserved and visible | ✓ VERIFIED | Unchanged; apps/web 18/18 (orchestrator run). |
-| 5 | Identity hue, 1:1 seats, desk reclaim | ✓ VERIFIED | Regression: pixel-office 103/103, re-run by me. |
-| 6 | Superseded adapter invocation never writes shared state; no overlapping `query()` (05-18) | ✓ VERIFIED | Not touched by 05-19 (diff 739887c..HEAD has no claude-adapter files); claude-adapter 35 + 3 skipped (orchestrator). |
-| 7 | 05-19: arrival is `hasArrived` at both checks; no code line keys on IDLE | ✓ VERIFIED | `handoff-choreography.ts:49-51, 180, 194`; no `CharacterState.IDLE` in code lines. |
-| 8 | 05-19: one pose writer never overwrites WALK; every walk ends in `restPose` | ✓ VERIFIED | `setRestPose` in `index.ts` upsert and completion `:149`; tests a1, (a), (b), (c) pass through `stepOffice`. |
-| 9 | 05-19 paths (a), (b), (b2), (c): no stranding, no dropped completion | ✓ VERIFIED | Named real-loop tests pass. 0 `finishWalk` from the 05-17 block onward (per summary; tests read). |
-| 10 | 05-19 WR-01/WR-02/WR-03: one record per sender, identity, icon across glyph-less status | ✓ VERIFIED | `:106-112`, `:176`, `:194`, `:208-213`, `index.ts` bubble line; named tests pass. The ICON_VISIBLE identity hole (new WR-01) is advisory. |
-| 11 | Phase goal + OFFICE-01/03: a handoff never leaves the sender showing a status it is not in or without its blocked/waiting signal | ✗ FAILED | CR-01 reproduced above. |
+| 1 | ROADMAP SC1: sprites and animations match real current state | ✓ VERIFIED | Live TRUTH 1 PASS (588 px); `STATUS_MAP` exhaustive; post-handoff state now correct (truth 11). |
+| 2 | ROADMAP SC2: blocked or waiting is distinguishable at a glance | ✓ VERIFIED (mechanically) | Live TRUTH 2/4 PASS (68 owner-bound px). Frozen glyph survives every handoff phase (truth 13). Human items 1-2. |
+| 3 | ROADMAP SC3: handoff shows walk, icon, accept, template dialogue | ✓ VERIFIED | Live TRUTH 3 and 5 PASS (2647 box px + 971 text px). |
+| 4 | ROADMAP SC4: attribution and licence preserved and visible | ✓ VERIFIED | Unchanged since prior round; apps/web 18/18. Provenance is human item 3. |
+| 5 | Identity hue, 1:1 seats, desk reclaim | ✓ VERIFIED | Regression suite 110/110. |
+| 6 | Superseded adapter invocation never writes shared state; no overlapping `query()` (05-18) | ✓ VERIFIED | 05-20 touched no claude-adapter file. |
+| 7 | 05-19: arrival is `hasArrived` at both checks | ✓ VERIFIED | `handoff-choreography.ts:49-51, 197, 210`. |
+| 8 | 05-19: one pose writer; every walk ends in `restPose` | ✓ VERIFIED | `setRestPose` at `index.ts:177` and `:165`; tests pass. |
+| 9 | 05-19 paths (a), (b), (b2), (c): no stranding, no dropped completion | ✓ VERIFIED | Named real-loop tests pass. |
+| 10 | 05-19 WR-01/02/03: one record per sender, identity, icon across status updates | ✓ VERIFIED | `:117-123`, `:190`; tests pass. |
+| 11 | Phase goal + OFFICE-01/03: a handoff never leaves the sender showing a status it is not in or without its blocked/waiting signal (prior gap) | ✓ VERIFIED | it.each TESTING/BLOCKED/WAITING_FOR_CEO pass; Probe A. |
+| 12 | 05-20: `statusBubble` holds the latest status glyph; only the upsert writes it | ✓ VERIFIED | `types.ts:134`, `characters.ts:72`, `index.ts:178` (sole writer). |
+| 13 | 05-20: `applyBubble` is the sole `bubbleType` writer; frozen glyph > task icon while ICON_VISIBLE > status glyph; order-independent | ✓ VERIFIED | `:240-242`; called at `index.ts:180`, `:86`, `:157`, `:205`. Upsert writes `statusBubble` and `frozen` before calling it. Test "CR-01 order" passes. |
+| 14 | 05-20: a sender retired by another sender's request gets its glyph back at once and walks home with it | ✓ VERIFIED | `retireHandoff` deletes first (`:78`), then `applyBubble` (`:86`). Test "CR-01 retire" passes. |
+| 15 | 05-20 WR-01: every phase retires a record whose sender is not current; completion for such a record sets no TYPE and paints no line | ✓ VERIFIED | `:147-150`, `:190-193`, `:83`. Tests "WR-01 tick", "WR-01 same frame" pass. |
+| 16 | 05-20: new tests drive `stepOffice` through the public surface only; no existing test edited (103 → 110) | ✓ VERIFIED | Diff read; no `finishWalk` in the new blocks; 110/110. |
 
-**Score:** 10/11 truths verified. No truths are present but behaviour-unverified.
+**Score:** 16/16 truths verified. No truths are present but behaviour-unverified: every behaviour-dependent truth (11, 13, 14, 15) has a named real-loop test that passed in my run.
 
 ### Required Artifacts
 
 | Artifact | Status | Details |
 |----------|--------|---------|
-| `packages/pixel-office/src/types.ts` | ✓ VERIFIED | `restPose: CharacterState` present. No `statusBubble` (gap). |
-| `packages/pixel-office/src/engine/characters.ts` | ✓ VERIFIED | `setRestPose`, walk end in `restPose`, at-target path drop. |
-| `packages/pixel-office/src/index.ts` | ⚠️ VERIFIED with defect | Pose goes through `setRestPose`. Bubble is written directly, and no status glyph is kept (gap). |
-| `packages/pixel-office/src/handoff/handoff-choreography.ts` | ⚠️ VERIFIED with defect | Stranding is fixed. `:185`, `:140` and `:74` erase the status glyph (gap). ICON_VISIBLE has no identity branch (advisory). |
-| `packages/pixel-office/src/handoff/handoff-choreography.test.ts` | ✓ VERIFIED | 7 new nested tests plus flipped a1. No test sets a glyph before the request. |
-| `scripts/verify-pixel-office-live.mjs` | ✓ VERIFIED | Comment-only change. Ran: `LIVE PROOF: PASS`. |
+| `packages/pixel-office/src/types.ts` | ✓ VERIFIED | `statusBubble: BubbleType \| null` with doc. |
+| `packages/pixel-office/src/engine/characters.ts` | ✓ VERIFIED | `createCharacter` initialises `statusBubble: null`. |
+| `packages/pixel-office/src/index.ts` | ✓ VERIFIED | Upsert: `setRestPose`, `statusBubble`, `frozen`, then `applyBubble(ch)`. |
+| `packages/pixel-office/src/handoff/handoff-choreography.ts` | ✓ VERIFIED | `applyBubble`, `senderIsCurrent`, delete-first `retireHandoff`. Receiver identity not covered (advisory). |
+| `packages/pixel-office/src/handoff/handoff-choreography.test.ts` | ✓ VERIFIED | 7 new real-loop tests; additive only. |
 
 ### Key Link Verification
 
 | From | To | Via | Status |
 |------|----|-----|--------|
-| upsert | `setRestPose` → walk end `restPose` | `index.ts`, `characters.ts` | ✓ WIRED |
-| completion | receiver pose | `setRestPose(toChar, TYPE)` `:149` | ✓ WIRED |
-| requested | retire by taskId or sender | loop `:106-112` | ✓ WIRED |
-| tick checks | identity with `record.fromChar` | `:176`, `:194` | ✓ WIRED. ICON_VISIBLE not covered (advisory) |
-| upsert bubble | `isWaitingHandoffSender` | `index.ts` | ✓ WIRED |
-| arrival/completion | sender's status glyph restored | — | ✗ NOT_WIRED (gap) |
+| apps/web `onEvent` | `upsertCharacterFromAgent` → `statusBubble`/`frozen` → `applyBubble` | `App.tsx:42,59`; `index.ts:177-180` | ✓ WIRED |
+| `stepOffice` arrival | ICON_VISIBLE → `applyBubble(fromChar)` | `index.ts` `stepOffice` → `:204-205` | ✓ WIRED |
+| completion | `senderIsCurrent` guard → RETURNING → `applyBubble(record.fromChar)` | `:147-157` | ✓ WIRED |
+| `retireHandoff` | delete → `senderIsCurrent` → `applyBubble(record.fromChar)` | `:78-86` | ✓ WIRED |
+| loop top | `senderIsCurrent` false → retire, all phases | `:190-193` | ✓ WIRED |
+| loop top | receiver identity | — | Not present (advisory WR-01; unreachable today) |
 
 ### Behavioral Spot-Checks
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| pixel-office suite incl. 05-19 tests | `npx vitest run --root packages/pixel-office` | 103 passed (plus 4 probe tests while the probe existed: 107/107) | ✓ PASS |
-| CR-01 glyph after handoff (TESTING/BLOCKED/WAITING_FOR_CEO) | throwaway probe | glyph null at home in all three | ✗ FAIL |
-| WR-01 ICON_VISIBLE OFFLINE | throwaway probe | record leaks; accepted line lasts 1 frame | ✗ FAIL (advisory) |
+| pixel-office suite incl. 7 new tests | `npx vitest run --root packages/pixel-office` | 110 passed | ✓ PASS |
+| Reducer-shaped handoff, TESTING sender | throwaway probe A | home, TYPE, `testing`, no lines | ✓ PASS |
+| Receiver OFFLINE mid-walk | throwaway probe B | sender stuck with task icon | ✗ FAIL (advisory, unreachable today) |
 
 ### Probe Execution
 
 | Probe | Command | Result | Status |
 |-------|---------|--------|--------|
-| `scripts/verify-pixel-office-live.mjs` | `node scripts/verify-pixel-office-live.mjs` | exit 0; TRUTH 1-5 PASS; `LIVE PROOF: PASS`; no listeners left afterwards | PASS |
+| `scripts/verify-pixel-office-live.mjs` | `node scripts/verify-pixel-office-live.mjs` | exit 0; TRUTH 1-5 PASS; `LIVE PROOF: PASS` | PASS |
 
 ### Requirements Coverage
 
 | Requirement | Source Plans | Status | Evidence |
 |-------------|--------------|--------|----------|
-| OFFICE-01 | 05-01..18 | ⚠️ SATISFIED in steady state, violated after a handoff | Truth 1; truth 11 (TESTING sender reads as CODING). |
-| OFFICE-02 | 05-02/05/06/09/12 | ✓ SATISFIED | Truth 4. Provenance is human item 3. |
-| OFFICE-03 | 05-02/07/08/10/12/13/16/17 | ✗ BLOCKED after a handoff | Truth 2 holds in steady state. A blocked/waiting sender loses its glyph after a handoff (truth 11). |
-| HANDOFF-01 | 05-03..19 | ✗ PARTIAL | The walk, icon, accept and return sequence is now robust (truths 7-10). The sequence itself corrupts the sender's displayed status (truth 11). **I reverted the executor's `[x]`/Complete to `[ ]`/Gaps Found in REQUIREMENTS.md.** |
-| HANDOFF-02 | 05-04/05/10/11/12/13/16 | ✓ SATISFIED | Template-only, capped, painted live. |
+| OFFICE-01 | 05-01..20 | ✓ SATISFIED | Truths 1, 11. |
+| OFFICE-02 | 05-02/05/06/09/12 | ✓ SATISFIED (provenance pending human item 3) | Truth 4. |
+| OFFICE-03 | 05-02/07/08/10/12/13/16/17/20 | ✓ SATISFIED (mechanically; human items 1-2) | Truths 2, 11, 13. |
+| HANDOFF-01 | 05-03..20 | ✓ SATISFIED | Truths 3, 7-11, 13-15. |
+| HANDOFF-02 | 05-04/05/10/11/12/13/16 | ✓ SATISFIED (legibility pending human items 1, 4) | Template-only, capped, painted live. |
 
-Every phase ID appears in at least one plan's `requirements`, and REQUIREMENTS.md maps no other IDs to Phase 5, so nothing is orphaned.
+Every phase ID appears in at least one plan's `requirements`. REQUIREMENTS.md maps no other IDs to Phase 5, so nothing is orphaned.
+
+Note for the orchestrator: REQUIREMENTS.md currently shows OFFICE-01, OFFICE-03 and HANDOFF-01 as `[x]`/Complete (set by the 05-20 executor) but OFFICE-02 and HANDOFF-02 as `[ ]`/Gaps Found. I found no failing evidence for either of the last two. They hinge only on human items 1, 3 and 4, so leave them pending or mark them Complete once the human checks are done. I did not edit REQUIREMENTS.md.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `packages/pixel-office/src/handoff/handoff-choreography.ts` | 185 | Unconditional overwrite of the status glyph | 🛑 Blocker | Gap |
-| `packages/pixel-office/src/handoff/handoff-choreography.ts` | 140, 74 | Glyph cleared to `null` instead of restored | 🛑 Blocker | Gap |
-| `packages/pixel-office/src/handoff/handoff-choreography.ts` | 170-200 | No ICON_VISIBLE identity branch | ⚠️ Warning | Advisory (WR-01) |
+| `packages/pixel-office/src/handoff/handoff-choreography.ts` | 124, 184-216 | No receiver identity check | ⚠️ Warning | Advisory WR-01 (unreachable today) |
+| `packages/pixel-office/src/handoff/handoff-choreography.ts` | 219-223 | `isWaitingHandoffSender` doc is stale | ℹ️ Info | IN-01 |
 | `packages/pixel-office/src/index.ts` | `stepOffice` comment | Still says "WALK->IDLE signal" | ℹ️ Info | IN-01 |
 
-There are no `TBD`/`FIXME`/`XXX` markers in the six files 05-19 modified.
+There are no `TBD`/`FIXME`/`XXX` markers in the five files 05-20 modified.
 
-**Re-verification evidence gate:** the blocker sites are in `handoff-choreography.ts`, which was git-modified this round (af8a0b0, b3b76c5). The blocker also has a deterministic reproduction from this session, so it blocks.
+**Re-verification evidence gate:** the receiver-identity finding is in a file modified this round and has a deterministic reproduction. It is not a blocker because it contradicts no phase truth on any path the product can reach today. A character can leave the floor only through an OFFLINE status, and nothing produces one. It is recorded as advisory, which matches how the previous round treated the same class of defect on the sender side.
 
 ### Human Verification Required
 
@@ -246,23 +238,13 @@ There are no `TBD`/`FIXME`/`XXX` markers in the six files 05-19 modified.
 3. **MetroCity provenance, link 2.** Compare a rendered figure against the source art.
 4. **Row-3 dialogue attribution.** Decide whether the current layout reads as the right speaker, or move desks to row 4.
 
-These are carried over unchanged. They do not affect the status, which is `gaps_found`.
+These are carried over unchanged from earlier rounds. They are the only reason the status is not `passed`.
 
 ### Gaps Summary
 
-One gap remains, and it is a new one. The stranding gap is closed.
-
-05-19 made the pose a stored value that every walk returns to. The status glyph got no such treatment. The handoff FSM overwrites the glyph with `handoff-task` when the sender arrives and sets it to `null` on completion or retire. Because a handoff never changes the sender's status in the projection, nothing ever puts the glyph back. A blocked or waiting sender therefore comes home without its OFFICE-03 signal, and a TESTING/REVIEWING/DEPLOYING sender reads as CODING.
-
-The fix mirrors `restPose`:
-- add a `statusBubble` field that only the status upsert writes;
-- derive the displayed bubble from it, with the handoff icon as the fallback;
-- restore `statusBubble` instead of writing `null` at `:140` and `:74`;
-- choose explicitly what wins on arrival at `:185`.
-
-Add two real-loop tests where the glyph is set before the request (TESTING and BLOCKED). The same plan should add an ICON_VISIBLE identity branch and make the completion handler and `retireHandoff` act through `record.fromChar` (new WR-01).
+There are no gaps. The prior gap is closed and the prior advisory WR-01 (sender side) is closed, both with passing real-loop tests and an independent probe. The new receiver-side WR-01 is recorded as advisory. It becomes a blocker the moment any producer emits OFFLINE, so fix it before worker liveness or agent removal lands.
 
 ---
 
-_Verified: 2026-09-22T16:30:00Z_
+_Verified: 2026-09-22T17:20:00Z_
 _Verifier: Claude (gsd-verifier)_
