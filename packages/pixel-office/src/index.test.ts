@@ -114,6 +114,50 @@ describe("desk layout headroom (CR-02)", () => {
     const rows = seatRows(80);
     for (const row of rows) expect(row).toBeLessThanOrEqual(DEFAULT_ROWS - 2);
   });
+
+  /** "col,row" of every id's seat, asserting no two share a tile. */
+  function expectDistinctSeats(ids: string[]): void {
+    const seats = ids.map((id) => {
+      const ch = getCharacter(id)!;
+      return `${ch.seatCol},${ch.seatRow}`;
+    });
+    expect(new Set(seats).size).toBe(seats.length);
+  }
+
+  it("reclaims a despawned agent's desk across heavy offline/online churn (WR-03)", () => {
+    for (const id of ["agent-a", "agent-b", "agent-c"]) upsertCharacterFromAgent(id, AgentStatus.IDLE);
+    const b = getCharacter("agent-b")!;
+    const original = { col: b.seatCol, row: b.seatRow };
+    for (let i = 0; i < 100; i++) {
+      upsertCharacterFromAgent("agent-b", AgentStatus.OFFLINE);
+      upsertCharacterFromAgent("agent-b", AgentStatus.IDLE);
+    }
+    const after = getCharacter("agent-b")!;
+    expect({ col: after.seatCol, row: after.seatRow }).toEqual(original);
+    expectDistinctSeats(["agent-a", "agent-b", "agent-c"]);
+  });
+
+  it("never seats two concurrently seated characters on one tile after churn (<= 54 seated)", () => {
+    const ids = Array.from({ length: 37 }, (_, i) => `agent-${i}`);
+    for (const id of ids) upsertCharacterFromAgent(id, AgentStatus.IDLE);
+    expect(getCharacter("agent-36")!.seatRow).toBe(9);
+    expect(getCharacter("agent-36")!.seatCol).toBe(1);
+    for (let i = 0; i < 18; i++) {
+      upsertCharacterFromAgent("agent-0", AgentStatus.OFFLINE);
+      upsertCharacterFromAgent("agent-0", AgentStatus.IDLE);
+    }
+    expectDistinctSeats(ids);
+  });
+
+  it("gives the next new character the lowest-numbered free desk", () => {
+    for (let i = 0; i < 5; i++) upsertCharacterFromAgent(`agent-${i}`, AgentStatus.IDLE);
+    upsertCharacterFromAgent("agent-1", AgentStatus.OFFLINE);
+    upsertCharacterFromAgent("agent-3", AgentStatus.OFFLINE);
+    upsertCharacterFromAgent("new-1", AgentStatus.IDLE);
+    upsertCharacterFromAgent("new-2", AgentStatus.IDLE);
+    expect(getCharacter("new-1")).toMatchObject({ seatCol: 2, seatRow: 3 });
+    expect(getCharacter("new-2")).toMatchObject({ seatCol: 4, seatRow: 3 });
+  });
 });
 
 describe("layout/tileMap findPath (forked, sanity check)", () => {
