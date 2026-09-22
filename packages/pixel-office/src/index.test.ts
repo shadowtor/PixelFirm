@@ -85,6 +85,48 @@ describe("per-agent identity hue (WR-08)", () => {
     const buckets = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
     for (const { hueShift } of seedAndRead()) expect(buckets).toContain(hueShift);
   });
+
+  // The ten ids 05-VERIFICATION.md gap 2 measured (seven distinct hues under 05-10).
+  const MEASURED = ["alpha", "beta", "agent-1", "agent-2", "claude-1", "engineer", "qa", "worker-a", "worker-b", "ceo"];
+  const hueOf = (id: string) => getCharacter(id)!.hueShift;
+
+  it("gives the ten measured ids ten distinct hues and pairwise-different pixel data", () => {
+    for (const id of MEASURED) upsertCharacterFromAgent(id, AgentStatus.IDLE);
+    const hues = MEASURED.map(hueOf);
+    expect(new Set(hues).size).toBe(10);
+    for (let i = 0; i < hues.length; i++) {
+      for (let j = i + 1; j < hues.length; j++) {
+        expect(getCharacterSprites(hues[i]).walk[Direction.DOWN][0]).not.toEqual(
+          getCharacterSprites(hues[j]).walk[Direction.DOWN][0],
+        );
+      }
+    }
+  });
+
+  it("holds twelve distinct hues for twelve seated agents, and exactly twelve for thirteen (the ceiling)", () => {
+    const ids = Array.from({ length: 13 }, (_, i) => `seat-${i}`);
+    for (const id of ids.slice(0, 12)) upsertCharacterFromAgent(id, AgentStatus.IDLE);
+    expect(new Set(ids.slice(0, 12).map(hueOf)).size).toBe(12);
+    upsertCharacterFromAgent(ids[12], AgentStatus.IDLE);
+    expect(new Set(ids.map(hueOf)).size).toBe(12);
+  });
+
+  it("frees a despawned agent's hue for the next new agent when all twelve are held", () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `seat-${i}`);
+    for (const id of ids) upsertCharacterFromAgent(id, AgentStatus.IDLE);
+    const freed = hueOf("seat-5");
+    upsertCharacterFromAgent("seat-5", AgentStatus.OFFLINE);
+    upsertCharacterFromAgent("newcomer", AgentStatus.IDLE);
+    expect(hueOf("newcomer")).toBe(freed);
+  });
+
+  it("never lets AgentStatus feed the identity hue", () => {
+    for (const id of MEASURED) upsertCharacterFromAgent(id, AgentStatus.IDLE);
+    const idle = MEASURED.map(hueOf);
+    _resetForTests();
+    MEASURED.forEach((id, i) => upsertCharacterFromAgent(id, i % 2 ? AgentStatus.CODING : AgentStatus.BLOCKED));
+    expect(MEASURED.map(hueOf)).toEqual(idle);
+  });
 });
 
 describe("desk layout headroom (CR-02)", () => {
