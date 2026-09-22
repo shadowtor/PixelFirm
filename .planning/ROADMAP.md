@@ -168,7 +168,7 @@ Plans:
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
   5. The office floor is furnished — MetroCity floor and wall tiles, desks with monitors grouped in pods with walking lanes — agents sit at desk seats and never walk through furniture or another seated agent.
 
-**Plans:** 26/30 plans executed (UAT 2026-09-22 diagnosed 7 gaps — 10 further gap-closure plans added 2026-09-22 per seventh --gaps re-plan, revised after plan check)
+**Plans:** 27/30 plans executed (UAT 2026-09-22 diagnosed 7 gaps — 10 further gap-closure plans added 2026-09-22 per seventh --gaps re-plan, revised after plan check)
 
 Plans:
 
@@ -198,7 +198,7 @@ Plans:
 - [x] 05-24-PLAN.md — UAT gap closure: furnished office render — layout file, MetroCity floor/wall/desks/monitors/decor z-sorted with characters, sprite cache (G-05-1e)
 - [x] 05-25-PLAN.md — UAT gap closure: seat model — agents take layout desk seats, standing overflow, rebased seat tests, seated offset only at own desk (G-05-1e)
 - [x] 05-26-PLAN.md — UAT gap closure: live harness rebased on layout/office data + furnished and frame-rate truths, floor-texture glyph contrast, UI-SPEC/ROADMAP/footer credit sync (G-05-1e, G-05-2)
-- [ ] 05-27-PLAN.md — UAT gap closure: handoff interaction tile on the receiver's seat row + occupancy/furniture-aware walks, sender faces receiver, live sender-visible check (G-05-1d, G-05-1e)
+- [x] 05-27-PLAN.md — UAT gap closure: handoff interaction tile on the receiver's seat row + occupancy/furniture-aware walks, sender faces receiver, live sender-visible check (G-05-1d, G-05-1e)
 - [ ] 05-28-PLAN.md — UAT gap closure: compact tailed speech bubble under the speaker spanning sender to receiver, floor-clamped, layout-data guard, live TRUTH 5 (G-05-4, G-05-1b)
 - [ ] 05-29-PLAN.md — UAT gap closure: short deterministic handoff templates + caps, UI-SPEC typography/colour/copy (G-05-1b)
 - [ ] 05-30-PLAN.md — UAT gap closure: status glyphs anchored 1 px above the owner's visible head, on the floor, live TRUTH 4 (G-05-1c)
@@ -275,7 +275,7 @@ Plans:
 
 **Wave 16** *(blocked on 05-23 and 05-25)*
 
-- [ ] 05-26-PLAN.md — Live harness rebase + furnished truths + docs (G-05-1e, G-05-2)
+- [x] 05-26-PLAN.md — Live harness rebase + furnished truths + docs (G-05-1e, G-05-2)
 
 **Wave 17** *(blocked on 05-26)*
 
@@ -350,7 +350,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 26/30 | In Progress|  |
+| 5. Pixel Office Renderer | 27/30 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
