@@ -237,11 +237,15 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     }
   }
 
-  function expectHomeIdle(ch: Character): void {
+  function expectHome(ch: Character, pose: CharacterState): void {
     expect(ch.tileCol).toBe(ch.seatCol);
     expect(ch.tileRow).toBe(ch.seatRow);
     expect(ch.path.length).toBe(0);
-    expect(ch.state).toBe(CharacterState.IDLE);
+    expect(ch.state).toBe(pose);
+  }
+
+  function expectHomeIdle(ch: Character): void {
+    expectHome(ch, CharacterState.IDLE);
   }
 
   function onSeatOf(ch: Character, other: Character): boolean {
@@ -273,7 +277,8 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     const { a, b } = toReturningMidWalk();
     upsertCharacterFromAgent("agent-a", AgentStatus.CODING);
     run(5);
-    expectHomeIdle(a);
+    // 05-19 (IN-03): the CODING pose that landed mid-return applies when the walk ends.
+    expectHome(a, CharacterState.TYPE);
     expect(b.bubbleText).toBeNull();
     expect(a.bubbleText).toBeNull();
   });
@@ -396,5 +401,119 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     run(5);
     expectHomeIdle(a);
     expect(a.bubbleType).toBe("blocked");
+  });
+
+  describe("CR-01 stranding paths (05-19): real update loop", () => {
+    /** Steps the real loop until the path empties: the one frame where state is still WALK. */
+    function stepToArrivalFrame(ch: Character): void {
+      for (let i = 0; i < 600 && ch.path.length > 0; i++) stepOffice(1 / 60);
+    }
+
+    it("(a) a CODING status in the arrival frame does not strand the sender", () => {
+      seatAll();
+      const a = getCharacter("agent-a")!;
+      const b = getCharacter("agent-b")!;
+      handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+      stepToArrivalFrame(a);
+      expect(a.path.length).toBe(0);
+      expect(a.state).toBe(CharacterState.WALK);
+
+      upsertCharacterFromAgent("agent-a", AgentStatus.CODING);
+      run(5);
+      expect(onSeatOf(a, b)).toBe(true);
+      expect(a.bubbleType).toBe("handoff-task");
+      expect(a.bubbleText).toContain("Handing off");
+
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      expect(b.state).toBe(CharacterState.TYPE);
+
+      run(5);
+      expectHome(a, CharacterState.TYPE);
+      expect(a.bubbleText ?? null).toBeNull();
+      expect(b.bubbleText ?? null).toBeNull();
+    });
+
+    it("(b) a same-sender re-request while typing at the receiver re-arrives there", () => {
+      const { a, b } = toIconVisible();
+      upsertCharacterFromAgent("agent-a", AgentStatus.CODING);
+      expect(a.state).toBe(CharacterState.TYPE);
+
+      handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b", NEW_REQUEST_ID));
+      run(0.5);
+      expect(onSeatOf(a, b)).toBe(true);
+      expect(a.bubbleType).toBe("handoff-task");
+      expect(a.bubbleText).toContain("Handing off");
+
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      expect(b.state).toBe(CharacterState.TYPE);
+
+      run(5);
+      expectHome(a, CharacterState.TYPE);
+      expect(a.bubbleText ?? null).toBeNull();
+      expect(b.bubbleText ?? null).toBeNull();
+    });
+
+    it("(b2) a same-sender re-request just after leaving the receiver's tile brings it back there", () => {
+      const { a, b } = toReturningMidWalk();
+      expect(onSeatOf(a, b)).toBe(true);
+      expect(a.path.length).toBeGreaterThan(0);
+
+      handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b", NEW_REQUEST_ID));
+      expect(b.bubbleText ?? null).toBeNull();
+
+      run(3);
+      expect(onSeatOf(a, b)).toBe(true);
+      expect(a.bubbleType).toBe("handoff-task");
+      expect(a.bubbleText).toContain("Handing off");
+
+      handleHandoffEvent(completedEvent("task-1", "agent-b", "5fa85f64-5717-4562-b3fc-2c963f66afa6"));
+      expect(b.bubbleText).toContain("accepts");
+
+      run(5);
+      expectHome(a, CharacterState.IDLE);
+      expect(a.bubbleText ?? null).toBeNull();
+      expect(b.bubbleText ?? null).toBeNull();
+    });
+
+    it("(c) a receiver mid-walk on its own handoff keeps walking when its incoming handoff completes", () => {
+      for (const id of ["agent-a", "agent-b", "filler-1", "filler-2", "filler-3", "agent-c"]) {
+        upsertCharacterFromAgent(id, AgentStatus.IDLE);
+      }
+      const a = getCharacter("agent-a")!;
+      const b = getCharacter("agent-b")!;
+      const c = getCharacter("agent-c")!;
+
+      handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+      run(2);
+      expect(a.bubbleType).toBe("handoff-task");
+
+      handleHandoffEvent(requestedEvent("task-2", "agent-b", "agent-c", NEW_REQUEST_ID));
+      for (let i = 0; i < 20; i++) stepOffice(1 / 60);
+      expect(b.state).toBe(CharacterState.WALK);
+      expect(b.path.length).toBeGreaterThan(0);
+      const pathBefore = b.path.length;
+
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      stepOffice(1 / 60);
+      expect(b.state).toBe(CharacterState.WALK);
+
+      upsertCharacterFromAgent("agent-b", AgentStatus.CODING);
+      run(0.4);
+      expect(b.path.length).toBeLessThan(pathBefore);
+
+      run(3);
+      expect(onSeatOf(b, c)).toBe(true);
+      expect(b.bubbleType).toBe("handoff-task");
+
+      handleHandoffEvent(completedEvent("task-2", "agent-c", "5fa85f64-5717-4562-b3fc-2c963f66afa6"));
+      expect(c.state).toBe(CharacterState.TYPE);
+
+      run(5);
+      expectHome(a, CharacterState.IDLE);
+      expectHome(b, CharacterState.TYPE);
+      expect(a.bubbleText ?? null).toBeNull();
+      expect(b.bubbleText ?? null).toBeNull();
+      expect(c.bubbleText ?? null).toBeNull();
+    });
   });
 });
