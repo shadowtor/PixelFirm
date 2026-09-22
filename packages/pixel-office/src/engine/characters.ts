@@ -13,8 +13,10 @@
 // (isReadingTool — packages/pixel-office has no toolUtils.js; READING is one
 // of the two AgentStatus values this phase's derivation deliberately never
 // emits, per 05-01-PLAN.md's flagged_assumptions). The WALK state's path-
-// following logic is kept verbatim: 05-04's handoff choreography reuses it
-// via walkCharacterTo below (RESEARCH.md Architecture Patterns → Pattern 1).
+// following logic is kept verbatim except for one modification (05-17): a
+// frozen character still walks, only its walk frame is held. 05-04's handoff
+// choreography reuses it via walkCharacterTo below (RESEARCH.md Architecture
+// Patterns → Pattern 1).
 
 import {
   TILE_SIZE,
@@ -70,10 +72,12 @@ export function createCharacter(id: string, tileCol = 1, tileRow = 1, hueShift =
 }
 
 export function updateCharacter(ch: Character, dt: number): void {
-  // D-03: frozen statuses (blocked/waiting_for_agent/waiting_for_ceo) never
-  // advance their animation frame, regardless of pose — a stuck agent must
-  // never read as still actively working (05-02, status-mapping.ts).
-  if (ch.frozen) {
+  // D-03: frozen statuses (blocked/waiting_for_agent/waiting_for_ceo) freeze
+  // the animation frame in every pose — a stuck agent must never read as
+  // still actively working (05-02, status-mapping.ts). Frozen never freezes
+  // position: a walk is a real handoff's movement and must complete (D-04,
+  // 05-17), so WALK skips this early return and holds its frame below.
+  if (ch.frozen && ch.state !== CharacterState.WALK) {
     ch.frame = 0;
     ch.frameTimer = 0;
     return;
@@ -98,7 +102,10 @@ export function updateCharacter(ch: Character, dt: number): void {
     }
 
     case CharacterState.WALK: {
-      if (ch.frameTimer >= WALK_FRAME_DURATION_SEC) {
+      if (ch.frozen) {
+        ch.frame = 0;
+        ch.frameTimer = 0;
+      } else if (ch.frameTimer >= WALK_FRAME_DURATION_SEC) {
         ch.frameTimer -= WALK_FRAME_DURATION_SEC;
         ch.frame = (ch.frame + 1) % 4;
       }

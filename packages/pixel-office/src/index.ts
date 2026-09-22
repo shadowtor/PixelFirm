@@ -168,11 +168,16 @@ export function upsertCharacterFromAgent(agentId: string, status: AgentStatus, n
     ch = createCharacter(agentId, col, row, identityHueFor(agentId));
     characters.set(agentId, ch);
   }
-  ch.state = visual.pose;
-  // ponytail: an AgentStatus update mid-handoff overwrites the "handoff-task"
-  // bubble/text a real handoff in progress may have set on this same agent
-  // (handoff-choreography.ts). Acceptable for this MVP — upgrade path: give
-  // the handoff overlay priority here if that ever causes visible flicker.
+  // A pending path belongs to a real handoff event pair (D-04's walk-then-
+  // return). Overwriting the state would stop updateCharacter moving the
+  // character for good (05-VERIFICATION.md gap 1), so the pose waits.
+  // ponytail: a pose from a status that lands mid-walk is not replayed on
+  // arrival, so the character shows the fork's WALK arrival pose (IDLE) until
+  // its next status event — the nominal handoff's end state. Upgrade path:
+  // remember the latest pose and apply it when the handoff record retires.
+  // A status bubble can still replace the "handoff-task" icon while the
+  // sender waits at the receiver (flicker only; the record still retires).
+  if (ch.path.length === 0) ch.state = visual.pose;
   ch.bubbleType = visual.bubble ?? null;
   ch.frozen = visual.frozen ?? false;
   ch.frameSpeedMultiplier = visual.frameSpeedMultiplier ?? 1;
