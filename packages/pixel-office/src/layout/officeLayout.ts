@@ -30,6 +30,9 @@ export interface PlacedFurniture {
 const sprites = officeSprites.sprites as unknown as Record<string, { data: SpriteData | SpriteData[] }>;
 const floorTiles = sprites.floorTiles.data as SpriteData[];
 const wallTop = sprites.wallTop.data as SpriteData;
+/** The desk sprite object itself, so a FURNITURE entry can be recognised as a
+ *  desk by identity (05-33, G-05-P1) without adding a field to PlacedFurniture. */
+export const DESK_SPRITE = sprites.desk.data as SpriteData;
 
 export const OFFICE_TILE_MAP: TileType[][] = layout.tiles.map((line) =>
   Array.from(line, (ch) => (ch === "W" ? TileType.WALL : TileType.FLOOR_1)),

@@ -618,7 +618,12 @@ describe("handoff speech bubble (05-28, G-05-4 / G-05-1b)", () => {
 // The new resolveDialogueBox signature is reached with await import(...) so a
 // RED run is a failing assertion, not an ESM link crash (05-10 precedent).
 
-const NO_OBSTACLES = { glyphs: [], desks: [], furniture: [], characters: [] };
+const NO_OBSTACLES: { glyphs: Box[]; desks: Box[]; furniture: Box[]; characters: Box[] } = {
+  glyphs: [],
+  desks: [],
+  furniture: [],
+  characters: [],
+};
 /** Speaker geometry for a standing 16x32 frame whose head ink starts 3 rows in. */
 const speakerAt = (centerX: number, footY: number, zoom: number) => ({
   centerX,
@@ -696,15 +701,19 @@ describe("resolveDialogueBox candidate scoring (05-33, G-05-P1)", () => {
     expect(p.candidates[1].deskArea).toBe(0);
   });
 
+  // A floor that puts the two side candidates out of bounds, so a case can
+  // pit 'below' against 'above' alone (both score 0 on everything otherwise).
+  const SIDES_OUT = { ...FLOOR, left: 70, right: 200 };
+
   it("when every candidate covers a desk, the least desk area wins", async () => {
     const desks = [
-      { x: 103, y: BELOW_Y, w: 20, h: 10 }, // below: 200
+      { x: 103, y: BELOW_Y, w: 20, h: 10 }, // below: 20 x 9 = 180
       { x: 103, y: ABOVE_Y, w: 30, h: 9 }, //  above: 270
       { x: 146, y: SIDE_Y, w: 40, h: 9 }, //   right: 360
       { x: 60, y: SIDE_Y, w: 5, h: 9 }, //     left:   45  <- least
     ];
     const p = await resolve({ desks, furniture: desks });
-    expect(p.candidates.map((c) => c.deskArea)).toEqual([200, 270, 360, 45]);
+    expect(p.candidates.map((c) => c.deskArea)).toEqual([180, 270, 360, 45]);
     expect(p.candidates.every((c) => c.valid)).toBe(true);
     expect(p.candidates[3]).toMatchObject({ kind: "left", x: p.x, y: p.y });
   });
@@ -734,11 +743,11 @@ describe("resolveDialogueBox candidate scoring (05-33, G-05-P1)", () => {
   it("a desk outranks everything soft: a 4 px desk under 'below' loses to a full character or plant over 'above'", async () => {
     const desk = { x: 103, y: BELOW_Y, w: 2, h: 2 }; // area 4
     const wide = { x: 103, y: ABOVE_Y, w: 66, h: 9 }; // area 594
-    const vsCharacter = await resolve({ desks: [desk], furniture: [desk], characters: [wide] });
+    const vsCharacter = await resolve({ desks: [desk], furniture: [desk], characters: [wide] }, SIDES_OUT);
     expect(vsCharacter.candidates[0].deskArea).toBe(4);
     expect(vsCharacter.candidates[1].characterArea).toBe(594);
     expect(vsCharacter.y).toBe(ABOVE_Y);
-    const vsFurniture = await resolve({ desks: [desk], furniture: [desk, wide] });
+    const vsFurniture = await resolve({ desks: [desk], furniture: [desk, wide] }, SIDES_OUT);
     expect(vsFurniture.candidates[1].furnitureArea).toBe(594);
     expect(vsFurniture.y).toBe(ABOVE_Y);
   });
@@ -746,7 +755,8 @@ describe("resolveDialogueBox candidate scoring (05-33, G-05-P1)", () => {
   it("non-desk furniture outranks characters: a plant under 'below' loses to a character over 'above'", async () => {
     const plant = { x: 103, y: BELOW_Y, w: 30, h: 8 };
     const character = { x: 103, y: ABOVE_Y, w: 66, h: 9 };
-    const p = await resolve({ furniture: [plant], characters: [character] });
+    const p = await resolve({ furniture: [plant], characters: [character] }, SIDES_OUT);
+    expect(p.candidates.map((c) => c.valid)).toEqual([true, true, false, false]);
     expect(p.candidates[0]).toMatchObject({ deskArea: 0, furnitureArea: 240 });
     expect(p.candidates[1]).toMatchObject({ deskArea: 0, furnitureArea: 0, characterArea: 594 });
     expect(p.y).toBe(ABOVE_Y);
