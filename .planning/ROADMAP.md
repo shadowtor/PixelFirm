@@ -167,7 +167,7 @@ Plans:
   3. When one agent hands off work to another, the office shows the first agent walking over, a task icon appearing, and the second agent accepting it and moving to work — using deterministic, template-based dialogue, never LLM-generated at render time.
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
 
-**Plans:** 23/30 plans executed (UAT 2026-09-22 diagnosed 7 gaps — 10 further gap-closure plans added 2026-09-22 per seventh --gaps re-plan, revised after plan check)
+**Plans:** 24/30 plans executed (UAT 2026-09-22 diagnosed 7 gaps — 10 further gap-closure plans added 2026-09-22 per seventh --gaps re-plan, revised after plan check)
 
 Plans:
 
@@ -194,7 +194,7 @@ Plans:
 - [x] 05-21-PLAN.md — UAT gap closure: minimum integer display scale (>= 3x) via engine zoom, pixelated, live scale truth (G-05-1a)
 - [x] 05-22-PLAN.md — UAT gap closure: MetroCity Interior sheets committed + reproducible decode to office-metrocity.json + ASSET-LICENSES provenance/credit and link-2 outfit-layer upgrade (G-05-1e)
 - [x] 05-23-PLAN.md — UAT gap closure: frozen-state glyphs re-authored with closed black outline + contrast/shape guard tests (G-05-2)
-- [ ] 05-24-PLAN.md — UAT gap closure: furnished office render — layout file, MetroCity floor/wall/desks/monitors/decor z-sorted with characters, sprite cache (G-05-1e)
+- [x] 05-24-PLAN.md — UAT gap closure: furnished office render — layout file, MetroCity floor/wall/desks/monitors/decor z-sorted with characters, sprite cache (G-05-1e)
 - [ ] 05-25-PLAN.md — UAT gap closure: seat model — agents take layout desk seats, standing overflow, rebased seat tests, seated offset only at own desk (G-05-1e)
 - [ ] 05-26-PLAN.md — UAT gap closure: live harness rebased on layout/office data + furnished and frame-rate truths, floor-texture glyph contrast, UI-SPEC/ROADMAP/footer credit sync (G-05-1e, G-05-2)
 - [ ] 05-27-PLAN.md — UAT gap closure: handoff interaction tile on the receiver's seat row + occupancy/furniture-aware walks, sender faces receiver, live sender-visible check (G-05-1d, G-05-1e)
@@ -265,7 +265,7 @@ Plans:
 
 **Wave 14** *(blocked on Wave 13 — parallel, no file overlap, neither runs the live harness)*
 
-- [ ] 05-23-PLAN.md — Frozen-glyph outline and contrast (G-05-2)
+- [x] 05-23-PLAN.md — Frozen-glyph outline and contrast (G-05-2)
 - [ ] 05-24-PLAN.md — Furnished office render + sprite cache (G-05-1e)
 
 **Wave 15** *(blocked on 05-24)*
@@ -349,7 +349,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 23/30 | In Progress|  |
+| 5. Pixel Office Renderer | 24/30 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
