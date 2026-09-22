@@ -516,4 +516,66 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       expect(c.bubbleText ?? null).toBeNull();
     });
   });
+
+  describe("one sender, one handoff (05-19, WR-01/WR-02/WR-03): real update loop", () => {
+    it("WR-01: a second task from the same sender supersedes the first; the first's completion is a no-op", () => {
+      const { a, b } = toIconVisible();
+      const c = getCharacter("agent-c")!;
+      handleHandoffEvent(requestedEvent("task-2", "agent-a", "agent-c", NEW_REQUEST_ID));
+      run(1);
+      expect(onSeatOf(a, c)).toBe(true);
+      expect(a.bubbleText).toContain("task-2");
+
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      run(0.2);
+      expect(onSeatOf(a, c)).toBe(true);
+      expect(a.bubbleType).toBe("handoff-task");
+      expect(a.bubbleText).toContain("task-2");
+      expect(b.state).not.toBe(CharacterState.TYPE);
+
+      handleHandoffEvent(completedEvent("task-2", "agent-c", "5fa85f64-5717-4562-b3fc-2c963f66afa6"));
+      expect(c.state).toBe(CharacterState.TYPE);
+      run(0.2);
+      expect(c.bubbleText).toContain("accepts");
+
+      run(5);
+      expectHomeIdle(a);
+      expect(a.bubbleText ?? null).toBeNull();
+      expect(b.bubbleText ?? null).toBeNull();
+      expect(c.bubbleText ?? null).toBeNull();
+    });
+
+    it("WR-02: the handoff-task icon survives a glyph-less status; a real glyph shows, then the icon returns", () => {
+      const { a } = toIconVisible();
+      upsertCharacterFromAgent("agent-a", AgentStatus.CODING);
+      expect(a.bubbleType).toBe("handoff-task");
+      upsertCharacterFromAgent("agent-a", AgentStatus.BLOCKED);
+      expect(a.bubbleType).toBe("blocked");
+      upsertCharacterFromAgent("agent-a", AgentStatus.CODING);
+      expect(a.bubbleType).toBe("handoff-task");
+
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      run(5);
+      expectHome(a, CharacterState.TYPE);
+      expect(a.bubbleType).toBeNull();
+    });
+
+    it("WR-03: OFFLINE and re-seat in the same frame never inherit the old record's arrival", () => {
+      seatAll();
+      const b = getCharacter("agent-b")!;
+      handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+      run(0.2);
+      upsertCharacterFromAgent("agent-a", AgentStatus.OFFLINE);
+      upsertCharacterFromAgent("agent-a", AgentStatus.IDLE);
+      run(1);
+
+      const a = getCharacter("agent-a")!;
+      expectHomeIdle(a);
+      expect(a.bubbleType).not.toBe("handoff-task");
+      expect(a.bubbleText ?? null).toBeNull();
+
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      expect(b.state).not.toBe(CharacterState.TYPE);
+    });
+  });
 });
