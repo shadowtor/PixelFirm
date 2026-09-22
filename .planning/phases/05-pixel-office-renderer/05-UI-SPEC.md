@@ -80,7 +80,7 @@ Declared values (must be multiples of 4) — **applies to the DOM overlay only**
 | 2xl | 48px | — (unused this phase) |
 | 3xl | 64px | — (unused this phase) |
 
-**Exceptions:** The canvas's actual layout unit is the pixel-art **tile grid**, not the 8-point DOM scale — `TILE_SIZE = 16px`, office grid `DEFAULT_COLS × DEFAULT_ROWS = 20 × 11` tiles (`packages/pixel-office/src/constants.ts`), giving a fixed `320×176px` canvas at 1x scale. Any new on-canvas element (a bubble icon, a badge, a future dialogue box) must align to this 16px tile grid, not the 4px DOM spacing scale.
+**Exceptions:** The canvas's actual layout unit is the pixel-art **tile grid**, not the 8-point DOM scale — `TILE_SIZE = 16px`, office grid `DEFAULT_COLS × DEFAULT_ROWS = 20 × 11` tiles (`packages/pixel-office/src/constants.ts`), giving a `320×176px` office grid that is never presented at native size (05-21, G-05-1a): it is always shown at an integer scale N ≥ `MIN_DISPLAY_SCALE` (3), where N is the largest integer that fits the viewport minus the 24px footer allowance (`displayScaleFor`). The canvas backing store is `320N × 176N`, the engine draws every frame at zoom N, the CSS box equals the backing store, and the canvas uses `image-rendering: pixelated`. Any new on-canvas element (a bubble icon, a badge, a future dialogue box) must align to this 16px tile grid, not the 4px DOM spacing scale.
 
 ---
 

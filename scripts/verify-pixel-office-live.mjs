@@ -30,7 +30,8 @@
 // a real pair on the live relay drives reducer -> character upsert ->
 // choreography -> painted canvas.
 //
-// Truths: (1) a live agent paints a sprite; (2) a live blocked status paints
+// Truths: (0) the office is presented at an integer scale >= MIN_DISPLAY_SCALE,
+// never native (05-21, G-05-1a); (1) a live agent paints a sprite; (2) a live blocked status paints
 // its glyph; (3) a handoff pair paints the task icon, then clears it; (4) the
 // blocked glyph is owner-bound; (5) the handoff dialogue line is painted
 // owner-bound above the waiting sender, the receiver's accepted line is
@@ -48,7 +49,7 @@
 
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import net from "node:net";
 import path from "node:path";
@@ -181,6 +182,19 @@ const DEFAULT_COLS = readNumberConst(constantsSrc, "constants.ts", "DEFAULT_COLS
 const DEFAULT_ROWS = readNumberConst(constantsSrc, "constants.ts", "DEFAULT_ROWS");
 const DESK_ROW_START = readNumberConst(officeIndexSrc, "index.ts", "DESK_ROW_START");
 const DESK_ROW_PITCH = readNumberConst(officeIndexSrc, "index.ts", "DESK_ROW_PITCH");
+const MIN_DISPLAY_SCALE = readNumberConst(officeIndexSrc, "index.ts", "MIN_DISPLAY_SCALE");
+// Optional review screenshots (05-21): only when PIXEL_OFFICE_SHOTS names a
+// directory outside the repo. Unset means no files are written.
+const SHOTS_DIR = process.env.PIXEL_OFFICE_SHOTS ? path.resolve(process.env.PIXEL_OFFICE_SHOTS) : null;
+if (SHOTS_DIR && !path.relative(ROOT, SHOTS_DIR).startsWith("..") && !path.isAbsolute(path.relative(ROOT, SHOTS_DIR))) {
+  throw new Error(`PIXEL_OFFICE_SHOTS must be outside the repo (${ROOT}), got ${SHOTS_DIR}`);
+}
+async function shot(page, name) {
+  if (!SHOTS_DIR) return;
+  mkdirSync(SHOTS_DIR, { recursive: true });
+  await page.screenshot({ path: path.join(SHOTS_DIR, name) });
+  log(`screenshot: ${path.join(SHOTS_DIR, name)}`);
+}
 const WALK_SPEED_PX_PER_SEC = readNumberConst(constantsSrc, "constants.ts", "WALK_SPEED_PX_PER_SEC");
 const INTERIOR_COLS = DEFAULT_COLS - 2;
 const MAP_W = DEFAULT_COLS * TILE_SIZE;
@@ -624,6 +638,25 @@ async function main() {
         `not reset, or the apps/api server on ${API_URL} is connected to a different database than this harness reset`,
     );
 
+    // ── TRUTH 0 — never native 320x176 (05-21, G-05-1a): an integer scale
+    // >= MIN_DISPLAY_SCALE, drawn 1:1 in CSS, with pixelated scaling.
+    const box = await page.evaluate(() => {
+      const canvas = document.getElementById("office-canvas");
+      const r = canvas.getBoundingClientRect();
+      return { w: canvas.width, h: canvas.height, cssW: r.width, cssH: r.height, rendering: getComputedStyle(canvas).imageRendering };
+    });
+    const boxWhere = `backing ${box.w}x${box.h}, CSS box ${box.cssW}x${box.cssH}, image-rendering ${box.rendering}`;
+    assert(
+      Number.isInteger(empty.scale) && empty.scale >= MIN_DISPLAY_SCALE,
+      `display scale ${empty.scale} is not an integer >= MIN_DISPLAY_SCALE ${MIN_DISPLAY_SCALE} (${boxWhere})`,
+    );
+    assert(
+      Math.abs(box.cssW - box.w) <= 0.5 && Math.abs(box.cssH - box.h) <= 0.5,
+      `the canvas CSS box does not equal its backing store (${boxWhere})`,
+    );
+    assert(box.rendering === "pixelated", `canvas image-rendering is not pixelated (${boxWhere})`);
+    log(`TRUTH 0 PASS — display scale ${empty.scale} (backing ${box.w}x${box.h}, CSS box ${box.cssW}x${box.cssH}, pixelated)`);
+
     // ── Baseline: two real agents materialised by real task.status_changed
     // events posted while the page was already open, both actively working
     // (no bubble on either of them).
@@ -663,6 +696,7 @@ async function main() {
       blockedScan.blockedHits > 0,
       `bubble-blocked's distinctive colour(s) ${BLOCKED_COLORS.join(", ")} never appeared on canvas (0 px)`,
     );
+    await shot(page, "states.png");
     log(`TRUTH 2 PASS — ${blockedScan.blockedHits} blocked-bubble pixels, no navigation between the event and the scan`);
 
     // ── TRUTH 3 — a real handoff pair paints the task icon, then clears it.
@@ -706,6 +740,7 @@ async function main() {
     const speakerGlyphSlotTop = speakerSpriteTop - BUBBLE_ICON_GAP_PX - BUBBLE_ICON_HEIGHT_PX;
     const speakerCentreX = receiverDesk.col * TILE_SIZE + TILE_SIZE / 2;
     const dlg = await scanCanvas(page, null, speakerGlyphSlotTop);
+    await shot(page, "handoff.png");
     const dlgWhere =
       `${dlg.dialogueHits} dialogue-box px + ${dlg.dialogueTextPx} text px at x ${dlg.dialogueMinX}..${dlg.dialogueMaxX}, ` +
       `y ${dlg.dialogueMinY}..${dlg.dialogueMaxY}`;
