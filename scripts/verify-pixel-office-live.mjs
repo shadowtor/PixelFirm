@@ -229,6 +229,28 @@ function claimDesk(agentId) {
   return deskPosition(deskSlots.get(agentId));
 }
 
+// Blocking furniture footprint tiles ("col,row"), from the same layout data.
+const FURNITURE_BLOCKS = new Set(
+  LAYOUT.furniture
+    .filter((f) => f.blocks)
+    .flatMap((f) => Array.from({ length: f.w * f.h }, (_, i) => `${f.col + (i % f.w)},${f.row + Math.floor(i / f.w)}`)),
+);
+
+/** Where a handoff sender waits (05-27): outward along the receiver's seat row
+ *  (-1, +1, -2, +2, ...), the first free walkable non-furniture tile.
+ *  Mirrors `interactionTileFor` in handoff-choreography.ts and must change with it. */
+function interactionTile(receiverSeat, occupiedTiles) {
+  const row = receiverSeat.row;
+  for (let d = 1; d < DEFAULT_COLS; d++) {
+    for (const col of [receiverSeat.col - d, receiverSeat.col + d]) {
+      const key = `${col},${row}`;
+      if (LAYOUT.tiles[row]?.[col] !== "." || FURNITURE_BLOCKS.has(key) || occupiedTiles.has(key)) continue;
+      return { col, row };
+    }
+  }
+  return null;
+}
+
 /** A tile column's x-range in unzoomed canvas px. A glyph is 11 wide and its
  *  owner's sprite 16, so a centred glyph is always inside its own column. */
 const tileColumnRange = (col) => ({ from: col * TILE_SIZE, to: (col + 1) * TILE_SIZE });
@@ -236,7 +258,14 @@ const tileColumnRange = (col) => ({ from: col * TILE_SIZE, to: (col + 1) * TILE_
 // Sprite height comes from the decoded sheet itself, so a re-decode with
 // different frame geometry moves the band assertions with it rather than
 // silently invalidating them.
-const SPRITE_HEIGHT = JSON.parse(readFileSync(path.join(SPRITE_DIR, "character-metrocity.json"), "utf8")).down[0].length;
+const CHARACTER_SHEET = JSON.parse(readFileSync(path.join(SPRITE_DIR, "character-metrocity.json"), "utf8"));
+const SPRITE_HEIGHT = CHARACTER_SHEET.down[0].length;
+/** Smallest opaque cell count over every frame of every direction (05-27's
+ *  sender-visible floor): the waiting sender faces the receiver, so its side
+ *  frame (~241 cells) is what is on screen, not a down frame (~294). */
+const MIN_FRAME_OPAQUE = Math.min(
+  ...["down", "up", "right"].flatMap((dir) => CHARACTER_SHEET[dir].map((f) => f.flat().filter((c) => c).length)),
+);
 
 /** Top edge of a character's sprite box on a given interior row, unzoomed —
  *  `renderScene`'s bottom-centre anchor: tile centre minus the sprite height.
@@ -431,15 +460,16 @@ const statusChanged = (agentId, taskId, status) => ({
  * `xRange` (unzoomed grid px, `{from, to}`) scopes the scan to a horizontal
  * band — without it every count is a claim about EVERY agent on the floor, not
  * about one. Backing-store scaling is normalised in both axes, so a band is
- * always expressed in the engine's own grid coordinates.
+ * always expressed in the engine's own grid coordinates. `yRange` does the
+ * same vertically (05-27: one sprite's rows, without the glyph above it).
  *
  * `blockedMinY`/`blockedMaxY` report the vertical extent of the blocked-glyph
  * pixels found inside the band (null when there are none), which is what turns
  * "a blocked glyph was painted somewhere" into "it was painted on this agent".
  */
-async function scanCanvas(page, xRange = null, textAboveY = null) {
+async function scanCanvas(page, xRange = null, textAboveY = null, yRange = null) {
   return page.evaluate(
-    ({ office, fallbackFloor, blocked, handoff, dialogueBox, mapW, mapH, band, textAbove }) => {
+    ({ office, fallbackFloor, blocked, handoff, dialogueBox, mapW, mapH, band, textAbove, rows }) => {
       const canvas = document.getElementById("office-canvas");
       if (!canvas) throw new Error("#office-canvas is not in the DOM");
       const ctx = canvas.getContext("2d");
@@ -462,6 +492,8 @@ async function scanCanvas(page, xRange = null, textAboveY = null) {
 
       const fromX = band ? Math.round(band.from * scale) : 0;
       const toX = band ? Math.min(Math.round(band.to * scale), canvas.width) : canvas.width;
+      const fromY = rows ? Math.round(rows.from * scale) : 0;
+      const toY = rows ? Math.min(Math.round(rows.to * scale), canvas.height) : canvas.height;
 
       let sprite = 0;
       let fallbackFloorHits = 0;
@@ -474,7 +506,7 @@ async function scanCanvas(page, xRange = null, textAboveY = null) {
       let dMaxX = null;
       let dMinY = null;
       let dMaxY = null;
-      for (let y = 0; y < canvas.height; y++) {
+      for (let y = fromY; y < toY; y++) {
         for (let x = fromX; x < toX; x++) {
           const i = (y * canvas.width + x) * 4;
           if (data[i + 3] === 0) continue;
@@ -538,6 +570,7 @@ async function scanCanvas(page, xRange = null, textAboveY = null) {
       mapH: MAP_H,
       band: xRange,
       textAbove: textAboveY,
+      rows: yRange,
     },
   );
 }
@@ -822,7 +855,7 @@ async function main() {
       `bubble-handoff-task's distinctive colour(s) ${HANDOFF_COLORS.join(", ")} never appeared on canvas during the walk (0 px)`,
     );
 
-    // TRUTH 5 (during) — the sender stands on the receiver's desk tile in its
+    // TRUTH 5 (during) — the sender stands beside the receiver (05-27) in its
     // own status pose (TYPE for this running, so CODING, sender; 05-19) and
     // speaks the requested line. No task.created is posted and the
     // receiver has no name, so the line interpolates the raw 23-char task id
@@ -848,16 +881,37 @@ async function main() {
     );
     assert(dlg.dialogueTextPx > 0, `no text pixel painted inside the dialogue box above y ${speakerGlyphSlotTop}: ${dlgWhere}`);
 
+    // TRUTH 5 (sender visible) — 05-27 (G-05-1d): the sender waits on its own
+    // interaction tile beside the receiver, so each full sprite sits in its own
+    // tile column (the UAT defect left 22% of the sender visible).
+    const senderHome = claimDesk(SENDER);
+    const othersSeats = new Set(
+      [...deskSlots.keys()].filter((id) => id !== SENDER).map((id) => `${claimDesk(id).col},${claimDesk(id).row}`),
+    );
+    const senderTile = interactionTile(receiverDesk, othersSeats);
+    assert(senderTile !== null, `no interaction tile on the receiver's seat row ${receiverDesk.row}`);
+    // Only the standing sprite's own rows: the glyph and dialogue above it are not the body.
+    const senderRows = { from: spriteTopY(senderTile.row), to: spriteTopY(senderTile.row) + SPRITE_HEIGHT };
+    const senderBandScan = await scanCanvas(page, tileColumnRange(senderTile.col), null, senderRows);
+    const receiverBandScan = await scanCanvas(page, tileColumnRange(receiverDesk.col));
+    const senderMinPx = Math.ceil(0.8 * MIN_FRAME_OPAQUE * dlg.scale * dlg.scale);
+    const visibleWhere =
+      `sender (${senderTile.col},${senderTile.row}) ${senderBandScan.sprite} agent px (need >= ${senderMinPx}), ` +
+      `receiver (${receiverDesk.col},${receiverDesk.row}) ${receiverBandScan.sprite} agent px`;
+    assert(senderBandScan.sprite >= senderMinPx, `the waiting sender's sprite is not fully visible: ${visibleWhere}`);
+    assert(receiverBandScan.sprite > 0, `the receiver's column holds no agent px: ${visibleWhere}`);
+    log(`TRUTH 5 (sender visible) PASS — ${visibleWhere}`);
+
     await postEvent(token, {
       type: "agent.handoff_completed",
       taskId: HANDOFF_TASK,
       sourceAgentId: RECEIVER,
       payload: { taskId: HANDOFF_TASK, toAgentId: RECEIVER },
     });
-    // The sender walks home over the same desk distance it walked out.
-    const senderDesk = claimDesk(SENDER);
+    // The sender walks home from its interaction tile; +2 tiles for the detour
+    // around occupied seats on the way (05-27: walks avoid other agents).
     const walkHomeMs =
-      ((Math.abs(senderDesk.col - receiverDesk.col) + Math.abs(senderDesk.row - receiverDesk.row)) * TILE_SIZE * 1000) /
+      ((Math.abs(senderHome.col - senderTile.col) + Math.abs(senderHome.row - senderTile.row) + 2) * TILE_SIZE * 1000) /
       WALK_SPEED_PX_PER_SEC;
     const handoffEndDeadlineMs = walkHomeMs + RENDER_SETTLE_MS;
     // Icon gone = the completion was processed, so these px are the accepted
