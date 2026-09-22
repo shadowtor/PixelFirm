@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-29-PLAN.md
-last_updated: "2026-09-22T11:58:45.021Z"
+stopped_at: Completed 05-30-PLAN.md
+last_updated: "2026-09-22T12:05:17.506Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 05 execution started
-state_head: c9c70833a7ed11281733fdc0787023f660d4ae4d
+state_head: 0446d976be2059c89316482104001a2915289fc0
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 45
-  completed_plans: 44
+  completed_plans: 45
   percent: 50
 ---
 
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 29 of 30
-Status: Plan 29 complete; 05-30 next
-Last activity: 2026-09-22 — Completed 05-29 (short handoff label, UI-SPEC amended; G-05-1b closed)
+Plan: 30 of 30
+Status: All 30 plans complete; phase awaiting verification
+Last activity: 2026-09-22 — Completed 05-30 (glyphs anchored 1 px above the owner's head; G-05-1c closed)
 
 Progress: [█████░░░░░] 50%
 
@@ -104,6 +104,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P27 | 9min | 2 tasks | 5 files |
 | Phase 05 P28 | 9min | 2 tasks | 6 files |
 | Phase 05 P29 | 6min | 2 tasks | 4 files |
+| Phase 05 P30 | 9min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -211,6 +212,7 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-27: handoff sender waits on the nearest free tile on the receiver's seat row; all handoff walks avoid furniture and other agents
 - [Phase 05]: 05-28: handoff line is a speech bubble under the speaker's feet, spanning the pair, clamped only to the floor interior; layout guard test proves speaker bands clear
 - [Phase 05]: 05-29: handoff dialogue is a short label ('<title> → <name>', '<name> accepts <title>'), caps 12/10 code points; UI-SPEC supersedes the 11px canvas dialogue scale
+- [Phase 05]: 05-30: state glyphs anchor on the owner's visible head (lowest ink row 1 px above the frame's first opaque row, per frame; G-05-1c)
 
 ### Pending Todos
 
@@ -239,6 +241,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T11:58:44.823Z
-Stopped at: Completed 05-29-PLAN.md
+Last session: 2026-09-22T12:05:17.365Z
+Stopped at: Completed 05-30-PLAN.md
 Resume file: None
