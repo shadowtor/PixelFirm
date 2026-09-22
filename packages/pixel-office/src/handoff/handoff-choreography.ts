@@ -14,9 +14,11 @@
 // which module finishes evaluating first.
 import type { CompanyEvent } from "event-schema";
 import { setRestPose, walkCharacterTo } from "../engine/characters.js";
-import { getCharacter, getTaskTitle, getTileMap } from "../index.js";
+import { getCharacter, getCharacters, getTaskTitle, getTileMap } from "../index.js";
+import { FURNITURE_BLOCKED_TILES } from "../layout/officeLayout.js";
+import { findPath, isWalkable } from "../layout/tileMap.js";
 import type { Character } from "../types.js";
-import { CharacterState } from "../types.js";
+import { CharacterState, Direction } from "../types.js";
 import { resolveHandoffDialogue } from "./dialogue-templates.js";
 
 type HandoffPhase = "WALKING_TO_RECEIVER" | "ICON_VISIBLE" | "RETURNING_TO_DESK";
@@ -33,13 +35,69 @@ interface HandoffRecord {
   /** The sender Character this record walks, compared by identity (05-19,
    *  WR-03): a re-seated sender is a new object and never inherits it. */
   fromChar: Character;
+  /** The interaction tile the sender walks to and waits on (05-27, G-05-1d). */
+  target: Tile;
 }
 
-// No blocked-tile tracking exists anywhere in this repo yet (no furniture —
-// 05-01's trim). An empty set matches every other findPath call site here.
-const NO_BLOCKED_TILES = new Set<string>();
+type Tile = { col: number; row: number };
+const tileKey = (col: number, row: number): string => `${col},${row}`;
 
 const handoffs = new Map<string, HandoffRecord>();
+
+/**
+ * Tiles a walk must avoid (05-27, G-05-1d/G-05-1e): blocking furniture, and
+ * every other present character's seat and, when it is standing, its tile.
+ * The walker's own seat and the target stay open.
+ */
+export function blockedTilesFor(walker: Character, target: Tile): Set<string> {
+  const blocked = new Set(FURNITURE_BLOCKED_TILES);
+  for (const ch of getCharacters()) {
+    if (ch === walker) continue;
+    blocked.add(tileKey(ch.seatCol, ch.seatRow));
+    if (ch.state !== CharacterState.WALK) blocked.add(tileKey(ch.tileCol, ch.tileRow));
+  }
+  blocked.delete(tileKey(walker.seatCol, walker.seatRow));
+  blocked.delete(tileKey(target.col, target.row));
+  return blocked;
+}
+
+/**
+ * Where the sender stands at the receiver (05-27, G-05-1d): the nearest free,
+ * reachable, non-furniture tile on the receiver's SEAT row, searched outward
+ * from its seat (-1, +1, -2, +2, ...). Staying on the seat row keeps every
+ * handoff speaker on a layout seat row (05-28's bubble band relies on it).
+ *
+ * ponytail: null when the row has no free tile — impossible on the shipped
+ * layout (each seat row keeps 8+ non-seat floor tiles); the caller then shows
+ * the icon where the sender stands instead of stacking it on someone.
+ */
+function interactionTileFor(toChar: Character, fromChar: Character): Tile | null {
+  const tileMap = getTileMap();
+  const row = toChar.seatRow;
+  const taken = new Set<string>([tileKey(toChar.seatCol, toChar.seatRow)]);
+  for (const ch of getCharacters()) {
+    if (ch === fromChar) continue;
+    taken.add(tileKey(ch.seatCol, ch.seatRow));
+    taken.add(tileKey(ch.tileCol, ch.tileRow));
+  }
+  for (const record of handoffs.values()) {
+    if (record.fromChar !== fromChar && record.phase !== "RETURNING_TO_DESK") {
+      taken.add(tileKey(record.target.col, record.target.row));
+    }
+  }
+  const width = tileMap[row]?.length ?? 0;
+  for (let d = 1; d < width; d++) {
+    for (const col of [toChar.seatCol - d, toChar.seatCol + d]) {
+      if (taken.has(tileKey(col, row)) || !isWalkable(col, row, tileMap, FURNITURE_BLOCKED_TILES as Set<string>)) continue;
+      const here = fromChar.tileCol === col && fromChar.tileRow === row;
+      const tile = { col, row };
+      if (here || findPath(fromChar.tileCol, fromChar.tileRow, col, row, tileMap, blockedTilesFor(fromChar, tile)).length > 0) {
+        return tile;
+      }
+    }
+  }
+  return null;
+}
 
 /**
  * Arrival is "not walking and nothing left to walk" (05-19, review CR-01).
@@ -88,7 +146,8 @@ function retireHandoff(record: HandoffRecord, sendSenderHome: boolean): void {
     const headingHome = last !== undefined && last.col === fromChar.seatCol && last.row === fromChar.seatRow;
     const atHome = fromChar.tileCol === fromChar.seatCol && fromChar.tileRow === fromChar.seatRow;
     if (sendSenderHome && !atHome && !headingHome) {
-      walkCharacterTo(fromChar, fromChar.seatCol, fromChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
+      const seat = { col: fromChar.seatCol, row: fromChar.seatRow };
+      walkCharacterTo(fromChar, seat.col, seat.row, getTileMap(), blockedTilesFor(fromChar, seat));
     }
   }
 }
@@ -121,7 +180,8 @@ export function handleHandoffEvent(event: CompanyEvent): void {
         retireHandoff(previous, previous.fromAgentId !== fromAgentId);
       }
     }
-    walkCharacterTo(fromChar, toChar.seatCol, toChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
+    const target = interactionTileFor(toChar, fromChar) ?? { col: fromChar.tileCol, row: fromChar.tileRow };
+    walkCharacterTo(fromChar, target.col, target.row, getTileMap(), blockedTilesFor(fromChar, target));
     handoffs.set(taskId, {
       taskId,
       fromAgentId,
@@ -130,6 +190,7 @@ export function handleHandoffEvent(event: CompanyEvent): void {
       acceptedText: null,
       requestedText: null,
       fromChar,
+      target,
     });
     return;
   }
@@ -156,7 +217,8 @@ export function handleHandoffEvent(event: CompanyEvent): void {
     // The sender's own status glyph comes back (05-20, review CR-01).
     applyBubble(fromChar);
     if (fromChar.bubbleText === record.requestedText) fromChar.bubbleText = null;
-    walkCharacterTo(fromChar, fromChar.seatCol, fromChar.seatRow, getTileMap(), NO_BLOCKED_TILES);
+    const seat = { col: fromChar.seatCol, row: fromChar.seatRow };
+    walkCharacterTo(fromChar, seat.col, seat.row, getTileMap(), blockedTilesFor(fromChar, seat));
     if (toChar) {
       // The receiver "accepts and moves to work" at their existing desk —
       // per HANDOFF-01's exact wording, no second walk leg for them.
@@ -199,6 +261,13 @@ export function checkHandoffArrivals(): void {
       const taskTitle = getTaskTitle(record.taskId) ?? record.taskId;
       const toChar = getCharacter(record.toAgentId);
       const toAgentName = toChar?.name ?? record.toAgentId;
+      // 05-27: turn to the receiver before speaking.
+      if (toChar) {
+        const dc = toChar.tileCol - fromChar.tileCol;
+        const dr = toChar.tileRow - fromChar.tileRow;
+        if (dc !== 0) fromChar.dir = dc > 0 ? Direction.RIGHT : Direction.LEFT;
+        else if (dr !== 0) fromChar.dir = dr > 0 ? Direction.DOWN : Direction.UP;
+      }
       record.requestedText = resolveHandoffDialogue("requested", taskTitle, toAgentName);
       fromChar.bubbleText = record.requestedText;
       record.phase = "ICON_VISIBLE";

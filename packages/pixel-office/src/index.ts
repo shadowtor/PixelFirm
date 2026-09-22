@@ -163,6 +163,12 @@ export function getCharacter(agentId: string): Character | undefined {
   return characters.get(agentId);
 }
 
+/** Read-only view of every present Character (05-27: the handoff FSM's
+ *  occupancy checks); same circular-import note as getCharacter. */
+export function getCharacters(): IterableIterator<Character> {
+  return characters.values();
+}
+
 /**
  * The one per-frame update (05-17). The requestAnimationFrame loop and the
  * tests both run exactly this, so a test can never shortcut past it.

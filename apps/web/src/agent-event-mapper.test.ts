@@ -201,7 +201,10 @@ describe("live handoff path", () => {
     // that const object is not part of this package's public surface.
     expect(sender?.state).toBe("walk");
     expect(sender?.path.length).toBeGreaterThan(0);
-    expect(sender?.path.at(-1)).toEqual({ col: receiver?.seatCol, row: receiver?.seatRow });
+    // 05-27 (G-05-1d): the sender stops beside the receiver on its seat row, never on it.
+    const end = sender!.path.at(-1)!;
+    expect(end.row).toBe(receiver?.seatRow);
+    expect(Math.abs(end.col - receiver!.seatCol)).toBe(1);
   });
 
   it("leaves the sender standing still when the choreography runs before the upserts — the ordering in App.tsx is load-bearing", () => {
