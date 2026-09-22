@@ -69,8 +69,10 @@ at each site name the ceiling and the upgrade path.
 
 | Ceiling | Site | Upgrade path |
 |---|---|---|
-| Twelve identity hue buckets — two agents collide on a colour past 12 seated | `packages/pixel-office/src/index.ts` (`hueForAgentId`) | On-canvas name labels; 05-UI-SPEC.md's Typography section already reserves the monospace/11px scale |
-| 54 desks on the default 20x11 grid (rows 3/6/9 x 18 cols, down from 162); overflow stacks on the last valid row | `packages/pixel-office/src/index.ts` (`nextDeskPosition`) | A larger grid or a scrolling camera |
+| Twelve identity hues — a new character takes its hashed bucket or the next free one, so two concurrently seated characters share a hue only from the thirteenth concurrently seated agent | `packages/pixel-office/src/index.ts` (`identityHueFor`) | On-canvas name labels; 05-UI-SPEC.md's Typography section already reserves the monospace/11px scale |
+| 54 concurrently seated desks on the default 20x11 grid (rows 3/6/9 x 18 cols, down from 162), reclaimed on despawn lowest-first, so only a 55th concurrently seated character stacks on the last valid row | `packages/pixel-office/src/index.ts` (`nextDeskPosition`) | A larger grid or a scrolling camera |
+
+Corrected by 05-14 (2026-09-22): as originally written, the hue row understated the ceiling. The 05-10 algorithm hashed into 12 buckets with no avoidance, so collisions were possible from the second agent (05-VERIFICATION.md measured alpha and beta on the same hue); and the desk row did not mention that despawn never freed a desk, so churn alone could reach stacking.
 
 The desk-count reduction is the direct cost of the row pitch CR-02 required —
 a glyph only clears the sprite box of the desk row behind it at pitch >= 3.
@@ -167,18 +169,36 @@ instead."
 **Fix, when someone picks this up:** a real trigger needs either a
 role-to-agent registry that resolves an observed GSD role to an actual agent
 id, or genuine multi-agent orchestration where a second agent exists to
-receive control. Both are Phase 6 scope. Restoring an automatic trigger is
-therefore building that registry, not reverting a line.
+receive control. No ROADMAP phase currently owns a real handoff trigger.
+Phase 6 (CEO Dashboard & Approval Workflow) was named here and in
+05-11-SUMMARY.md, but its goal, success criteria and CEO-01..05 do not include
+multi-agent orchestration or a role-to-agent registry. Placing the work is a
+roadmap decision — a scope addition via `/gsd-discuss-phase 6`, or a new phase
+via `/gsd-phase` — to be taken before Phase 6 is planned. (Corrected by 05-14,
+2026-09-22; supersedes the phase attribution in 05-11-SUMMARY.md, which is left
+as the historical record.)
 
 ## Office capacity and identity-hue ceilings (deliberate, from 05-10)
 
 Recorded here as a scoped deferral so a future reader meets both limits in the
-deferral record rather than only in an in-code comment: the default 20x11 grid
-seats **54 desks** (not 162), because a desk row pitch of 3 is the smallest
-that gives a status glyph clearance over the desk row behind it; and per-agent
-identity uses **12 evenly spaced hue buckets**, so colour collisions begin at
-the thirteenth seated agent. Upgrade paths: a larger grid or a scrolling
+deferral record rather than only in an in-code comment (both corrected by
+05-14): the default 20x11 grid seats **54 concurrently seated desks** (not
+162), because a desk row pitch of 3 is the smallest that gives a status glyph
+clearance over the desk row behind it; a despawned character's desk is
+reclaimed lowest-first, so only a 55th concurrently seated character stacks.
+Per-agent identity uses **12 evenly spaced hue buckets**; a new character takes
+its hashed bucket or the next free one, so two concurrently seated characters
+share a hue only from the thirteenth concurrently seated agent. Upgrade paths: a larger grid or a scrolling
 camera for capacity, and on-canvas name labels for identity —
 `05-UI-SPEC.md`'s Typography section already reserves the monospace 11px scale
 for exactly that. Both sites carry `ponytail:` comments naming the ceiling;
 see the "Accepted ceilings (05-10)" table above for the exact call sites.
+
+## Handoff record outlives its sender's despawn (latent)
+
+If a sending agent despawns (OFFLINE) mid-walk and later returns under the same
+id, `checkHandoffArrivals` finds the new character IDLE with an empty path and
+shows a task icon at its own desk — a fabricated arrival. Latent for the same
+reason as 05-VERIFICATION.md gap 3: nothing emits OFFLINE today. Fix when an
+OFFLINE producer lands: drop handoff records involving an agent when it
+despawns. (Recorded by 05-14, 2026-09-22.)

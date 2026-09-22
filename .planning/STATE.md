@@ -187,6 +187,7 @@ None yet.
 - Phase 5 (05-08): an already-connected browser client never re-derives AgentStatus from task.status_changed / gsd.phase_observed / agent.handoff_completed — only a fresh snapshot reflects them. Phase 6's CEO dashboard has the identical need; proper fix is a live-projection-diff broadcast.
 - T-05-11-WR01 accepted: a worker credential can author state for any agent/company/visibility at POST /events. Acceptance expires the moment a non-INTERNAL consumer is pointed at the control plane (Phase 6/7 owns the fix).
 - Phase 5 (05-12): the restructured live proof (scripts/verify-pixel-office-live.mjs) has never been executed end to end — it recreates a Docker volume and starts two dev servers, so it is a deliberate human run. Truths 1-4 are structurally complete and node --check clean, but none has been observed passing on a real canvas. Running it twice in succession is human-verification item 1 for this phase.
+- Phase 5 (05-14): HANDOFF-01's production trigger has no owning ROADMAP phase (Phase 6 does not include multi-agent orchestration or a role-to-agent registry); a roadmap placement decision is needed before Phase 6 planning — see deferred-items.md.
 
 ## Deferred Items
 
