@@ -230,7 +230,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     for (let i = 0; i < Math.ceil(seconds * 60); i++) stepOffice(1 / 60);
   }
 
-  /** a at col 1, b at col 5 (4-tile walk), c at col 6, all on row 3. */
+  /** a at (1,4), b at (9,4) (8-tile walk), c at (11,4) — layout seats (05-25). */
   function seatAll(): void {
     for (const id of ["agent-a", "filler-1", "filler-2", "filler-3", "agent-b", "agent-c"]) {
       upsertCharacterFromAgent(id, AgentStatus.IDLE);
@@ -289,12 +289,12 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     const b = getCharacter("agent-b")!;
     handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
     run(0.2);
-    expect(a.path.length).toBe(4);
+    expect(a.path.length).toBe(8); // 05-25: layout seats are two columns apart
     upsertCharacterFromAgent("agent-a", AgentStatus.WAITING_FOR_AGENT);
     run(0.5);
     expect(a.frame).toBe(0);
     expect(a.frozen).toBe(true);
-    expect(a.path.length).toBeLessThan(4);
+    expect(a.path.length).toBeLessThan(8);
 
     run(3);
     expect(onSeatOf(a, b)).toBe(true);

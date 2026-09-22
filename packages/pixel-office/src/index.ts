@@ -33,17 +33,14 @@ import { renderFrame } from "./engine/renderer.js";
 // file (below) is a safe circular reference.
 export { handleHandoffEvent, checkHandoffArrivals } from "./handoff/handoff-choreography.js";
 import { _resetHandoffsForTests, applyBubble, checkHandoffArrivals } from "./handoff/handoff-choreography.js";
-import { FURNITURE, OFFICE_TILE_MAP } from "./layout/officeLayout.js";
+import { FURNITURE, OFFICE_TILE_MAP, SEATS, STANDING_SPOTS } from "./layout/officeLayout.js";
 import { resolveStatusVisual } from "./status/status-mapping.js";
 import type { Character } from "./types.js";
 import { TileType } from "./types.js";
 
-// 05-24 (G-05-1e): the furnished office grid from layout/office-layout.json —
-// the same wall border / open floor shape the old default map had, so the
-// desk-row seating below is unaffected (05-25 moves agents onto SEATS).
+// 05-24 (G-05-1e): the furnished office grid from layout/office-layout.json.
 const tileMap = OFFICE_TILE_MAP;
 const characters = new Map<string, Character>();
-const interiorCols = DEFAULT_COLS - 2;
 
 // Task titles known so far (from snapshot's ProjectionState.tasks or live
 // task.created events) — 05-04's handoff dialogue interpolates a real
@@ -66,17 +63,6 @@ export function getTaskTitle(taskId: string): string | undefined {
 export function getTileMap(): TileType[][] {
   return tileMap;
 }
-
-// 05-10 (CR-02): desk rows need real glyph headroom, worked out from this
-// package's own geometry — 16x32 sprite frames, TILE_SIZE 16 grid pitch,
-// 11x13 glyphs, BUBBLE_ICON_GAP_PX 2. A character on interior row r draws at
-// y = 16r - 24 and its glyph occupies [16r - 39, 16r - 26].
-//
-/** First interior row whose glyph clears y = 0: 16r - 39 >= 0 needs r >= 3. */
-const DESK_ROW_START = 3;
-/** Smallest row pitch p where a glyph clears the sprite box of the desk row
- *  behind it ([16(r-p) - 24, 16(r-p) + 8]): needs 16p > 47, i.e. p >= 3. */
-const DESK_ROW_PITCH = 3;
 
 /** Identity hues: twelve buckets, 30 degrees apart. */
 const HUE_BUCKETS = 12;
@@ -117,33 +103,20 @@ function identityHueFor(agentId: string): number {
   return preferred * step;
 }
 
-function deskForSlot(slot: number): { col: number; row: number } {
-  const row = DESK_ROW_START + DESK_ROW_PITCH * Math.floor(slot / interiorCols);
-  return { col: 1 + (slot % interiorCols), row: Math.min(row, DEFAULT_ROWS - 2) };
-}
-
-const DESK_CAPACITY =
-  (Math.floor((DEFAULT_ROWS - 2 - DESK_ROW_START) / DESK_ROW_PITCH) + 1) * interiorCols;
+const HOMES = [...SEATS, ...STANDING_SPOTS];
 
 /**
- * Lowest-numbered desk no seated character holds — derived from state, not a
- * counter, so an empty floor seats agent k at slot k exactly as before.
+ * First layout seat, then standing spot, that no present character holds —
+ * derived from state, not a counter, so a despawned agent's seat is reclaimed
+ * (lowest free first).
  *
- * ponytail: 54 CONCURRENTLY seated desks on the default 20x11 grid (rows
- * 3/6/9 x 18 cols). A despawned character's desk is reclaimed (lowest free
- * first), so churn no longer burns desks; only a 55th concurrently seated
- * character stacks on the last valid row rather than inside the wall border.
- * Upgrade path: a larger grid or a scrolling camera. No producer emits
- * OFFLINE today, so the reclaim path is exercised only through
- * upsertCharacterFromAgent's public contract until one does.
+ * ponytail: 16 seats + 4 standing spots; a 21st concurrently present agent
+ * shares the last standing spot. Upgrade path: a larger layout or a second
+ * floor (OFFICE-04).
  */
 function nextDeskPosition(): { col: number; row: number } {
   const taken = new Set([...characters.values()].map((ch) => `${ch.seatCol},${ch.seatRow}`));
-  for (let slot = 0; slot < DESK_CAPACITY; slot++) {
-    const desk = deskForSlot(slot);
-    if (!taken.has(`${desk.col},${desk.row}`)) return desk;
-  }
-  return deskForSlot(characters.size);
+  return HOMES.find((h) => !taken.has(`${h.col},${h.row}`)) ?? HOMES[HOMES.length - 1];
 }
 
 /**

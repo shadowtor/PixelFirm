@@ -227,22 +227,22 @@ describe("renderScene over the real desk layout — CR-02 two-character composit
   }
 
   /**
-   * Seats 19 agents so agent-1 and agent-19 land in the same interior column
-   * on two consecutive desk rows, blocks ONLY the later-row agent, and
+   * Seats 9 agents so agent-1 (1,4) and agent-9 (1,8) land in the same column
+   * on consecutive layout seat rows (05-25), blocks ONLY the later-row agent, and
    * isolates that agent's glyph rects via a control render (a colour
    * partition cannot: bubble-blocked shares #000000/#ffffff with the
    * character sprite).
    */
-  function renderBlockedNineteen(): { first: Character; later: Character; glyphRects: RecordedRect[] } {
-    const control = seatAgents(19);
+  function renderBlockedNine(): { first: Character; later: Character; glyphRects: RecordedRect[] } {
+    const control = seatAgents(9);
     const { ctx: controlCtx, rects: controlRects } = mockCtx();
     renderScene(controlCtx, control, 0, 0, 1);
 
     _resetForTests();
-    const chars = seatAgents(19);
+    const chars = seatAgents(9);
     const first = chars[0];
-    const later = chars[18];
-    upsertCharacterFromAgent("agent-19", AgentStatus.BLOCKED);
+    const later = chars[8];
+    upsertCharacterFromAgent("agent-9", AgentStatus.BLOCKED);
 
     const { ctx, rects } = mockCtx();
     renderScene(ctx, chars, 0, 0, 1);
@@ -253,7 +253,7 @@ describe("renderScene over the real desk layout — CR-02 two-character composit
   }
 
   it("never paints a later-row agent's blocked glyph inside the sprite box of the agent seated in front of it", () => {
-    const { first, later, glyphRects } = renderBlockedNineteen();
+    const { first, later, glyphRects } = renderBlockedNine();
 
     // The exact pairing 05-08 broke: same column, one desk row apart.
     expect(later.seatCol).toBe(first.seatCol);
@@ -277,15 +277,16 @@ describe("renderScene over the real desk layout — CR-02 two-character composit
     expect(glyphRects.some((g) => g.y < laterBox.top)).toBe(true);
 
     // Concrete expected geometry, so a silent layout drift is caught too:
-    // desk rows 3 and 6 => sprite boxes y 24..56 and y 72..104, glyph 57..70.
-    expect(firstBox.top).toBe(24);
-    expect(laterBox.top).toBe(72);
-    expect(Math.min(...glyphRects.map((r) => r.y))).toBeGreaterThanOrEqual(57);
-    expect(Math.max(...glyphRects.map((r) => r.y + r.h))).toBeLessThanOrEqual(70);
+    // seat rows 4 and 8 => sprite boxes y 40..72 and y 104..136; the glyph
+    // lies strictly between agent-1's box bottom and agent-9's box top.
+    expect(firstBox).toMatchObject({ top: 40, bottom: 72 });
+    expect(laterBox.top).toBe(104);
+    expect(Math.min(...glyphRects.map((r) => r.y))).toBeGreaterThan(firstBox.bottom);
+    expect(Math.max(...glyphRects.map((r) => r.y + r.h))).toBeLessThan(laterBox.top);
   });
 
   it("keeps the glyph's horizontal extent inside its own character's sprite extent — the property that makes a horizontal clamp unnecessary", () => {
-    const { later, glyphRects } = renderBlockedNineteen();
+    const { later, glyphRects } = renderBlockedNine();
     const laterBox = spriteBox(later);
 
     expect(glyphRects.length).toBeGreaterThan(0);
@@ -388,23 +389,23 @@ describe("renderScene dialogue pass — handoff text reaches the canvas, owner-b
     }
   });
 
-  it("stacks a row-6 owner's box directly above its own glyph slot", async () => {
+  it("stacks a row-8 owner's box directly above its own glyph slot", async () => {
     const { DIALOGUE_BOX_COLOR } = await import("../constants.js");
-    const chars = seatReal(19);
-    const owner = chars[18];
-    expect(owner.seatRow).toBe(6);
+    const chars = seatReal(9);
+    const owner = chars[8];
+    expect(owner.seatRow).toBe(8);
     owner.bubbleText = "Handing off \"Fix login bug\" to agent-2";
 
     const { ctx, rects } = mockCtx();
     renderScene(ctx, chars, 0, 0, 1);
 
     const drawY = ownerDrawY(owner);
-    expect(drawY).toBe(72);
+    expect(drawY).toBe(104);
     const glyphSlotTop = resolveBubbleY(drawY, 13, 1);
     const box = rects.find((r) => r.color.toLowerCase() === DIALOGUE_BOX_COLOR.toLowerCase())!;
     expect(box).toBeDefined();
     expect(box.y).toBe(glyphSlotTop - 2 - 13);
-    expect(box.y).toBe(42);
+    expect(box.y).toBe(74);
     expect(box.y + box.h).toBeLessThanOrEqual(glyphSlotTop);
   });
 
