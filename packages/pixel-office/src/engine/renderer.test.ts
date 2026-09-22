@@ -454,12 +454,28 @@ describe("renderScene dialogue pass — nothing to say, nothing drawn (05-13)", 
 
 type Box = { x: number; y: number; w: number; h: number };
 const overlaps = (a: Box, b: Box): boolean => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+/** Intersects OR merely abuts — what "the tail reaches the speaker" means for
+ *  a 1-px tail whose far edge lands exactly on a standing sprite's foot line. */
+const touches = (a: Box, b: Box): boolean =>
+  a.x <= b.x + b.w && b.x <= a.x + a.w && a.y <= b.y + b.h && b.y <= a.y + a.h;
 const spansX = (b: Box, x: number): boolean => b.x <= x && x <= b.x + b.w;
 /** Sprite box renderScene paints a character into (offset 0, zoom 1). */
 const spriteRect = (ch: Character): Box => ({ x: Math.round(ch.x - SPRITE_W / 2), y: ownerDrawY(ch), w: SPRITE_W, h: SPRITE_H });
 const TILE = 16;
 const FLOOR_LEFT = 16;
 const FLOOR_RIGHT = 304;
+const FLOOR_TOP = 16;
+const FLOOR_BOTTOM = 160;
+/** Every furniture piece's rect in unzoomed map px (offset 0, zoom 1). */
+const furnitureRects = (): Box[] =>
+  FURNITURE.map((f) => ({ x: f.x, y: f.y, w: f.sprite[0].length, h: f.sprite.length }));
+/** The one ink rect lying OUTSIDE the box: the tail. (The four border rects
+ *  sit on the box, so they all overlap it; the tail never does.) */
+function tailOf(ink: RecordedRect[], box: Box): RecordedRect {
+  const outside = ink.filter((r) => !overlaps(r, box));
+  expect(outside, `expected exactly one ink rect outside box ${JSON.stringify(box)}`).toHaveLength(1);
+  return outside[0];
+}
 
 /** Renders one frame and splits the op log: the bubble fill, its text, the ink
  *  rects, and pass 3 (every rect after the last text op is a state glyph). */
@@ -489,72 +505,78 @@ describe("handoff speech bubble (05-28, G-05-4 / G-05-1b)", () => {
     _resetForTests();
   });
 
-  it("tracer: the requested line is a bubble under the sender's feet spanning sender and receiver, tail at the sender", async () => {
-    const { DIALOGUE_TAIL_PX } = await import("../constants.js");
+  // 05-33 replaced 05-28's "layout guard: every speaker row's bubble band is
+  // clear" with the per-frame candidate scorer and the sweeps below: there is
+  // no fixed band under the seat rows any more, so its premise is gone.
+
+  it("requested line, clear office: one bubble, 5px monospace text in a 9 px box, tail on the sender, clear of furniture and glyphs", async () => {
     const chars = seatReal(3);
     const [sender, , receiver] = chars;
     requestAndWait(sender, receiver);
-    expect(sender.tileRow).toBe(receiver.tileRow);
+    expect(sender.bubbleTextPartnerId).toBe(receiver.id);
 
-    const { fills, ink, texts } = await renderBubbleFrame(chars);
+    const { fills, ink, texts, glyphs } = await renderBubbleFrame(chars);
     expect(fills).toHaveLength(1);
     const box = fills[0];
-    expect(spansX(box, sender.x), `box ${JSON.stringify(box)} misses the sender (${sender.x})`).toBe(true);
-    expect(spansX(box, receiver.x), `box ${JSON.stringify(box)} misses the receiver (${receiver.x})`).toBe(true);
-    expect(box.y).toBeGreaterThanOrEqual(sender.y + DIALOGUE_TAIL_PX);
-    const tail = ink.find((r) => r.y >= sender.y && r.y + r.h <= box.y && spansX(r, sender.x));
-    expect(tail, `no ink tail at x ${sender.x} between y ${sender.y} and ${box.y}`).toBeDefined();
+    const where = `box ${JSON.stringify(box)}`;
     expect(texts).toHaveLength(1);
     expect(texts[0].text).toBe(sender.bubbleText);
     expect(texts[0].font).toBe("5px monospace");
     expect(box.h).toBe(9);
     expect(overlaps({ x: texts[0].x, y: texts[0].y, w: 1, h: 1 }, box)).toBe(true);
+    // Nothing here asserts WHICH row the sender stands on: 05-34 moves handoff
+    // senders to fixed aisle slots and must not have to touch this test.
+    expect(touches(tailOf(ink, box), spriteRect(sender)), `${where}: tail misses the sender`).toBe(true);
+    for (const f of furnitureRects()) expect(overlaps(f, box), `${where} covers furniture ${JSON.stringify(f)}`).toBe(false);
+    for (const g of glyphs) expect(overlaps(g, box), `${where} is under glyph ${JSON.stringify(g)}`).toBe(false);
   });
 
-  it("layout guard: every speaker row's bubble band is clear", async () => {
-    const { resolveDialogueBox } = await import("./renderer.js");
-    const { DIALOGUE_BOX_PAD_X_PX: DIALOGUE_PAD } = await import("../constants.js");
-    const positions = [...SEATS, ...STANDING_SPOTS];
-    const speakerRows = [...new Set(positions.map((p) => p.row))];
-    const fullWidthText = FLOOR_RIGHT - FLOOR_LEFT - 2 * (DIALOGUE_PAD + 1);
-    for (const r of speakerRows) {
-      const footY = r * TILE + TILE / 2;
-      const band = resolveDialogueBox(FLOOR_LEFT + TILE / 2, null, footY, fullWidthText, 1, FLOOR_LEFT, FLOOR_RIGHT);
-      expect(band.x).toBe(FLOOR_LEFT);
-      expect(band.x + band.w).toBe(FLOOR_RIGHT);
-      // The first all-wall row below the speaker row ends the floor.
-      const wallRow = OFFICE_TILE_MAP.findIndex((line, i) => i > r && line.every((t) => t === TileType.WALL));
-      expect(band.y + band.h, `row ${r} band runs into the bottom wall`).toBeLessThanOrEqual(wallRow * TILE);
-      for (const p of positions.filter((q) => q.row !== r)) {
-        const poses: Character[] = [];
-        const standing = createCharacter("guard", p.col, p.row);
-        standing.state = CharacterState.IDLE;
-        standing.bubbleType = "blocked";
-        poses.push(standing);
-        if (SEATS.some((s) => s.col === p.col && s.row === p.row)) {
-          const seated = createCharacter("guard", p.col, p.row);
-          seated.state = CharacterState.TYPE;
-          seated.bubbleType = "blocked";
-          expect(isOwnSeat(seated)).toBe(true);
-          poses.push(seated);
-        }
-        for (const ch of poses) {
-          const { ctx, rects } = mockCtx();
-          renderScene(ctx, [ch], 0, 0, 1);
-          for (const rect of rects) {
-            expect(
-              overlaps(rect, band),
-              `row ${r} speaker band ${JSON.stringify(band)} is hit by the ${ch.state} agent at (${p.col},${p.row}): ${JSON.stringify(rect)}`,
-            ).toBe(false);
-          }
-        }
-      }
-    }
-  });
-
-  it("attributed at every position: all 16 seats and 4 standing spots as receiver", async () => {
+  it("every home, full office: in the floor, off every glyph, tail on the speaker, desk-free whenever a valid candidate is", async () => {
+    const { lastDialoguePlacements } = await import("./renderer.js");
     const positions = [...SEATS, ...STANDING_SPOTS];
     expect(positions).toHaveLength(20);
+    let deskAvoided = 0;
+    let furnitureAvoided = 0;
+
+    const check = async (chars: Character[], label: string, speaker: Character) => {
+      const { fills, ink, glyphs } = await renderBubbleFrame(chars);
+      const where = `${label}: speaker ${speaker.id} at (${speaker.tileCol},${speaker.tileRow})`;
+      expect(fills, where).toHaveLength(1);
+      const box = fills[0];
+      expect(box.x, where).toBeGreaterThanOrEqual(FLOOR_LEFT);
+      expect(box.x + box.w, where).toBeLessThanOrEqual(FLOOR_RIGHT);
+      expect(box.y, where).toBeGreaterThanOrEqual(FLOOR_TOP);
+      expect(box.y + box.h, where).toBeLessThanOrEqual(FLOOR_BOTTOM);
+      expect(glyphs.length, where).toBeGreaterThan(0);
+      for (const g of glyphs) expect(overlaps(g, box), `${where}: glyph ${JSON.stringify(g)} under ${JSON.stringify(box)}`).toBe(false);
+      expect(touches(tailOf(ink, box), spriteRect(speaker)), `${where}: tail misses the speaker`).toBe(true);
+
+      // The scorer's own record for this frame, so the ranking is checked
+      // against the candidates it actually considered.
+      const placements = lastDialoguePlacements();
+      expect(placements, where).toHaveLength(1);
+      const pl = placements[0];
+      expect(pl.speakerId, where).toBe(speaker.id);
+      expect({ x: pl.x, y: pl.y, w: pl.w, h: pl.h }, `${where}: recorded box != drawn fill`).toEqual({
+        x: box.x,
+        y: box.y,
+        w: box.w,
+        h: box.h,
+      });
+      const chosen = pl.candidates.find((c) => c.kind === pl.kind)!;
+      expect(chosen, where).toBeDefined();
+      expect(chosen.valid, `${where}: chose an invalid candidate (${pl.kind})`).toBe(true);
+      const valid = pl.candidates.filter((c) => c.valid);
+      if (valid.some((c) => c.deskArea === 0)) {
+        expect(chosen.deskArea, `${where}: a desk-free valid candidate existed, chose ${pl.kind}`).toBe(0);
+        if (valid.some((c) => c.deskArea > 0)) deskAvoided++;
+      }
+      if (valid.some((c) => c.furnitureArea === 0)) {
+        expect(chosen.furnitureArea, `${where}: a furniture-free valid candidate existed, chose ${pl.kind}`).toBe(0);
+        if (valid.some((c) => c.furnitureArea > 0)) furnitureAvoided++;
+      }
+    };
+
     for (const p of positions) {
       _resetForTests();
       const chars = seatReal(20);
@@ -562,21 +584,16 @@ describe("handoff speech bubble (05-28, G-05-4 / G-05-1b)", () => {
       const sender = chars.find((c) => c.seatRow !== p.row)!;
       for (const c of chars) if (c !== sender && c !== receiver) upsertCharacterFromAgent(c.id, AgentStatus.BLOCKED);
       requestAndWait(sender, receiver);
+      await check(chars, `requested -> (${p.col},${p.row})`, sender);
 
-      const where = `receiver (${p.col},${p.row}), sender at (${sender.tileCol},${sender.tileRow})`;
-      const { fills, glyphs } = await renderBubbleFrame(chars);
-      expect(fills, where).toHaveLength(1);
-      const box = fills[0];
-      expect(box.x, where).toBeGreaterThanOrEqual(FLOOR_LEFT);
-      expect(box.x + box.w, where).toBeLessThanOrEqual(FLOOR_RIGHT);
-      expect(spansX(box, sender.x) && spansX(box, receiver.x), `${where}: box ${JSON.stringify(box)}`).toBe(true);
-      expect(glyphs.length, where).toBeGreaterThan(0);
-      for (const g of glyphs) expect(overlaps(g, box), `${where}: glyph ${JSON.stringify(g)} under box ${JSON.stringify(box)}`).toBe(false);
-      for (const c of chars) {
-        if (c === sender || c === receiver || c.tileRow === sender.tileRow) continue;
-        expect(overlaps(spriteRect(c), box), `${where}: ${c.id} at (${c.tileCol},${c.tileRow}) under box ${JSON.stringify(box)}`).toBe(false);
-      }
+      handleHandoffEvent(handoffCompleted("8fa85f64-5717-4562-b3fc-2c963f66afa6", "task-1", receiver.id));
+      expect(receiver.bubbleText, `accepted -> (${p.col},${p.row})`).toContain("accepts");
+      await check(chars, `accepted -> (${p.col},${p.row})`, receiver);
     }
+
+    // Non-vacuity: the ranking was actually exercised, not trivially satisfied.
+    expect(deskAvoided, "no scene had a desk-covering valid candidate to avoid").toBeGreaterThan(0);
+    expect(furnitureAvoided, "no scene had a furniture-covering valid candidate to avoid").toBeGreaterThan(0);
   });
 
   it("the accepted bubble belongs to the receiver alone", async () => {
@@ -592,43 +609,231 @@ describe("handoff speech bubble (05-28, G-05-4 / G-05-1b)", () => {
     const { fills, ink } = await renderBubbleFrame(chars);
     expect(fills).toHaveLength(1);
     const box = fills[0];
-    expect(spansX(box, receiver.x)).toBe(true);
-    const tail = ink.find((r) => r.y >= receiver.y && r.y + r.h <= box.y && spansX(r, receiver.x));
-    expect(tail, `no tail at the receiver's centre ${receiver.x}`).toBeDefined();
+    expect(touches(tailOf(ink, box), spriteRect(receiver)), `tail misses the receiver (${receiver.x})`).toBe(true);
   });
 
-  it("resolveDialogueBox: centred on the pair, clamped only to the floor interior, x3 at zoom 3", async () => {
+});
+
+// ── 05-33 (G-05-P1): ordered candidate placement scored against obstacles ──
+// The new resolveDialogueBox signature is reached with await import(...) so a
+// RED run is a failing assertion, not an ESM link crash (05-10 precedent).
+
+const NO_OBSTACLES = { glyphs: [], desks: [], furniture: [], characters: [] };
+/** Speaker geometry for a standing 16x32 frame whose head ink starts 3 rows in. */
+const speakerAt = (centerX: number, footY: number, zoom: number) => ({
+  centerX,
+  footY,
+  headTop: footY - (SPRITE_H - 3) * zoom,
+  left: centerX - (SPRITE_W / 2) * zoom,
+  right: centerX + (SPRITE_W / 2) * zoom,
+});
+/** The sprite box that speaker geometry describes. */
+const speakerRect = (s: ReturnType<typeof speakerAt>, zoom: number): Box => ({
+  x: s.left,
+  y: s.headTop - 3 * zoom,
+  w: s.right - s.left,
+  h: s.footY - (s.headTop - 3 * zoom),
+});
+
+describe("resolveDialogueBox candidate scoring (05-33, G-05-P1)", () => {
+  it("with no obstacles it hangs below: centred on the pair, clamped to the floor interior, x3 at zoom 3", async () => {
     const { resolveDialogueBox } = await import("./renderer.js");
     const { DIALOGUE_BOX_HEIGHT_PX, DIALOGUE_TAIL_PX, DIALOGUE_BOX_PAD_X_PX } = await import("../constants.js");
     const cx = (col: number) => col * TILE + TILE / 2;
     for (const zoom of [1, 3]) {
       const ox = 7; // any offsetX: the floor edges carry it
-      const left = ox + TILE * zoom;
-      const right = ox + 19 * TILE * zoom;
+      const floor = { left: ox + TILE * zoom, top: TILE * zoom, right: ox + 19 * TILE * zoom, bottom: 160 * zoom };
       const text = 60 * zoom;
       const w = text + 2 * (DIALOGUE_BOX_PAD_X_PX + 1) * zoom;
       const at = (col: number) => ox + cx(col) * zoom;
-      // Room to spare: centred on the pair's midpoint, under the feet, tail at the speaker.
-      const mid = resolveDialogueBox(at(8), at(10), 72 * zoom, text, zoom, left, right);
-      expect(mid).toEqual({
+      const call = (col: number, partner: number | null) =>
+        resolveDialogueBox(speakerAt(at(col), 72 * zoom, zoom), partner, text, zoom, floor, NO_OBSTACLES);
+
+      // Room to spare: candidate 1 wins on index, under the feet, tail at the speaker.
+      const mid = call(8, at(10));
+      expect({ x: mid.x, y: mid.y, w: mid.w, h: mid.h }).toEqual({
         x: Math.round((at(8) + at(10)) / 2 - w / 2),
         y: 72 * zoom + DIALOGUE_TAIL_PX * zoom,
         w,
         h: DIALOGUE_BOX_HEIGHT_PX * zoom,
-        tailX: at(8),
       });
+      expect(mid.tail).toEqual({ x: Math.round(at(8) - zoom / 2), y: 72 * zoom, w: zoom, h: DIALOGUE_TAIL_PX * zoom });
+      expect(mid.candidates[0]).toMatchObject({ kind: "below", x: mid.x, y: mid.y, valid: true, deskArea: 0 });
+
       // Pair at cols 1-2: clamped to the left floor edge, never x = 0, still containing both.
-      const l = resolveDialogueBox(at(1), at(2), 72 * zoom, text, zoom, left, right);
-      expect(l.x).toBe(left);
+      const l = call(1, at(2));
+      expect(l.x).toBe(floor.left);
+      expect(l.x).toBeGreaterThan(0);
       expect(spansX(l, at(1)) && spansX(l, at(2))).toBe(true);
       // Pair at cols 16-17: clamped to the right floor edge.
-      const r = resolveDialogueBox(at(17), at(16), 72 * zoom, text, zoom, left, right);
-      expect(r.x + r.w).toBe(right);
+      const r = call(17, at(16));
+      expect(r.x + r.w).toBe(floor.right);
       expect(spansX(r, at(16)) && spansX(r, at(17))).toBe(true);
-      expect(r.tailX).toBe(at(17));
+      expect(r.tail.x).toBe(Math.round(at(17) - zoom / 2));
       // No partner: centred on the speaker alone.
-      expect(resolveDialogueBox(at(8), null, 72 * zoom, text, zoom, left, right).x).toBe(Math.round(at(8) - w / 2));
+      expect(call(8, null).x).toBe(Math.round(at(8) - w / 2));
     }
+  });
+
+  // One fixed frame of reference for the scoring cases: zoom 1, offset 0, a
+  // speaker at col 8 whose four candidates all start in-bounds.
+  const FLOOR = { left: FLOOR_LEFT, top: FLOOR_TOP, right: FLOOR_RIGHT, bottom: FLOOR_BOTTOM };
+  const SP = speakerAt(136, 72, 1); // headTop 43, left 128, right 144
+  const TEXT = 60;
+  const BELOW_Y = 74;
+  const ABOVE_Y = 18; // 43 - (13 + 1) - 2 - 9
+  const SIDE_Y = 43;
+  const resolve = async (obstacles: Partial<typeof NO_OBSTACLES>, floor = FLOOR, speaker = SP) => {
+    const { resolveDialogueBox } = await import("./renderer.js");
+    return resolveDialogueBox(speaker, null, TEXT, 1, floor, { ...NO_OBSTACLES, ...obstacles });
+  };
+
+  it("a desk under 'below' moves the bubble 'above', with zero desk overlap", async () => {
+    const desk = { x: 100, y: 76, w: 40, h: 10 };
+    const p = await resolve({ desks: [desk], furniture: [desk] });
+    expect(p.y).toBe(ABOVE_Y);
+    expect(p.candidates[0].deskArea).toBeGreaterThan(0);
+    expect(p.candidates[1].deskArea).toBe(0);
+  });
+
+  it("when every candidate covers a desk, the least desk area wins", async () => {
+    const desks = [
+      { x: 103, y: BELOW_Y, w: 20, h: 10 }, // below: 200
+      { x: 103, y: ABOVE_Y, w: 30, h: 9 }, //  above: 270
+      { x: 146, y: SIDE_Y, w: 40, h: 9 }, //   right: 360
+      { x: 60, y: SIDE_Y, w: 5, h: 9 }, //     left:   45  <- least
+    ];
+    const p = await resolve({ desks, furniture: desks });
+    expect(p.candidates.map((c) => c.deskArea)).toEqual([200, 270, 360, 45]);
+    expect(p.candidates.every((c) => c.valid)).toBe(true);
+    expect(p.candidates[3]).toMatchObject({ kind: "left", x: p.x, y: p.y });
+  });
+
+  it("a candidate intersecting a glyph is never returned: glyphs on below and above force 'right'", async () => {
+    const glyphs = [
+      { x: 110, y: BELOW_Y + 2, w: 10, h: 6 },
+      { x: 110, y: ABOVE_Y + 2, w: 10, h: 6 },
+    ];
+    const p = await resolve({ glyphs });
+    expect(p.candidates.map((c) => c.valid)).toEqual([false, false, true, true]);
+    expect(p).toMatchObject({ x: p.candidates[2].x, y: SIDE_Y });
+    // ...and 'left' when 'right' would leave the floor.
+    const narrow = await resolve({ glyphs }, { ...FLOOR, right: 200 });
+    expect(narrow.candidates[2].valid).toBe(false);
+    expect(narrow).toMatchObject({ x: narrow.candidates[3].x, y: SIDE_Y });
+  });
+
+  it("an 'above' candidate that would start above the floor top is never returned", async () => {
+    const high = speakerAt(136, 45, 1); // headTop 16 => above y -9
+    const p = await resolve({}, FLOOR, high);
+    expect(p.candidates[1].y).toBeLessThan(FLOOR_TOP);
+    expect(p.candidates[1].valid).toBe(false);
+    expect(p.y).toBe(47); // below, candidate 1
+  });
+
+  it("a desk outranks everything soft: a 4 px desk under 'below' loses to a full character or plant over 'above'", async () => {
+    const desk = { x: 103, y: BELOW_Y, w: 2, h: 2 }; // area 4
+    const wide = { x: 103, y: ABOVE_Y, w: 66, h: 9 }; // area 594
+    const vsCharacter = await resolve({ desks: [desk], furniture: [desk], characters: [wide] });
+    expect(vsCharacter.candidates[0].deskArea).toBe(4);
+    expect(vsCharacter.candidates[1].characterArea).toBe(594);
+    expect(vsCharacter.y).toBe(ABOVE_Y);
+    const vsFurniture = await resolve({ desks: [desk], furniture: [desk, wide] });
+    expect(vsFurniture.candidates[1].furnitureArea).toBe(594);
+    expect(vsFurniture.y).toBe(ABOVE_Y);
+  });
+
+  it("non-desk furniture outranks characters: a plant under 'below' loses to a character over 'above'", async () => {
+    const plant = { x: 103, y: BELOW_Y, w: 30, h: 8 };
+    const character = { x: 103, y: ABOVE_Y, w: 66, h: 9 };
+    const p = await resolve({ furniture: [plant], characters: [character] });
+    expect(p.candidates[0]).toMatchObject({ deskArea: 0, furnitureArea: 240 });
+    expect(p.candidates[1]).toMatchObject({ deskArea: 0, furnitureArea: 0, characterArea: 594 });
+    expect(p.y).toBe(ABOVE_Y);
+  });
+
+  it("returns all four candidates in order, and the chosen box is the lowest-keyed valid one", async () => {
+    // Mixed obstacles so the winner is decided by the key, not by index:
+    // below covers a desk, above is invalid (glyph), right covers a plant,
+    // left covers a character only -> left wins.
+    const desk = { x: 103, y: BELOW_Y, w: 10, h: 5 };
+    const p = await resolve({
+      glyphs: [{ x: 110, y: ABOVE_Y + 2, w: 10, h: 6 }],
+      desks: [desk],
+      furniture: [desk, { x: 146, y: SIDE_Y, w: 12, h: 6 }],
+      characters: [{ x: 60, y: SIDE_Y, w: 66, h: 9 }],
+    });
+    expect(p.candidates.map((c) => c.kind)).toEqual(["below", "above", "right", "left"]);
+    for (const c of p.candidates) {
+      expect(typeof c.valid).toBe("boolean");
+      for (const key of ["deskArea", "furnitureArea", "characterArea"] as const) expect(typeof c[key]).toBe("number");
+    }
+    const cmp = (a: (typeof p.candidates)[number], b: (typeof p.candidates)[number]) =>
+      a.deskArea - b.deskArea || a.furnitureArea - b.furnitureArea || a.characterArea - b.characterArea;
+    const best = p.candidates.filter((c) => c.valid).sort(cmp)[0];
+    expect(best.kind).toBe("left");
+    expect({ x: p.x, y: p.y, w: p.w, h: p.h }).toEqual({ x: best.x, y: best.y, w: best.w, h: best.h });
+  });
+
+  it("each candidate's tail is 1 px across, shares an edge with its box, and reaches the speaker", async () => {
+    for (const zoom of [1, 3]) {
+      const sp = speakerAt(136 * zoom, 72 * zoom, zoom);
+      const floor = { left: TILE * zoom, top: TILE * zoom, right: 19 * TILE * zoom, bottom: 160 * zoom };
+      const { resolveDialogueBox } = await import("./renderer.js");
+      const p = resolveDialogueBox(sp, null, 60 * zoom, zoom, floor, NO_OBSTACLES);
+      const [below, above, right, left] = p.candidates;
+      const sprite = speakerRect(sp, zoom);
+
+      expect(below.tail).toEqual({ x: Math.round(sp.centerX - zoom / 2), y: sp.footY, w: zoom, h: below.y - sp.footY });
+      expect(above.tail).toEqual({
+        x: Math.round(sp.centerX - zoom / 2),
+        y: above.y + above.h,
+        w: zoom,
+        h: sp.headTop - (above.y + above.h),
+      });
+      expect(right.tail).toMatchObject({ x: sp.right, h: zoom });
+      expect(right.tail.x + right.tail.w).toBe(right.x);
+      expect(left.tail).toMatchObject({ h: zoom });
+      expect(left.tail.x + left.tail.w).toBe(sp.left);
+      expect(left.tail.x).toBe(left.x + left.w);
+
+      for (const c of p.candidates) {
+        expect(c.tail.w, `${c.kind} tail width`).toBeGreaterThan(0);
+        expect(c.tail.h, `${c.kind} tail height`).toBeGreaterThan(0);
+        expect(overlaps(c.tail, c), `${c.kind} tail overlaps its own box`).toBe(false);
+        expect(touches(c.tail, c), `${c.kind} tail does not share an edge with its box`).toBe(true);
+        expect(touches(c.tail, sprite), `${c.kind} tail does not reach the speaker`).toBe(true);
+      }
+    }
+  });
+});
+
+describe("handoff bubble placement over the real office (05-33, G-05-P1)", () => {
+  beforeEach(() => {
+    _resetForTests();
+  });
+
+  it("tracer: the accepted line of a seated agent clears its desk, every glyph and the floor edge, tail on the receiver", async () => {
+    const chars = seatReal(3);
+    const [sender, , receiver] = chars;
+    requestAndWait(sender, receiver);
+    handleHandoffEvent(handoffCompleted("8fa85f64-5717-4562-b3fc-2c963f66afa6", "task-1", receiver.id));
+    expect(receiver.bubbleText).toContain("accepts");
+    expect(sender.bubbleText ?? null).toBeNull();
+
+    const { fills, ink, glyphs } = await renderBubbleFrame(chars);
+    expect(fills).toHaveLength(1);
+    const box = fills[0];
+    const where = `box ${JSON.stringify(box)}`;
+    expect(box.x, where).toBeGreaterThanOrEqual(FLOOR_LEFT);
+    expect(box.x + box.w, where).toBeLessThanOrEqual(FLOOR_RIGHT);
+    expect(box.y, where).toBeGreaterThanOrEqual(FLOOR_TOP);
+    expect(box.y + box.h, where).toBeLessThanOrEqual(FLOOR_BOTTOM);
+    for (const f of furnitureRects()) {
+      expect(overlaps(f, box), `${where} covers furniture ${JSON.stringify(f)}`).toBe(false);
+    }
+    for (const g of glyphs) expect(overlaps(g, box), `${where} is under glyph ${JSON.stringify(g)}`).toBe(false);
+    expect(touches(tailOf(ink, box), spriteRect(receiver)), `${where}: tail misses the receiver`).toBe(true);
   });
 });
 
