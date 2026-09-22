@@ -4,8 +4,8 @@ import type { CompanyEvent } from "event-schema";
 import { renderFrame, renderScene, resolveBubbleY } from "./renderer.js";
 import { FURNITURE, FURNITURE_BLOCKED_TILES, OFFICE_TILE_MAP, SEATS, STANDING_SPOTS, isOwnSeat } from "../layout/officeLayout.js";
 import officeSprites from "../sprites/office-metrocity.json" with { type: "json" };
-import { WALL_COLOR } from "../constants.js";
-import { createCharacter, getCharacterSprite, updateCharacter } from "./characters.js";
+import { CHARACTER_SITTING_OFFSET_PX, WALL_COLOR } from "../constants.js";
+import { createCharacter, getCharacterSprite, updateCharacter, walkCharacterTo } from "./characters.js";
 import { getCharacterSprites } from "../sprites/spriteData.js";
 import { BUBBLE_SPRITES } from "../sprites/bubbleSprites.js";
 import {
@@ -17,7 +17,7 @@ import {
   _resetForTests,
 } from "../index.js";
 import type { Character, SpriteData } from "../types.js";
-import { CharacterState, TileType } from "../types.js";
+import { CharacterState, Direction, TileType } from "../types.js";
 
 interface RecordedRect {
   color: string;
@@ -680,5 +680,57 @@ describe("sprite cache (05-24, T-05-24-01)", () => {
       if (prev === undefined) delete g.OffscreenCanvas;
       else g.OffscreenCanvas = prev;
     }
+  });
+});
+
+describe("seated only at the own desk (05-25, G-05-1e)", () => {
+  /** Top y of a lone character's painted sprite at zoom 1. */
+  const topY = (ch: Character) => {
+    const { ctx, rects } = mockCtx();
+    renderScene(ctx, [ch], 0, 0, 1);
+    return Math.min(...rects.map((r) => r.y));
+  };
+  const typer = (col: number, row: number) => {
+    const ch = createCharacter("t", col, row);
+    ch.state = CharacterState.TYPE;
+    return ch;
+  };
+  const isTypingFrame = (ch: Character) =>
+    getCharacterSprite(ch, getCharacterSprites(ch.hueShift)) === getCharacterSprites(ch.hueShift).typing[ch.dir][ch.frame % 2];
+
+  it("a TYPE agent on its own seat is drawn seated", () => {
+    const seated = typer(SEATS[0].col, SEATS[0].row);
+    expect(isOwnSeat(seated)).toBe(true);
+    const off = typer(SEATS[0].col, SEATS[0].row);
+    off.seatCol = SEATS[1].col; // same tile and frame, but not its own seat
+    expect(topY(seated) - topY(off)).toBe(CHARACTER_SITTING_OFFSET_PX);
+    expect(isTypingFrame(seated)).toBe(true);
+  });
+
+  it("a TYPE agent off its seat keeps typing but is not lowered (D-01)", () => {
+    const seated = typer(SEATS[0].col, SEATS[0].row);
+    const visiting = typer(SEATS[0].col, SEATS[0].row);
+    visiting.seatCol = SEATS[1].col;
+    const standing = typer(STANDING_SPOTS[0].col, STANDING_SPOTS[0].row);
+    expect(STANDING_SPOTS[0].row).toBe(SEATS[0].row);
+    for (const ch of [visiting, standing]) {
+      expect(isOwnSeat(ch)).toBe(false);
+      expect(topY(ch)).toBe(topY(seated) - CHARACTER_SITTING_OFFSET_PX);
+      expect(isTypingFrame(ch)).toBe(true);
+    }
+  });
+
+  it("a walk that ends at home faces down", () => {
+    const blocked = new Set(FURNITURE_BLOCKED_TILES);
+    const walk = (ch: Character, col: number, row: number) => {
+      walkCharacterTo(ch, col, row, OFFICE_TILE_MAP, blocked);
+      for (let i = 0; i < 600 && ch.state === CharacterState.WALK; i++) updateCharacter(ch, 1 / 60);
+      expect(ch.state).not.toBe(CharacterState.WALK);
+    };
+    const ch = createCharacter("w", SEATS[0].col, SEATS[0].row);
+    walk(ch, SEATS[0].col + 1, SEATS[0].row);
+    expect(ch.dir).toBe(Direction.RIGHT); // away from home: keeps its walking direction
+    walk(ch, SEATS[0].col, SEATS[0].row);
+    expect(ch.dir).toBe(Direction.DOWN);
   });
 });
