@@ -24,6 +24,10 @@ interface TaskRecord {
   // never reset — this is the one field that reflects "is there something
   // to stop right now." The field is shared but its writer is per-
   // invocation, so only the invocation that owns `currentRun` may clear it.
+  // pauseTask/cancelTask claim a fresh token, so after them it stays true
+  // with nothing running; the next resumeTask/sendMessage then runs one
+  // graceful stop against the already-settled runPromise, which returns true
+  // immediately — acceptable (05-18).
   inFlight?: boolean;
   // Ownership token of the invocation that currently owns this record (a
   // fresh object per runQuery call). Per-invocation code compares against it
@@ -395,6 +399,10 @@ export function createClaudeCodeRuntime(options: {
       if (!record || !record.controller || TERMINAL_STATUSES.includes(record.status)) {
         throw new Error("ClaudeCodeRuntime.pauseTask: task is not running");
       }
+      // Claim a fresh token: any runQuery still waiting in its preemption
+      // gives up, and the running invocation's late messages and teardown
+      // stop writing (05-VERIFICATION.md gap 2 / review CR-01).
+      record.currentRun = {};
       const exitedCleanly = await attemptGracefulStop(record);
       if (!exitedCleanly) record.controller.abort();
       // The session_id used for a later resume is whatever was captured
@@ -420,6 +428,10 @@ export function createClaudeCodeRuntime(options: {
       if (!record || !record.controller || TERMINAL_STATUSES.includes(record.status)) {
         throw new Error("ClaudeCodeRuntime.cancelTask: task is not running");
       }
+      // Claim a fresh token: any runQuery still waiting in its preemption
+      // gives up, and the running invocation's late messages and teardown
+      // stop writing (05-VERIFICATION.md gap 2 / review CR-01).
+      record.currentRun = {};
       // D-03: graceful stop first; if the query() call has not exited
       // within the bounded grace period, hard-abort to guarantee
       // termination. Status becomes "cancelled" either way.

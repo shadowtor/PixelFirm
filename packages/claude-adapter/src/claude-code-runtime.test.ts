@@ -358,6 +358,9 @@ describe("ClaudeCodeRuntime.cancelTask / watchdog integration", () => {
 describe("ClaudeCodeRuntime gsd role-change poll (an observation, never a handoff)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks keeps queued mockResolvedValueOnce values; Test 5 leaves one
+    // behind (its cancel no longer ticks the poll during the grace period, 05-18).
+    (observeGsdState as unknown as Mock).mockReset();
     vi.useFakeTimers();
   });
 
