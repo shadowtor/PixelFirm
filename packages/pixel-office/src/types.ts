@@ -136,7 +136,8 @@ export interface Character {
   name?: string;
   /** Tooltip/label text attached to the current bubble overlay, if any — set
    *  by handoff-choreography.ts's deterministic dialogue templates (05-04,
-   *  HANDOFF-02). Carries data only: actual bubble/tooltip *rendering* is
-   *  still unimplemented in engine/renderer.ts (05-02's documented gap). */
+   *  HANDOFF-02). Drawn by engine/renderer.ts's renderScene dialogue pass in
+   *  an owner-bound box beneath state glyphs (05-13). Carries only strings
+   *  produced by resolveHandoffDialogue (length-capped). */
   bubbleText?: string | null;
 }

@@ -2,18 +2,21 @@
 // commit 3537e140c2094761beae748592aeb92ece8edfdd (main, fetched 2026-09-21)
 // Forked under MIT — see packages/pixel-office/LICENSE
 //
-// Trimmed to the tile-grid + character draw calls 05-01 actually needs.
+// Trimmed to the tile-grid + character draw calls this package needs.
 // Dropped from the fork's original ~1050-line renderer.ts: furniture/wall/
 // carpet/area/pet layers, the floor-sprite-PNG pipeline (getColorizedFloor
 // Sprite/hasFloorSprites — no asset-loading pipeline exists in this repo),
-// the matrix spawn/despawn effect, speech-bubble rendering (no bubble sprite
-// data forked yet — 05-02 scope), every VS-Code-editor-only overlay (ghost
-// preview, selection highlight, delete/rotate buttons, grid overlay, area
-// labels), and the offscreen sprite-cache module (spriteCache.ts — with a
-// single idle character and no PNG assets yet, drawing each SpriteData pixel
+// the matrix spawn/despawn effect, the fork's own speech-bubble renderer
+// (replaced by this repo's state-glyph and handoff-dialogue passes below),
+// every VS-Code-editor-only overlay (ghost preview, selection highlight,
+// delete/rotate buttons, grid overlay, area labels), and the offscreen
+// sprite-cache module (spriteCache.ts — drawing each SpriteData pixel
 // directly via fillRect is simpler and correct at this scale). Re-add the
 // relevant layer here (not a fresh guess) once a later plan actually needs
-// furniture/carpets/areas/pets/bubbles.
+// furniture/carpets/areas/pets.
+//
+// renderScene draws three ordered passes over one z-sorted layout list:
+// (1) base sprites, (2) handoff dialogue boxes, (3) state glyphs.
 
 import {
   BUBBLE_ICON_GAP_PX,
@@ -198,13 +201,16 @@ export function renderScene(
   // comment claimed the opposite, which is exactly the ordering a future
   // reader reasons about when chasing an overlay-placement bug.)
   layouts.sort((a, b) => a.zY - b.zY);
-  for (const l of layouts) {
-    drawSpriteData(ctx, l.spriteData, l.drawX, l.drawY, zoom);
-    // D-03 icon overlay (05-07): drawn immediately after its own character's
-    // base sprite, so it can never z-sort behind a character in front of it.
-    drawGlyph(ctx, l, zoom);
-  }
+  // Pass 1: base sprites only.
+  for (const l of layouts) drawSpriteData(ctx, l.spriteData, l.drawX, l.drawY, zoom);
+  // Pass 2: handoff dialogue (05-13).
   for (const l of layouts) drawDialogue(ctx, l, offsetX, zoom, canvasWidth);
+  // Pass 3: state glyphs (OFFICE-03, D-03) are the TOP layer, drawn after
+  // every sprite and every dialogue box, so a transient handoff line can never
+  // hide a blocked/waiting/failed signal. A glyph now sorts behind nothing at
+  // all — which keeps 05-07's guarantee (never behind a character in front of
+  // it) and strengthens it.
+  for (const l of layouts) drawGlyph(ctx, l, zoom);
 }
 
 /** @internal */

@@ -62,15 +62,19 @@ function mockCtx(): { ctx: CanvasRenderingContext2D; rects: RecordedRect[]; text
   return { ctx: ctx as unknown as CanvasRenderingContext2D, rects, texts, ops };
 }
 
-/** Colours used by a bubble/badge glyph and by NO character base sprite pixel. */
-function bubbleOnlyColors(ch: Character): Set<string> {
+/** Colours used by a bubble/badge glyph and by NO base sprite pixel of any
+ *  given character (pass every character in the scene: neighbours with other
+ *  identity hues paint colours the owner's own sprite does not). */
+function bubbleOnlyColors(...chars: Character[]): Set<string> {
   const baseColors = new Set<string>();
-  const baseSprite = getCharacterSprite(ch, getCharacterSprites(ch.hueShift));
-  for (const row of baseSprite) for (const cell of row) if (cell) baseColors.add(cell);
+  for (const ch of chars) {
+    const baseSprite = getCharacterSprite(ch, getCharacterSprites(ch.hueShift));
+    for (const row of baseSprite) for (const cell of row) if (cell) baseColors.add(cell.toLowerCase());
+  }
 
   const bubbleColors = new Set<string>();
   for (const sprite of Object.values(BUBBLE_SPRITES)) {
-    for (const row of sprite) for (const cell of row) if (cell && !baseColors.has(cell)) bubbleColors.add(cell);
+    for (const row of sprite) for (const cell of row) if (cell && !baseColors.has(cell.toLowerCase())) bubbleColors.add(cell.toLowerCase());
   }
   return bubbleColors;
 }
@@ -452,7 +456,7 @@ describe("renderScene pass order — state glyphs are the top layer (05-13)", ()
     expect(box!.x).toBeLessThanOrEqual(middle.x - 6);
     expect(box!.x + box!.w).toBeGreaterThanOrEqual(middle.x + 6);
 
-    const glyphColors = bubbleOnlyColors(middle);
+    const glyphColors = bubbleOnlyColors(...chars);
     const glyphIdx = ops.map((op, i) => (op.kind === "rect" && glyphColors.has(op.color.toLowerCase()) ? i : -1)).filter((i) => i >= 0);
     expect(glyphIdx.length).toBeGreaterThan(0);
     const lastBox = lastIndex(ops, isBox);
@@ -477,7 +481,7 @@ describe("renderScene pass order — state glyphs are the top layer (05-13)", ()
     const { ctx, ops } = mockCtx();
     renderScene(ctx, [sender, receiver], 0, 0, 1);
 
-    const glyphColors = bubbleOnlyColors(sender);
+    const glyphColors = bubbleOnlyColors(sender, receiver);
     const firstGlyph = ops.findIndex((op) => op.kind === "rect" && glyphColors.has(op.color.toLowerCase()));
     const lastBox = lastIndex(ops, (op) => op.kind === "rect" && op.color.toLowerCase() === DIALOGUE_BOX_COLOR.toLowerCase());
     expect(firstGlyph).toBeGreaterThanOrEqual(0);
