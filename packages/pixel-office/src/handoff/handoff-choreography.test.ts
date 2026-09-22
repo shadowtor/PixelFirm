@@ -320,4 +320,81 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     expect(a.bubbleText).toBeNull();
     expect(b.bubbleText).toBeNull();
   });
+
+  it("b: sender OFFLINE mid-return clears the receiver's line at the next tick; a re-seated sender carries no handoff", () => {
+    const { b } = toReturningMidWalk();
+    upsertCharacterFromAgent("agent-a", AgentStatus.OFFLINE);
+    run(0.1);
+    expect(b.bubbleText).toBeNull();
+    upsertCharacterFromAgent("agent-b", AgentStatus.CODING);
+    run(0.1);
+    expect(b.bubbleText).toBeNull();
+
+    upsertCharacterFromAgent("agent-a", AgentStatus.IDLE);
+    run(1);
+    const a = getCharacter("agent-a")!;
+    expectHomeIdle(a);
+    expect(a.bubbleText ?? null).toBeNull();
+    expect(a.bubbleType).not.toBe("handoff-task");
+  });
+
+  it("b2: sender OFFLINE mid-walk to the receiver retires the record; a re-seated sender is never shown handing off", () => {
+    seatAll();
+    const b = getCharacter("agent-b")!;
+    handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+    run(0.2);
+    upsertCharacterFromAgent("agent-a", AgentStatus.OFFLINE);
+    run(0.1);
+    upsertCharacterFromAgent("agent-a", AgentStatus.IDLE);
+    run(1);
+    const a = getCharacter("agent-a")!;
+    expect(a.bubbleType).not.toBe("handoff-task");
+    expect(a.bubbleText ?? null).toBeNull();
+
+    handleHandoffEvent(completedEvent("task-1", "agent-b"));
+    expect(b.state).not.toBe(CharacterState.TYPE);
+  });
+
+  it("c1: a new request for the same task while RETURNING_TO_DESK retires the old record's accepted line", () => {
+    const { a, b } = toReturningMidWalk();
+    handleHandoffEvent(requestedEvent("task-1", "agent-c", "agent-b", NEW_REQUEST_ID));
+    expect(b.bubbleText).toBeNull();
+    run(5);
+    expectHomeIdle(a);
+  });
+
+  it("c2: a new request from a different sender while ICON_VISIBLE sends the old sender home clean", () => {
+    const { a, b } = toIconVisible();
+    handleHandoffEvent(requestedEvent("task-1", "agent-c", "agent-b", NEW_REQUEST_ID));
+    expect(a.bubbleText).toBeNull();
+    expect(a.bubbleType).toBeNull();
+    run(5);
+    expectHomeIdle(a);
+    const c = getCharacter("agent-c")!;
+    expect(onSeatOf(c, b)).toBe(true);
+    expect(c.bubbleType).toBe("handoff-task");
+  });
+
+  it("c3: a new request from the same sender while ICON_VISIBLE keeps it at the receiver, then completes normally", () => {
+    const { a, b } = toIconVisible();
+    handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b", NEW_REQUEST_ID));
+    run(0.5);
+    expect(onSeatOf(a, b)).toBe(true);
+    expect(a.bubbleType).toBe("handoff-task");
+    expect(a.bubbleText).toContain("Handing off");
+
+    handleHandoffEvent(completedEvent("task-1", "agent-b"));
+    run(5);
+    expectHomeIdle(a);
+    expect(b.bubbleText).toBeNull();
+  });
+
+  it("d: a real status glyph set during the handoff survives completion", () => {
+    const { a } = toIconVisible();
+    upsertCharacterFromAgent("agent-a", AgentStatus.BLOCKED);
+    handleHandoffEvent(completedEvent("task-1", "agent-b"));
+    run(5);
+    expectHomeIdle(a);
+    expect(a.bubbleType).toBe("blocked");
+  });
 });
