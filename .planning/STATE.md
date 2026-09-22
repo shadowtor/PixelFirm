@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 05
-current_phase_name: pixel-office-renderer
+current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-16-PLAN.md
-last_updated: "2026-09-22T04:10:17.134Z"
+stopped_at: Completed 05-17-PLAN.md
+last_updated: "2026-09-22T04:23:30.557Z"
 last_activity: 2026-09-22
 last_activity_desc: Phase 05 execution started
-state_head: 2a888c4fdf384c2578fe97a67d8bd6cf16d11bf7
+state_head: 38859ebd8f823b111ad40beafef65579f627311c
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 33
-  completed_plans: 31
+  completed_plans: 32
   percent: 50
 ---
 
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 
 ## Current Position
 
-Phase: 05 (pixel-office-renderer) — READY TO EXECUTE
-Plan: 16 of 16
+Phase: 05 (Pixel Office Renderer) — EXECUTING
+Plan: 2 of 18
 Status: Ready to execute
 Last activity: 2026-09-22 — Phase 05 execution started
 
@@ -91,6 +91,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P14 | 4 min | 3 tasks | 5 files |
 | Phase 05 P15 | 4 min | 2 tasks | 2 files |
 | Phase 05 P16 | 7 min | 2 tasks | 2 files |
+| Phase 05 P17 | 6min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -177,6 +178,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-14: desks and identity hues derived from seated characters (lowest free desk; hashed hue then next free bucket) — collisions start at the 13th concurrently seated agent
 - [Phase 05]: 05-15: runQuery ownership token (TaskRecord.currentRun + isCurrent()) guards every per-invocation writer; guard sits in the callbacks, not the public requestReview
 - [Phase 05]: 05-16: live-proof harness refuses to run while API/web port is taken (TCP preflight before any reset); servers always spawned, never reused (WR-06)
+- [Phase 05]: 05-17: status pose deferred while a handoff path is pending; frozen holds only the frame, never position
+- [Phase 05]: 05-17: retireHandoff is the single exit for a handoff record (home, vanished sender, replaced record)
 
 ### Pending Todos
 
@@ -205,6 +208,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T02:18:32.643Z
-Stopped at: Completed 05-16-PLAN.md
+Last session: 2026-09-22T04:23:30.403Z
+Stopped at: Completed 05-17-PLAN.md
 Resume file: None
