@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { AgentStatus } from "event-schema";
 import type { CompanyEvent } from "event-schema";
-import { renderScene, resolveBubbleY } from "./renderer.js";
+import { renderFrame, renderScene, resolveBubbleY } from "./renderer.js";
+import { FURNITURE, FURNITURE_BLOCKED_TILES, OFFICE_TILE_MAP, SEATS, STANDING_SPOTS, isOwnSeat } from "../layout/officeLayout.js";
+import officeSprites from "../sprites/office-metrocity.json" with { type: "json" };
+import { WALL_COLOR } from "../constants.js";
 import { createCharacter, getCharacterSprite, updateCharacter } from "./characters.js";
 import { getCharacterSprites } from "../sprites/spriteData.js";
 import { BUBBLE_SPRITES } from "../sprites/bubbleSprites.js";
@@ -14,7 +17,7 @@ import {
   _resetForTests,
 } from "../index.js";
 import type { Character, SpriteData } from "../types.js";
-import { CharacterState } from "../types.js";
+import { CharacterState, TileType } from "../types.js";
 
 interface RecordedRect {
   color: string;
@@ -521,5 +524,104 @@ describe("dialogue colours are unambiguous (05-13 guard)", () => {
       expect(c.toLowerCase()).not.toBe(FALLBACK_FLOOR_COLOR.toLowerCase());
       expect(c.toLowerCase()).not.toBe(WALL_COLOR.toLowerCase());
     }
+  });
+});
+
+describe("furnished office (G-05-1e)", () => {
+  const office = officeSprites.sprites as unknown as Record<string, { data: SpriteData | SpriteData[] }>;
+  const cellKeys = (sprite: SpriteData, x: number, y: number): Set<string> => {
+    const keys = new Set<string>();
+    sprite.forEach((row, r) => row.forEach((c, col) => c && keys.add(`${x + col},${y + r},${c.toLowerCase()}`)));
+    return keys;
+  };
+  const opKey = (op: RecordedOp): string => (op.kind === "rect" ? `${op.x},${op.y},${op.color.toLowerCase()}` : "");
+  /** Rect indices whose cell belongs to `mine` and to none of `others`. */
+  const indicesOf = (ops: RecordedOp[], mine: Set<string>, ...others: Set<string>[]): number[] =>
+    ops.flatMap((op, i) => {
+      const k = opKey(op);
+      return k && mine.has(k) && !others.some((o) => o.has(k)) ? [i] : [];
+    });
+  const charKeys = (ch: Character): Set<string> => {
+    const { ctx, rects } = mockCtx();
+    renderScene(ctx, [ch], 0, 0, 1, 320);
+    return new Set(rects.map((r) => `${r.x},${r.y},${r.color.toLowerCase()}`));
+  };
+
+  it("renderFrame paints MetroCity floor and wall tiles", () => {
+    const { ctx, rects } = mockCtx();
+    renderFrame(ctx, 320, 176, OFFICE_TILE_MAP, [], 1, FURNITURE);
+    const painted = new Set(rects.filter((r) => r.w === 1 && r.h === 1).map((r) => `${r.x},${r.y},${r.color.toLowerCase()}`));
+    const floor = (office.floorTiles.data as SpriteData[])[(1 % 2) * 2 + (1 % 2)];
+    const floorKeys = cellKeys(floor, 16, 16);
+    expect(floorKeys.size).toBe(256);
+    for (const k of floorKeys) expect(painted.has(k), k).toBe(true);
+    for (const k of cellKeys(office.wallTop.data as SpriteData, 80, 0)) expect(painted.has(k), k).toBe(true);
+    const side = rects.filter((r) => r.x === 0 && r.y === 80 && r.w === 16 && r.h === 16);
+    expect(side).toHaveLength(1);
+    expect(side[0].color).toBe(WALL_COLOR);
+  });
+
+  it("every furniture piece is painted at its footprint", () => {
+    const { ctx, rects } = mockCtx();
+    renderFrame(ctx, 320, 176, OFFICE_TILE_MAP, [], 1, FURNITURE);
+    const painted = new Set(rects.map((r) => `${r.x},${r.y},${r.color.toLowerCase()}`));
+    expect(FURNITURE.length).toBe(8 + 16 + 4 + 2);
+    for (const f of FURNITURE) for (const k of cellKeys(f.sprite, f.x, f.y)) expect(painted.has(k), k).toBe(true);
+  });
+
+  it("a desk covers the agent seated behind it, and an agent in the lane in front covers the desk", () => {
+    const seated = createCharacter("seated", 1, 4);
+    const walker = createCharacter("walker", 2, 6, 90);
+    const desk = FURNITURE.find((f) => f.x === 17 && f.sprite === office.desk.data)!;
+    expect(desk).toBeDefined();
+    const deskKeys = cellKeys(desk.sprite, desk.x, desk.y);
+    const aKeys = charKeys(seated);
+    const bKeys = charKeys(walker);
+    const { ctx, ops } = mockCtx();
+    renderScene(ctx, [walker, seated], 0, 0, 1, 320, FURNITURE);
+    const a = indicesOf(ops, aKeys, deskKeys, bKeys);
+    const b = indicesOf(ops, bKeys, deskKeys, aKeys);
+    const d = indicesOf(ops, deskKeys, aKeys, bKeys);
+    expect(a.length && b.length && d.length).toBeTruthy();
+    expect(d[0]).toBeGreaterThan(Math.max(...a));
+    expect(d[0]).toBeLessThan(b[0]);
+  });
+
+  it("wall decor is behind characters", () => {
+    const chars = [createCharacter("x", 4, 1), createCharacter("y", 12, 1, 60)];
+    const charSet = new Set([...charKeys(chars[0]), ...charKeys(chars[1])]);
+    const paintings = FURNITURE.filter((f) => f.sprite === office.painting.data);
+    expect(paintings).toHaveLength(2);
+    const paintKeys = new Set(paintings.flatMap((p) => [...cellKeys(p.sprite, p.x, p.y)]));
+    const { ctx, ops } = mockCtx();
+    renderScene(ctx, chars, 0, 0, 1, 320, FURNITURE);
+    const p = indicesOf(ops, paintKeys, charSet);
+    const c = indicesOf(ops, charSet, paintKeys);
+    expect(p.length && c.length).toBeTruthy();
+    expect(Math.max(...p)).toBeLessThan(Math.min(...c));
+  });
+
+  it("the layout's seat model is well-formed", () => {
+    const isFloor = (col: number, row: number) => OFFICE_TILE_MAP[row]?.[col] === TileType.FLOOR_1;
+    const seen = new Set<string>();
+    expect(SEATS).toHaveLength(16);
+    expect(STANDING_SPOTS).toHaveLength(4);
+    for (const s of SEATS) {
+      expect(isFloor(s.col, s.row)).toBe(true);
+      expect(FURNITURE_BLOCKED_TILES.has(`${s.col},${s.row + 1}`)).toBe(true);
+      expect(seen.has(`${s.col},${s.row}`)).toBe(false);
+      seen.add(`${s.col},${s.row}`);
+    }
+    for (const s of STANDING_SPOTS) {
+      const k = `${s.col},${s.row}`;
+      expect(isFloor(s.col, s.row)).toBe(true);
+      expect(FURNITURE_BLOCKED_TILES.has(k)).toBe(false);
+      expect(seen.has(k)).toBe(false);
+      seen.add(k);
+    }
+    for (const s of [...SEATS, ...STANDING_SPOTS]) expect([4, 8]).toContain(s.row);
+    const own = createCharacter("s", 1, 4);
+    expect(isOwnSeat(own)).toBe(true);
+    expect(isOwnSeat(createCharacter("t", 2, 6))).toBe(false);
   });
 });
