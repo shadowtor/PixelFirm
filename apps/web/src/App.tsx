@@ -150,7 +150,10 @@ export function App() {
           draws IS that pack's art rests on a credit line in the fork's README,
           which §4's own rule calls insufficient. A footer is too small to
           carry that distinction honestly, so it credits and points at the
-          audit rather than asserting a licence over the bytes we ship. */}
+          audit rather than asserting a licence over the bytes we ship.
+          05-26: the office art (MetroCity Interior, ASSET-LICENSES §1a) is
+          credited alongside the character pack — still credit-only, because
+          §1's hair layer is. */}
       <footer
         style={{
           position: "fixed",
@@ -164,8 +167,8 @@ export function App() {
           background: "rgba(0, 0, 0, 0.6)",
         }}
       >
-        Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character
-        sprites: MetroCity pack by JIK-A-4 · full audit: references/ASSET-LICENSES.md
+        Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character and
+        office sprites: MetroCity packs by JIK-A-4 · full audit: references/ASSET-LICENSES.md
       </footer>
     </>
   );

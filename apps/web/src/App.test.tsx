@@ -25,7 +25,7 @@ const footerMarkup = markup.slice(markup.indexOf("<footer"));
 // `&#x27;`, which would make this whole-sentence assertion unmatchable against
 // the rendered markup for a purely cosmetic reason.
 const ATTRIBUTION =
-  "Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character sprites: MetroCity pack by JIK-A-4 · full audit: references/ASSET-LICENSES.md";
+  "Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character and office sprites: MetroCity packs by JIK-A-4 · full audit: references/ASSET-LICENSES.md";
 
 describe("App attribution", () => {
   it("renders the complete attribution sentence, so a silent truncation goes red", () => {

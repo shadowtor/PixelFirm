@@ -183,9 +183,11 @@ any commercial distribution" — never silently upgraded to confirmed.
 ## Attribution in the running app
 
 `apps/web` renders a visible, always-on attribution line crediting this
-fork and the MetroCity pack (see `apps/web/src/App.tsx`) — attribution is not
-only recorded here. That line claims exactly what §1 and §2 support and no
-more: the fork's MIT licence, which is documented, and a credit for the
-character pack without a licence assertion, which is not. If §1 is upgraded,
+fork and both MetroCity packs — the character pack (§1) and the Interior pack
+(§1a) — as "character and office sprites: MetroCity packs by JIK-A-4" (see
+`apps/web/src/App.tsx`, 05-26) — attribution is not only recorded here. That
+line claims exactly what §1, §1a and §2 support and no more: the fork's MIT
+licence, which is documented, and a credit for both packs without a licence
+assertion, because §1's hair layer is credit-only. If §1 is upgraded,
 the footer is upgraded with it — `apps/web/src/App.test.tsx` pins the complete
 sentence, so the two cannot drift apart silently.

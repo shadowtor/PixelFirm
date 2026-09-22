@@ -54,11 +54,25 @@ This is a **non-exhaustive** list — any new `AgentStatus` value or handoff-sta
 | `bubble-waiting.json` | `waiting_for_agent` | Blue hourglass, 3 px neck (>= 2 px), closed 1 px black outline — re-authored 05-23 (G-05-2) | 11×13 `{palette, pixels}` |
 | `bubble-handoff-task.json` | handoff task icon (sender, `ICON_VISIBLE`) | authored 05-07 (distinct silhouette, `bubbleSprites.test.ts`) | 11×13 `{palette, pixels}` |
 
+**Office sprites (05-22/05-24/05-26, G-05-1e):** decoded into `packages/pixel-office/src/sprites/office-metrocity.json` from the MetroCity Interior pack by JIK-A-4 (CC0 at source; sheets, hashes and verification in `references/ASSET-LICENSES.md` §1a). Scenery only — never a state signal.
+
+| Key | Source sheet | Size (w×h) |
+|-----|--------------|------------|
+| `floorTiles` | `Home/TilesHouse.png` (4 plank quadrants) | 4 × 16×16 |
+| `wallTop` | `Home/TilesHouse.png` | 16×16 |
+| `desk` | `Home/LivingRoom-Sheet.png` | 46×30 |
+| `plant` | `Home/Flowers-Sheet.png` | 20×41 |
+| `plantSmall` | `Home/Flowers-Sheet.png` | 14×21 |
+| `bookcase` | `Home/Cupboard-Sheet.png` | 36×43 |
+| `cabinet` | `Hospital/Miscellaneous-Sheet.png` | 22×27 |
+| `painting` | `Home/Paintings-Sheet.png` | 14×16 |
+| `monitorBack` | original (authored in this repo) | 10×9 |
+
 **Asset format contract (lock in for any new icon the closure plan adds):**
 - Exactly 11 columns × 13 rows, `pixels: string[][]` — empty string `""` cells are transparent.
 - `palette: Record<string, hexColor>` — pixel values are palette keys, never raw hex inline.
 - Every glyph must be a **distinct silhouette**, not a recolour of another glyph (OFFICE-03's grayscale/compressed-video legibility requirement — colour alone must never be the only signal).
-- Every glyph used by a frozen status (`STATUS_MAP` `frozen: true`) has a closed 1 px near-black outline (relative luminance <= 0.03), every other cell >= 3:1 against it, the outline >= 3:1 against the office floor, and frozen glyph masks differ pairwise in >= 20 cells; enforced by `bubbleSprites.test.ts` (05-23, G-05-2).
+- Every glyph used by a frozen status (`STATUS_MAP` `frozen: true`) has a closed 1 px near-black outline (relative luminance <= 0.03), every other cell >= 3:1 against it, the outline >= 3:1 against `FALLBACK_FLOOR_COLOR`, the outline or main fill >= 3:1 against each MetroCity floor tile's mean colour (05-26), and frozen glyph masks differ pairwise in >= 20 cells; enforced by `bubbleSprites.test.ts` (05-23, G-05-2).
 
 **Known gap the closure plan must resolve (do not re-invent — author in this same format):** — all three resolved; each bullet is kept as written with its resolution prefixed.
 - **Resolved by 05-07** (both assets authored; listed in the table above). `bubble-permission.json` (for `waiting_for_ceo`) and `bubble-waiting.json` (for `waiting_for_agent`) are referenced by `STATUS_MAP`'s `bubble: "permission"` / `bubble: "waiting"` keys but **do not exist on disk** — `05-02-SUMMARY.md` and `05-VERIFICATION.md` both confirm this. These two states currently resolve to a bubble key with no backing JSON.
@@ -83,6 +97,8 @@ Declared values (must be multiples of 4) — **applies to the DOM overlay only**
 
 **Exceptions:** The canvas's actual layout unit is the pixel-art **tile grid**, not the 8-point DOM scale — `TILE_SIZE = 16px`, office grid `DEFAULT_COLS × DEFAULT_ROWS = 20 × 11` tiles (`packages/pixel-office/src/constants.ts`), giving a `320×176px` office grid that is never presented at native size (05-21, G-05-1a): it is always shown at an integer scale N ≥ `MIN_DISPLAY_SCALE` (3), where N is the largest integer that fits the viewport minus the 24px footer allowance (`displayScaleFor`). The canvas backing store is `320N × 176N`, the engine draws every frame at zoom N, the CSS box equals the backing store, and the canvas uses `image-rendering: pixelated`. Any new on-canvas element (a bubble icon, a badge, a future dialogue box) must align to this 16px tile grid, not the 4px DOM spacing scale.
 
+**Office layout (05-24/05-25/05-26, G-05-1e):** `packages/pixel-office/src/layout/office-layout.json` is the single source. Pods of two seats sit behind 3-tile desks at cols 1/5/9/13 on rows 5/9; the seats are on rows 4/8 facing the viewer. Lanes run along cols 4/8/12/16 and rows 3/6/7. Standing spots are (17,4) (18,4) (17,8) (18,8). Decor sits on cols 17-18 and the top wall. Every seat and standing spot is on row 4 or 8, so the strip under their feet holds only furniture, never an agent or a glyph (05-28 guards this with a layout-data test).
+
 ---
 
 ## Typography
@@ -104,8 +120,9 @@ Font family for the footer: `monospace` (unstyled system stack, no webfont loade
 
 | Role | Value | Usage |
 |------|-------|-------|
-| Dominant (60%) | `#808080` (`FALLBACK_FLOOR_COLOR`) | Office floor tiles — the base surface every other element sits on |
-| Secondary (30%) | `#3A3A5C` (`WALL_COLOR`) | Office wall/boundary tiles |
+| Dominant (60%) | MetroCity Interior wood-plank floor tiles (`office-metrocity.json` `floorTiles`, e.g. `#926429`/`#7d4e13`) | Office floor — the base surface every other element sits on (05-24, G-05-1e). `FALLBACK_FLOOR_COLOR` `#808080` is kept only as a constant for tests and the live harness's bare-floor check (TRUTH 6, 05-26); it is never painted |
+| Secondary (30%) | MetroCity wall tile (`wallTop`) on the top wall + `#3A3A5C` (`WALL_COLOR`) side/bottom border | Office wall/boundary tiles (05-24) |
+| Furniture | MetroCity desks, monitors and decor (`office-metrocity.json`, placed by `office-layout.json`) | Scenery, never a state signal (05-24/05-25/05-26) |
 | Accent (10%) | per-glyph palette colours inside each bubble/badge JSON (e.g. `#ffb703` amber for `permission`-style, `#2a9d8f` green for `completed`) | **Reserved exclusively for the state-signal bubble/badge icon overlay drawn above a character** (D-03) — never applied as a character sprite tint/recolour |
 | Destructive | `#d62828` (red, `bubble-blocked.json`/`bubble-failed.json`) | Reserved for the `blocked` and `failed` state icons only |
 | Dialogue box | `#121212` (`DIALOGUE_BOX_COLOR`) | Handoff dialogue box fill only. Achromatic; never an accent and never a state signal. `renderer.test.ts` "dialogue colours are unambiguous (05-13 guard)" proves no character (all twelve identity hues) or glyph palette, floor or wall paints it |
@@ -129,7 +146,7 @@ Font family for the footer: `monospace` (unstyled system stack, no webfont loade
 | Handoff dialogue — requested | `Handing off "${taskTitle}" to ${toAgentName}` (`resolveHandoffDialogue("requested", ...)`, `dialogue-templates.ts`) — locked, deterministic, HANDOFF-02 |
 | Handoff dialogue — accepted | `${toAgentName} accepts "${taskTitle}"` (`resolveHandoffDialogue("accepted", ...)`) — locked, deterministic, HANDOFF-02 |
 | Handoff dialogue — length rule (05-13) | `taskTitle` capped at `MAX_DIALOGUE_TITLE_CHARS` (16) and `toAgentName` at `MAX_DIALOGUE_NAME_CHARS` (12) code points, cut by code point and ending in U+2026 `…` when cut (`dialogue-templates.ts`). Templates unchanged. Shown for its sequence only: the requested line while the sender waits at the receiver's desk, the accepted line until the sender is home |
-| Attribution footer | `Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character sprites: MetroCity pack by JIK-A-4 · full audit: references/ASSET-LICENSES.md` (`apps/web/src/App.tsx`) — locked, always-on, never gated behind a menu (OFFICE-02). **Sentence updated 05-12 (WR-09):** the `(CC0)` claim was removed — the pack is CC0 at its publisher's listing (cited, `references/ASSET-LICENSES.md` §1), but that the shipped file is that pack's art rests on the fork's credit alone, a distinction a one-line footer cannot carry. The locked properties — always-on, fixed, ungated, crediting both fork and pack, pointing at the audit — are unchanged, and `apps/web/src/App.test.tsx` pins the complete sentence. |
+| Attribution footer | `Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character and office sprites: MetroCity packs by JIK-A-4 · full audit: references/ASSET-LICENSES.md` (`apps/web/src/App.tsx`) — locked, always-on, never gated behind a menu (OFFICE-02). **Updated 05-26:** credits both MetroCity packs (character §1, Interior §1a), still without a licence assertion. **Sentence updated 05-12 (WR-09):** the `(CC0)` claim was removed — the pack is CC0 at its publisher's listing (cited, `references/ASSET-LICENSES.md` §1), but that the shipped file is that pack's art rests on the fork's credit alone, a distinction a one-line footer cannot carry. The locked properties — always-on, fixed, ungated, crediting both fork and pack, pointing at the audit — are unchanged, and `apps/web/src/App.test.tsx` pins the complete sentence. |
 
 **Dialogue tone rule (locked, HANDOFF-02):** no exclamation marks, no first-person ("I") framing, no simulated personality — plainly functional strings only, never phrased to imply spontaneous/live AI generation. Only `taskTitle` (plain `TaskState.title`) and `toAgentName` (plain `AgentState.name`) may ever be interpolated — never payload/prompt/diff content. This is mechanically enforced today by a grep-style test asserting zero network/LLM call surface in `dialogue-templates.ts`; the closure plan must not weaken this.
 
@@ -145,7 +162,7 @@ Applicable state considerations resolved: 7 covered, 1 backstop, 0 unresolved
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
 | populated (data-driven pose) | AgentStatus → pose/bubble mapping | ✅ covered | `STATUS_MAP` has an exhaustive, compile-checked entry for all 15 `AgentStatus` values with no fallback branch (`status-mapping.ts`, unit-proven) |
-| zero-one-many (agents on floor) | office floor / agent roster | ✅ covered | 1:1 with real projection state (`upsertCharacterFromAgent` / despawn-on-`offline`), no fabricated placeholder agents, up to 54 concurrently seated desks (rows 3/6/9 × 18 cols); a despawned agent's desk is reclaimed lowest-first (05-14). A 55th+ concurrently seated character stacks on the last valid row — accepted ceiling, `deferred-items.md` |
+| zero-one-many (agents on floor) | office floor / agent roster | ✅ covered | 1:1 with real projection state (`upsertCharacterFromAgent` / despawn-on-`offline`), no fabricated placeholder agents. 16 desk seats + 4 standing spots (right strip, on the seat rows, `office-layout.json`); lowest free seat first, reclaimed on despawn (05-14, 05-25). A 21st+ concurrently present agent shares the last standing spot — accepted ceiling (05-25/05-26, G-05-1e) |
 | loading (blocked/waiting-for-input) | agent sprite + bubble overlay | ✅ covered | `blocked`/`waiting_for_agent`/`waiting_for_ceo` all resolve to `frozen: true` + a distinct bubble key (OFFICE-03), unit-proven; painted live (TRUTH 2) |
 | empty (visual: invisible sprites) | character sprite pixels | ✅ covered | Resolved by 05-06 (MetroCity sheet decoded into `character-metrocity.json`, 4-direction × {idle,walk,type} shape preserved); observed live by TRUTH 1 (`scripts/verify-pixel-office-live.mjs`) |
 | overflow (state signal render) | bubble/badge icon draw pass | ✅ covered | Resolved by 05-07 (renderer glyph pass, z-sorted after the base sprite; owner-bound 05-12; top layer 05-13); observed live by TRUTH 2 and owner-bound by TRUTH 4 |
@@ -166,7 +183,7 @@ Applicable state considerations resolved: 7 covered, 1 backstop, 0 unresolved
 
 ## Registry Safety
 
-N/A — `Tool: none`. This phase's third-party code is a **forked source copy** (specific TypeScript modules copy-pasted from `pixel-agents-hq/pixel-agents`, commit `3537e140c2094761beae748592aeb92ece8edfdd`, MIT), not an installed shadcn/component registry. Every forked file carries a 3-line attribution header (source URL, commit SHA, licence) per OFFICE-02; the full licence text is preserved verbatim in `packages/pixel-office/LICENSE`, and `references/ASSET-LICENSES.md` carries the D-05-scoped asset audit. No `shadcn view`/registry vetting gate applies to a source-forked engine.
+N/A — `Tool: none`. This phase's third-party code is a **forked source copy** (specific TypeScript modules copy-pasted from `pixel-agents-hq/pixel-agents`, commit `3537e140c2094761beae748592aeb92ece8edfdd`, MIT), not an installed shadcn/component registry. Every forked file carries a 3-line attribution header (source URL, commit SHA, licence) per OFFICE-02; the full licence text is preserved verbatim in `packages/pixel-office/LICENSE`, and `references/ASSET-LICENSES.md` carries the D-05-scoped asset audit. No `shadcn view`/registry vetting gate applies to a source-forked engine. The MetroCity Interior sheets are committed source images decoded into `office-metrocity.json` by a script, not a registry, and are audited in `references/ASSET-LICENSES.md` §1a (05-24/05-26).
 
 ---
 
