@@ -3,11 +3,13 @@
 // never reads git/GSD/Claude Code state directly, only AgentStatus values
 // handed to it by apps/web's WS client.
 import { AgentStatus } from "event-schema";
-import { DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE } from "./constants.js";
+import { DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE, WALL_COLOR } from "./constants.js";
 
 // Re-exported so apps/web can size its <canvas> from this package's own grid
-// dimensions instead of hardcoding/duplicating them.
-export { DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE };
+// dimensions instead of hardcoding/duplicating them. WALL_COLOR joins them for
+// 05-31 (G-05-P6): the host page fills any viewport remainder around the office
+// with the office's own border colour, which must be that one value, not a copy.
+export { DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE, WALL_COLOR };
 
 // 05-21 (G-05-1a): the 320x176 office is never shown at native size — its
 // 11x13 glyphs are unreadable there. Minimum integer presentation scale.

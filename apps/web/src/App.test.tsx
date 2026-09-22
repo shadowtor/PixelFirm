@@ -1,10 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { DEFAULT_COLS, DEFAULT_ROWS, MIN_DISPLAY_SCALE, TILE_SIZE } from "pixel-office";
+import {
+  DEFAULT_COLS,
+  DEFAULT_ROWS,
+  MIN_DISPLAY_SCALE,
+  TILE_SIZE,
+  WALL_COLOR,
+  displayScaleFor,
+} from "pixel-office";
 // The audit document the in-app credit points at. ?raw is a build-time
 // filesystem read, so a missing file fails this module outright — and it
 // needs no jsdom/@types/node, neither of which this package depends on.
 import assetLicenses from "../../../references/ASSET-LICENSES.md?raw";
+// Same ?raw read for the host page: the pre-mount background lives there, not
+// in any module this suite can import.
+import indexHtml from "../index.html?raw";
 import { App } from "./App";
 
 // OFFICE-02: 05-VERIFICATION.md failed the attribution prohibition closed
@@ -13,6 +23,8 @@ import { App } from "./App";
 // DOM, no canvas and no socket are needed.
 const markup = renderToStaticMarkup(<App />);
 const footerMarkup = markup.slice(markup.indexOf("<footer"));
+// Everything before the canvas is its full-viewport surround (05-31).
+const wrapperMarkup = markup.slice(0, markup.indexOf("<canvas"));
 
 // 05-12 (WR-09): the credit is pinned, the sprite licence claim is
 // deliberately absent. ASSET-LICENSES.md §1 confirms the MetroCity PACK as CC0
@@ -56,5 +68,32 @@ describe("App canvas", () => {
   it("keeps integer pixels crisp under browser/OBS scaling", () => {
     const canvasMarkup = markup.slice(markup.indexOf("<canvas"), markup.indexOf(">", markup.indexOf("<canvas")));
     expect(canvasMarkup).toContain("image-rendering:pixelated");
+  });
+});
+
+// 05-31 (G-05-P6): the renderer's output is the office and nothing else. The
+// scale comes from the FULL viewport — no DOM height is reserved for the
+// footer, which now overlays the office's own bottom wall row — and whatever
+// remainder a non-multiple viewport leaves is the office's border colour, never
+// black.
+describe("App viewport fill", () => {
+  it("sizes the documented OBS sources from the full viewport, with no footer allowance", () => {
+    // 720/176 = 4.09 -> 4. The old 24px allowance made this (720-24)/176 -> 3,
+    // which is what left 320px of black to the right of the canvas.
+    expect(displayScaleFor(1280, 720)).toBe(4);
+    expect(displayScaleFor(1920, 1080)).toBe(6);
+  });
+
+  it("surrounds the canvas in the office border colour, so a remainder is never black", () => {
+    expect(wrapperMarkup.toLowerCase()).toContain(`background:${WALL_COLOR.toLowerCase()}`);
+  });
+
+  it("paints the host page the same border colour, so no black frame shows before React mounts", () => {
+    expect(indexHtml.toLowerCase()).toContain(`background:${WALL_COLOR.toLowerCase()}`);
+  });
+
+  it("overlays the attribution with no black strip behind it", () => {
+    expect(footerMarkup).not.toContain("rgba(0, 0, 0");
+    expect(footerMarkup).not.toContain("#000");
   });
 });
