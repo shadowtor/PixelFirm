@@ -30,7 +30,11 @@ interface TaskRecord {
   // before writing shared fields, because attemptGracefulStop can return on
   // timeout before the superseded stream has drained — its teardown, watchdog,
   // late messages, role poll and query() callbacks would otherwise write the
-  // successor's state (05-VERIFICATION.md gap 4 / review CR-02).
+  // successor's state (05-VERIFICATION.md gap 4 / review CR-02). runQuery
+  // claims it BEFORE waiting on a prior invocation's graceful stop and
+  // re-checks it after, because overlapping callers all wait on the same old
+  // stream — only the last claimer may start a query() (05-VERIFICATION.md
+  // gap 2 / review CR-01).
   currentRun?: object;
 }
 
@@ -130,28 +134,38 @@ export function createClaudeCodeRuntime(options: {
     const record = tasks.get(taskId);
     if (!record) throw new Error(`ClaudeCodeRuntime.runQuery: unknown taskId ${taskId}`);
 
+    // Claim the record BEFORE any await: overlapping callers (a double-send,
+    // a retry, a pause/cancel) all wait on the same old stream below, so the
+    // token must name the latest caller while they wait, and each re-checks
+    // it afterwards (05-VERIFICATION.md gap 2 / review CR-01).
+    const invocation = {};
+    const isCurrent = () => record.currentRun === invocation;
+    const hadPrior = record.inFlight;
+    record.currentRun = invocation;
+
     // CR-03: a prior invocation for this taskId is still in flight (e.g.
     // resumeTask/sendMessage called while the task is still "running", or a
     // genuine double-call) — starting a second concurrent query() here would
     // silently orphan the first invocation's controller/watchdog/poll-
     // interval, leaving pauseTask/cancelTask unable to control it. Properly
     // stop the existing invocation first, via the same graceful-then-hard-
-    // abort path pauseTask/cancelTask use, before taking over the record.
-    // The stop can return on timeout, before the old stream drains, so the
-    // old invocation's finally runs later — it must not clear the flag this
-    // invocation sets below, or a third call would skip this branch and run
-    // concurrently (gap 4 / CR-02; see TaskRecord.currentRun).
-    if (record.inFlight) {
+    // abort path pauseTask/cancelTask use. record.controller is still the old
+    // invocation's here: every waiter resumes before any later claimer can
+    // start a query. The stop can return on timeout, before the old stream
+    // drains, so the old invocation's finally runs later — it must not clear
+    // the flag set below (gap 4 / CR-02; see TaskRecord.currentRun).
+    if (hadPrior) {
       const exitedCleanly = await attemptGracefulStop(record);
       if (!exitedCleanly) record.controller?.abort();
     }
+    // Superseded, paused or cancelled while waiting. Whoever owns the record
+    // now stops the old stream itself, so this call resolves without starting
+    // a query (last caller wins).
+    if (!isCurrent()) return;
 
     const controller = new AbortController();
-    const invocation = {};
     record.controller = controller;
-    record.currentRun = invocation;
     record.inFlight = true;
-    const isCurrent = () => record.currentRun === invocation;
 
     const stream = query({
       prompt,
