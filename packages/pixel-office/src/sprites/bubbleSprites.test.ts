@@ -190,3 +190,55 @@ describe("G-05-2 frozen-state glyph contrast (shape + animation, never colour al
     }
   });
 });
+
+// ── G-05-P5 (05-32): the waiting_for_agent glyph must read as an hourglass by
+// silhouette alone at 1x. The pre-05-32 asset had a 5-px, 3-row neck and
+// flat-sided bulbs, so it read as a spool or a capital I and identification
+// leaned on its blue colour (OFFICE-03 / D-03 forbid exactly that).
+
+describe("1x hourglass silhouette (G-05-P5)", () => {
+  const sprite = resolveBubbleSprite("waiting");
+  const CAP_ROWS = 3;
+  const widths = sprite.map((row) => row.filter(Boolean).length);
+  const outline = edgeAndInterior(sprite).edge[0]!.toLowerCase();
+  const nonOutline = (row: string[]) => row.filter((c) => c && c.toLowerCase() !== outline);
+  /** Ink widths of the rows strictly between the two caps (the bulbs + waist). */
+  const between = widths.slice(CAP_ROWS, sprite.length - CAP_ROWS);
+  const waistRow = CAP_ROWS + between.indexOf(Math.min(...between));
+  /** The two non-outline fills, darker first: sand (#4361ee) before glass (#a9bcff). */
+  const fills = [...new Set(sprite.flat().filter(Boolean).map((c) => c.toLowerCase()))]
+    .filter((c) => c !== outline)
+    .sort((a, b) => relLum(a) - relLum(b));
+  const countColor = (rows: number[], color: string) =>
+    rows.reduce((n, r) => n + sprite[r]!.filter((c) => c.toLowerCase() === color).length, 0);
+  const rowRange = (from: number, to: number) => (to < from ? [] : Array.from({ length: to - from + 1 }, (_, i) => from + i));
+
+  it("has heavy caps: the first 3 and the last 3 rows each span all 11 columns", () => {
+    for (const r of [...rowRange(0, CAP_ROWS - 1), ...rowRange(sprite.length - CAP_ROWS, sprite.length - 1)]) {
+      expect(sprite[r]!.every(Boolean), `row ${r} is not full-width ink`).toBe(true);
+      expect(widths[r], `row ${r}`).toBe(11);
+    }
+  });
+
+  it("pinches to a single-pixel-fill waist: exactly one row between the caps is 3 px of ink with 1 fill cell", () => {
+    expect(Math.min(...between)).toBe(3);
+    expect(between.filter((w) => w === 3)).toHaveLength(1);
+    expect(nonOutline(sprite[waistRow]!), `row ${waistRow} fill`).toHaveLength(1);
+  });
+
+  it("has triangular bulbs: ink narrows strictly down to the waist and widens strictly away from it", () => {
+    for (const r of rowRange(CAP_ROWS + 1, waistRow)) {
+      expect(widths[r], `row ${r} must be narrower than row ${r - 1}`).toBeLessThan(widths[r - 1]!);
+    }
+    for (const r of rowRange(waistRow + 1, sprite.length - CAP_ROWS - 1)) {
+      expect(widths[r], `row ${r} must be wider than row ${r - 1}`).toBeGreaterThan(widths[r - 1]!);
+    }
+  });
+
+  it("puts the sand in the lower bulb: more of the darker fill below the waist than above it", () => {
+    const sand = fills[0]!;
+    const above = countColor(rowRange(CAP_ROWS, waistRow - 1), sand);
+    const below = countColor(rowRange(waistRow + 1, sprite.length - CAP_ROWS - 1), sand);
+    expect(below, `sand ${sand}: ${below} below vs ${above} above`).toBeGreaterThan(above);
+  });
+});
