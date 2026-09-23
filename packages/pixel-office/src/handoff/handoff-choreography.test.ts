@@ -27,6 +27,7 @@ type TileRef = { col: number; row: number };
 // waiting sender's tile — no test restates the aisle row or the offsets.
 const officeLayoutModule = (await import("../layout/officeLayout")) as {
   interactionSlotsFor?: (home: TileRef) => ReadonlyArray<TileRef>;
+  homeNearRow?: (row: number) => TileRef | undefined;
 };
 const slotsFor = (home: TileRef): ReadonlyArray<TileRef> => officeLayoutModule.interactionSlotsFor?.(home) ?? [];
 /** The fixed slots of a character's HOME — where a sender handing off to it waits. */
@@ -108,6 +109,23 @@ describe("interaction slots (05-34, G-05-P2): layout data alone", () => {
           );
         }
       }
+    }
+  });
+});
+
+describe("the interaction row's load-bearing invariant is validated (review WR-04)", () => {
+  it("rejects exactly the rows that would put every slot beside a home, and accepts the shipped aisle", () => {
+    const { homeNearRow } = officeLayoutModule;
+    expect(typeof homeNearRow, "officeLayout must export homeNearRow (review WR-04)").toBe("function");
+    // The aisle row itself, read back from the layout rather than restated.
+    const aisle = slotsFor(SEATS[0])[0]!.row;
+    expect(homeNearRow!(aisle), `the shipped interaction row ${aisle} must be accepted`).toBeUndefined();
+    // Rows 3/5/7/9 pass every other check the validator makes — integer, in
+    // range, with free floor — yet leave every slot within Chebyshev 1 of a
+    // seat, so interactionTileFor returns null for essentially every receiver
+    // and the whole handoff walk is silently disabled.
+    for (const row of [3, 5, 7, 9]) {
+      expect(homeNearRow!(row), `interaction.row ${row} must be rejected`).toBeDefined();
     }
   });
 });

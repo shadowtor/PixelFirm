@@ -84,6 +84,21 @@ interface InteractionData {
   row: number;
   colOffsets: number[];
 }
+
+/**
+ * The home (seat or standing spot) too close to `row` for the aisle rule to
+ * hold, if any — the invariant `interactionSlotsFor` promises and
+ * `interactionTileFor` relies on (review WR-04).
+ *
+ * A slot within Chebyshev distance 1 of any home is rejected as taken by the
+ * FSM, so an interaction row within 1 row of a home leaves every slot beside a
+ * seated or standing agent and returns null for essentially every receiver —
+ * silently disabling the whole handoff walk. Rows 3/5/7/9 of the shipped layout
+ * are exactly that: in range, with free floor, and useless.
+ */
+export function homeNearRow(row: number): { col: number; row: number } | undefined {
+  return [...SEATS, ...STANDING_SPOTS].find((h) => Math.abs(h.row - row) <= 1);
+}
 const INTERACTION: InteractionData = (() => {
   const raw = layout.interaction as InteractionData | undefined;
   if (!raw || typeof raw.row !== "number" || !Array.isArray(raw.colOffsets) || raw.colOffsets.length === 0) {
@@ -94,6 +109,15 @@ const INTERACTION: InteractionData = (() => {
   }
   if (!OFFICE_TILE_MAP[raw.row]!.some((t, col) => t === TileType.FLOOR_1 && !blocked.has(`${col},${raw.row}`))) {
     throw new Error(`office-layout.json: interaction.row ${raw.row} has no free floor tile`);
+  }
+  // The load-bearing one (review WR-04): the checks above throw on harmless
+  // misconfigurations and used to wave through the harmful one.
+  const nearHome = homeNearRow(raw.row);
+  if (nearHome) {
+    throw new Error(
+      `office-layout.json: interaction.row ${raw.row} is within 1 row of the home at ` +
+        `(${nearHome.col},${nearHome.row}) — every slot would be shoulder-to-shoulder with a seated agent`,
+    );
   }
   return raw;
 })();
