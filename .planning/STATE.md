@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-38-PLAN.md
-last_updated: "2026-09-23T07:14:06.200Z"
+stopped_at: Completed 05-39-PLAN.md
+last_updated: "2026-09-23T07:27:28.515Z"
 last_activity: 2026-09-23
 last_activity_desc: Phase 05 execution started
-state_head: 30607af68ef37257a0002c8a94d34e1ad360cc1e
+state_head: fe93c6fede2e73f1ca0bb369f0761d3804d2e8c1
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 55
-  completed_plans: 53
+  completed_plans: 54
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 2 of 40
+Plan: 3 of 40
 Status: Ready to execute
 Last activity: 2026-09-23 — Phase 05 execution started
 
@@ -113,6 +113,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P36 | 7 min | 3 tasks | 4 files |
 | Phase 05 P37 | 18 min | 2 tasks | 4 files |
 | Phase 05 P38 | 13 min | 2 tasks | 4 files |
+| Phase 05 P39 | 8 min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -240,6 +241,7 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-37: speakerText and the getDialogueBox lookup are left as-is - that comparison is CR-01's frame-freshness guard, a different property from speaker identity
 - [Phase 05]: 05-38: the live TRUTH 4 gap bound guards renderer-vs-constant drift, not a constant revert - the harness reads the same constant the renderer compiles from, so both sides move together; the unit literal pins are the revert guards
 - [Phase 05]: 05-38: every widening ships with the bound that catches its over-correction - the raised glyph gap got a two-sided live bound, and the deeper seated sink got a head-visibility floor (seatedRows >= 10, measured 13)
+- [Phase 05]: Repaint over redraw for G-05-1a: the waiting glyph silhouette was already correct, so only the FILL changed (glass #a9bcff to #c8d4ff, upper bulb emptied). Zero opaque cells moved, so all four 05-32 silhouette guards stayed green untouched. — Raising the light fill opens the glass/sand gap to 3.423:1 without spending the sand-vs-outline contrast that the G-05-2 frozen-glyph rule measures independently.
 
 ### Pending Todos
 
@@ -268,6 +270,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-23T07:13:42.595Z
-Stopped at: Completed 05-38-PLAN.md
+Last session: 2026-09-23T07:26:52.538Z
+Stopped at: Completed 05-39-PLAN.md
 Resume file: None
