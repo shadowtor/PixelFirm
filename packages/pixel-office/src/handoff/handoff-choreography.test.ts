@@ -18,7 +18,7 @@ import { FURNITURE, FURNITURE_BLOCKED_TILES, SEATS, STANDING_SPOTS } from "../la
 import { TileType } from "../types";
 import { renderScene } from "../engine/renderer";
 import { handleHandoffEvent, checkHandoffArrivals, isWaitingHandoffSender, blockedTilesFor } from "./handoff-choreography";
-import { resolveHandoffDialogue } from "./dialogue-templates";
+import { resolveHandoffDialogue, MAX_DIALOGUE_TITLE_CHARS } from "./dialogue-templates";
 
 type TileRef = { col: number; row: number };
 
@@ -381,7 +381,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     run(WALK_SECONDS);
     expect(atInteractionSlot(a, b)).toBe(true);
     expect(a.bubbleType).toBe("handoff-task");
-    expect(a.bubbleText).toContain(" → ");
+    expect(a.bubbleText).toContain("hands");
     return { a, b };
   }
 
@@ -422,7 +422,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
 
     run(WALK_SECONDS);
     expect(atInteractionSlot(a, b)).toBe(true);
-    expect(a.bubbleText).toContain(" → ");
+    expect(a.bubbleText).toContain("hands");
 
     handleHandoffEvent(completedEvent("task-1", "agent-b"));
     expect(b.state).toBe(CharacterState.TYPE);
@@ -510,7 +510,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     run(0.5);
     expect(atInteractionSlot(a, b)).toBe(true);
     expect(a.bubbleType).toBe("handoff-task");
-    expect(a.bubbleText).toContain(" → ");
+    expect(a.bubbleText).toContain("hands");
 
     handleHandoffEvent(completedEvent("task-1", "agent-b"));
     run(WALK_SECONDS);
@@ -546,7 +546,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       run(WALK_SECONDS);
       expect(atInteractionSlot(a, b)).toBe(true);
       expect(a.bubbleType).toBe("handoff-task");
-      expect(a.bubbleText).toContain(" → ");
+      expect(a.bubbleText).toContain("hands");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       expect(b.state).toBe(CharacterState.TYPE);
@@ -566,7 +566,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       run(0.5);
       expect(atInteractionSlot(a, b)).toBe(true);
       expect(a.bubbleType).toBe("handoff-task");
-      expect(a.bubbleText).toContain(" → ");
+      expect(a.bubbleText).toContain("hands");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       expect(b.state).toBe(CharacterState.TYPE);
@@ -588,7 +588,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       run(WALK_SECONDS);
       expect(atInteractionSlot(a, b)).toBe(true);
       expect(a.bubbleType).toBe("handoff-task");
-      expect(a.bubbleText).toContain(" → ");
+      expect(a.bubbleText).toContain("hands");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b", "5fa85f64-5717-4562-b3fc-2c963f66afa6"));
       expect(b.bubbleText).toContain("accepts");
@@ -648,13 +648,17 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       handleHandoffEvent(requestedEvent("task-2", "agent-a", "agent-c", NEW_REQUEST_ID));
       run(WALK_SECONDS);
       expect(atInteractionSlot(a, c)).toBe(true);
-      expect(a.bubbleText).toContain("task-2");
+      // Which record owns the line is the stamp, plus the receiver it names —
+      // never the task id, which 05-40 (G-05-1b) stopped painting as a title.
+      expect(a.bubbleTextTaskId).toBe("task-2");
+      expect(a.bubbleText).toContain("agent-c");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       run(0.2);
       expect(atInteractionSlot(a, c)).toBe(true);
       expect(a.bubbleType).toBe("handoff-task");
-      expect(a.bubbleText).toContain("task-2");
+      expect(a.bubbleTextTaskId).toBe("task-2");
+      expect(a.bubbleText).toContain("agent-c");
       expect(b.state).not.toBe(CharacterState.TYPE);
 
       handleHandoffEvent(completedEvent("task-2", "agent-c", "5fa85f64-5717-4562-b3fc-2c963f66afa6"));
@@ -717,7 +721,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       run(WALK_SECONDS);
       expect(atInteractionSlot(a, b)).toBe(true);
       expect(a.bubbleType).toBe(atReceiver);
-      expect(a.bubbleText).toContain(" → ");
+      expect(a.bubbleText).toContain("hands");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       expect(b.state).toBe(CharacterState.TYPE);
@@ -1250,9 +1254,12 @@ describe("host read path (05-35, G-05-P4)", () => {
       },
     ]);
 
-    // The bubble itself is unchanged: still the 12-code-point cut label.
-    expect(a.bubbleText).toContain("Refactor th…");
-    expect(Array.from("Refactor th…").length).toBe(12);
+    // The bubble itself still shows the cut label — derived from the cap
+    // rather than re-pinned as a literal, so 05-40's 12 -> 14 widening does
+    // not have to be typed out twice (and the next one will not silently pass).
+    const cut = Array.from(LONG_TITLE).slice(0, MAX_DIALOGUE_TITLE_CHARS - 1).join("") + "…";
+    expect(Array.from(cut).length).toBe(MAX_DIALOGUE_TITLE_CHARS);
+    expect(a.bubbleText).toContain(cut);
     expect(a.bubbleText).not.toContain(LONG_TITLE);
   });
 
@@ -1495,5 +1502,73 @@ describe("host read path (05-35, G-05-P4)", () => {
     // The FSM is untouched: the sender is still waiting with its own line.
     expect(isWaitingHandoffSender(a)).toBe(true);
     expect(a.bubbleText).toBe(bubbleTextBefore);
+  });
+});
+
+// 05-40 (G-05-1b): both call sites used to resolve the label with
+// `getTaskTitle(taskId) ?? taskId`, so every handoff in the live stack — where
+// no producer emits a task.created carrying a title — interpolated the raw
+// TASK ID as if it were a human title, and the cap then chopped it to an
+// ellipsis-terminated fragment. That is the frame the UAT round rejected. An
+// id is not a title; these are the guards that go red the moment one is
+// painted again.
+describe("a task id is never painted as a title (05-40, G-05-1b)", () => {
+  /** Long enough that the 14-code-point cap cuts it, so a regression to the
+   *  `?? taskId` fallback paints an ellipsis-terminated FRAGMENT — which is
+   *  why the assertions below check a ten-character PREFIX, not the whole id,
+   *  and so cannot pass vacuously against a truncated paint. */
+  const LONG_TASK_ID = "task-9f3c1b7e-4a2d-11f0-9cbe-0242ac120002";
+  const ID_PREFIX = LONG_TASK_ID.slice(0, 10);
+  const REQ_ID = "c1a85f64-5717-4562-b3fc-2c963f66afa6";
+  const COMP_ID = "c2a85f64-5717-4562-b3fc-2c963f66afa6";
+
+  function run(seconds: number): void {
+    for (let i = 0; i < Math.ceil(seconds * 60); i++) stepOffice(1 / 60);
+  }
+
+  /** Drives a full requested-then-accepted pair for `LONG_TASK_ID`. */
+  function fullPair(receiverId = "agent-b"): { a: Character; b: Character } {
+    for (const id of ["agent-a", "filler-1", "filler-2", "filler-3", receiverId]) {
+      upsertCharacterFromAgent(id, AgentStatus.IDLE);
+    }
+    const a = getCharacter("agent-a")!;
+    const b = getCharacter(receiverId)!;
+    handleHandoffEvent(requestedEvent(LONG_TASK_ID, "agent-a", receiverId, REQ_ID));
+    run(10);
+    return { a, b };
+  }
+
+  it("paints neither participant's bubble with the task id when no title was registered", () => {
+    expect(Array.from(LONG_TASK_ID).length).toBeGreaterThan(MAX_DIALOGUE_TITLE_CHARS);
+    const { a, b } = fullPair();
+
+    expect(a.bubbleText, "the sender is speaking its requested line").toBeTruthy();
+    expect(a.bubbleText, "the sender's bubble paints the task id as a title").not.toContain(ID_PREFIX);
+    expect(a.bubbleText).toBe("hands off to agent-b");
+
+    handleHandoffEvent(completedEvent(LONG_TASK_ID, "agent-b", COMP_ID));
+    expect(b.bubbleText, "the receiver is speaking its accepted line").toBeTruthy();
+    expect(b.bubbleText, "the receiver's bubble paints the task id as a title").not.toContain(ID_PREFIX);
+    expect(b.bubbleText).toBe("agent-b accepts the handoff");
+  });
+
+  it("paints the registered title on both lines when one IS known", () => {
+    registerTaskTitle(LONG_TASK_ID, "Fix login");
+    const { a, b } = fullPair();
+
+    expect(a.bubbleText).toBe("hands Fix login to agent-b");
+    handleHandoffEvent(completedEvent(LONG_TASK_ID, "agent-b", COMP_ID));
+    expect(b.bubbleText).toBe("agent-b accepts Fix login");
+  });
+
+  it("an unnamed receiver still yields a readable line — its capped agent id, and the verb", () => {
+    const LONG_AGENT_ID = "receiver-agent-00000001";
+    const { a } = fullPair(LONG_AGENT_ID);
+
+    expect(getCharacter(LONG_AGENT_ID)!.name ?? null, "this receiver genuinely has no name").toBeNull();
+    const capped = LONG_AGENT_ID.slice(0, 9) + "…";
+    expect(a.bubbleText).toBe(`hands off to ${capped}`);
+    expect(a.bubbleText).toContain("hands");
+    expect(a.bubbleText).not.toContain(ID_PREFIX);
   });
 });
