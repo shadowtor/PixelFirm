@@ -1001,6 +1001,22 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       expect(c.bubbleType).toBe("handoff-task");
     });
 
+    // review IN-02: a record whose sender went offline is dead, so it must not
+    // hold its aisle slot until the next checkHandoffArrivals tick retires it.
+    it("a record whose sender went offline frees its slot at once (review IN-02)", () => {
+      const { a, b } = toIconVisible();
+      const c = getCharacter("agent-c")!;
+      const aTile = { col: a.tileCol, row: a.tileRow };
+      expect(aTile).toEqual(slotsOfHome(b)[0]);
+
+      // No frame stepped: the dead record is still in the map when c asks.
+      upsertCharacterFromAgent("agent-a", AgentStatus.OFFLINE);
+      expect(getCharacter("agent-a"), "agent-a is gone").toBeUndefined();
+      handleHandoffEvent(requestedEvent("task-2", "agent-c", "agent-b", NEW_REQUEST_ID));
+
+      expect(c.path[c.path.length - 1], "the dead record still reserved the first slot").toEqual(aTile);
+    });
+
     it("the interaction tile is always a fixed slot of the receiver's home", () => {
       const homes = [...SEATS, ...STANDING_SPOTS];
       expect(homes.length).toBe(20);
