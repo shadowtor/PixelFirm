@@ -444,10 +444,11 @@ function drawDialogue(
   return box;
 }
 
-/** The LAST frame's placements, each stamped with the speaker and the exact
- *  text that frame painted — the text is what makes a stale rect detectable
- *  (review CR-01); see getDialogueBox. */
-let framePlacements: Array<DialoguePlacement & { speakerId: string; text: string }> = [];
+/** The LAST frame's placements, each stamped with the speaker and the RECORD
+ *  IDENTITY whose line that frame painted (`Character.bubbleTextTaskId`) — the
+ *  same stamp the FSM's own `showsLineOf`/`clearLine` use. That identity is
+ *  what makes a stale rect detectable (review CR-01/WR-01); see getDialogueBox. */
+let framePlacements: Array<DialoguePlacement & { speakerId: string; taskId: string | null }> = [];
 
 /** Test-only reset — the per-frame record is module state like any other, so
  *  index.ts's _resetForTests clears it too (review CR-01: without this, a
@@ -459,31 +460,37 @@ export function _resetFrameForTests(): void {
 /** Every dialogue placement from the LAST renderScene call, with the scored
  *  candidate set behind each choice. Replaced per frame; read-only.
  *  Test instrumentation for the G-05-P1 ranking (05-33). @internal */
-export function lastDialoguePlacements(): ReadonlyArray<DialoguePlacement & { speakerId: string; text: string }> {
+export function lastDialoguePlacements(): ReadonlyArray<DialoguePlacement & { speakerId: string; taskId: string | null }> {
   return framePlacements;
 }
 
 /**
- * The box of the bubble the LAST rendered frame drew for `agentId` showing
- * exactly `text` — its fill rect, in canvas backing-store px — or undefined.
- * The CSS box equals the backing store (05-21), so a host can hit-test pointer
- * offsets against this directly (05-35, G-05-P4).
+ * The box of the bubble the LAST rendered frame drew for `agentId` on behalf of
+ * the handoff record `taskId` — its fill rect, in canvas backing-store px — or
+ * undefined. The CSS box equals the backing store (05-21), so a host can
+ * hit-test pointer offsets against this directly (05-35, G-05-P4).
  *
- * `text` is not a convenience filter, it is the freshness check (review CR-01).
- * A paused canvas still SHOWS its last frame, so a rect from that frame is
- * truthful for as long as the line it was drawn for is still the line being
- * claimed. What is not truthful is a rect drawn for some OTHER line: state
+ * `taskId` is not a convenience filter, it is the freshness check (review
+ * CR-01). A paused canvas still SHOWS its last frame, so a rect from that frame
+ * is truthful for as long as the line it was drawn for is still the line being
+ * claimed. What is not truthful is a rect drawn for some OTHER record: state
  * advances out of band (handleHandoffEvent runs off the host's WS handler, not
- * off the loop), so a caller can hold a record whose text the last painted
- * frame never drew. Matching on the drawn text makes that case undefined
- * instead of an arbitrarily old rect the caller cannot distinguish.
+ * off the loop), so a caller can hold a record the last painted frame never
+ * drew. Matching on the record identity makes that case undefined instead of an
+ * arbitrarily old rect the caller cannot distinguish.
+ *
+ * It is the RECORD IDENTITY, not the drawn text (review WR-01): two successive
+ * records from one speaker whose titles cap to byte-identical lines are
+ * indistinguishable by text, so text-keying hands the second the first's rect —
+ * the exact collision `showsLineOf` already keys on the stamp to avoid. Speaker
+ * attribution and rect attribution now use one identity.
  *
  * A fresh copy off the same per-frame record `lastDialoguePlacements` exposes,
  * never a second source: a rect a scorer did not actually draw is exactly the
  * class of bug 05-33's single-source rule exists to make unrepresentable.
  */
-export function getDialogueBox(agentId: string, text: string): DialogueRect | undefined {
-  const p = framePlacements.find((f) => f.speakerId === agentId && f.text === text);
+export function getDialogueBox(agentId: string, taskId: string): DialogueRect | undefined {
+  const p = framePlacements.find((f) => f.speakerId === agentId && f.taskId === taskId);
   return p ? { x: p.x, y: p.y, w: p.w, h: p.h } : undefined;
 }
 
@@ -567,7 +574,7 @@ export function renderScene(
     });
     if (!placement) return;
     placed.push(placement);
-    framePlacements.push({ speakerId: l.ch.id, text: l.ch.bubbleText ?? "", ...placement });
+    framePlacements.push({ speakerId: l.ch.id, taskId: l.ch.bubbleTextTaskId ?? null, ...placement });
   });
   // Pass 3: state glyphs (OFFICE-03, D-03) are the TOP layer, drawn after
   // every sprite and every dialogue box, so a transient handoff line can never

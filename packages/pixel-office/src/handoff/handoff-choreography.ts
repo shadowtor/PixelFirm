@@ -416,10 +416,6 @@ export function getActiveHandoffs(): ActiveHandoff[] {
     // showsLineOf reads the stamp the writer left, so two records whose lines
     // cap to the same text can never both claim one bubble (review WR-07).
     let speakerId: string | null = null;
-    // The line that speaker is showing, carried alongside so the box lookup can
-    // be matched against what the last frame actually painted. That remaining
-    // text comparison is CR-01's frame-freshness guard, NOT the attribution.
-    let speakerText: string | null = null;
     if (
       record.phase === "ICON_VISIBLE" &&
       senderIsCurrent(record) &&
@@ -427,12 +423,10 @@ export function getActiveHandoffs(): ActiveHandoff[] {
       showsLineOf(record.fromChar, record)
     ) {
       speakerId = record.fromAgentId;
-      speakerText = record.requestedText;
     } else if (record.phase === "RETURNING_TO_DESK" && record.acceptedText !== null) {
       const toChar = getCharacter(record.toAgentId);
       if (toChar && showsLineOf(toChar, record)) {
         speakerId = record.toAgentId;
-        speakerText = record.acceptedText;
       }
     }
     out.push({
@@ -442,7 +436,11 @@ export function getActiveHandoffs(): ActiveHandoff[] {
       toAgentId: record.toAgentId,
       phase: record.phase,
       speakerId,
-      box: (speakerId === null || speakerText === null ? undefined : getDialogueBox(speakerId, speakerText)) ?? null,
+      // Keyed on the record's own identity, the same stamp showsLineOf reads
+      // above — so speaker attribution and rect attribution can never disagree
+      // (review WR-01). The speakerId short-circuit is what makes the
+      // overwritten-record contract hold.
+      box: (speakerId === null ? undefined : getDialogueBox(speakerId, record.taskId)) ?? null,
     });
   }
   return out;

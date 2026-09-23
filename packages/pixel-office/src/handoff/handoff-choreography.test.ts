@@ -1448,6 +1448,43 @@ describe("host read path (05-35, G-05-P4)", () => {
       expect(b.bubbleText ?? null).toBeNull();
     });
 
+    // review WR-01: the CR-01 freshness test above uses "A different title
+    // entirely", so it only ever exercised the NON-colliding case. This is the
+    // case the review names — two successive records from the SAME speaker
+    // whose titles cap to byte-identical lines. While the frame record keyed on
+    // the drawn TEXT, the second record was silently handed the first's rect.
+    it("a superseding record with a byte-identical line gets its own rect, never the previous record's (review WR-01)", () => {
+      const { a, b } = twoSendersOneReceiver();
+      const toName = b.name ?? "agent-b";
+      const drawn = renderFrameBoxFills();
+      expect(drawn.length, "both senders' lines were drawn this frame").toBe(2);
+      expect(stampOf(a)).toBe("task-x");
+      const beforeBox = activeHandoffs().find((h) => h.taskId === "task-x")!.box;
+      expect(beforeBox, "the first record's own rect").not.toBeNull();
+
+      // The SAME title, so the superseding record's line is byte-identical to
+      // the one the last frame painted — asserted, never assumed.
+      registerTaskTitle("task-z", TITLE_X);
+      expect(resolveHandoffDialogue("requested", TITLE_X, toName)).toBe(
+        resolveHandoffDialogue("requested", TITLE_X, toName),
+      );
+      const lineBefore = a.bubbleText;
+      handleHandoffEvent(requestedEvent("task-z", "agent-a", "agent-b", REQ_Z));
+      run(10);
+      expect(stampOf(a), "the sender's line now belongs to the superseding record").toBe("task-z");
+      expect(a.bubbleText, "the two records' lines must be byte-identical for this to test anything").toBe(lineBefore);
+
+      // No frame has painted task-z's line: state advances off the WS handler,
+      // not off the render loop. Keying on text hands it task-x's rect.
+      const live = activeHandoffs().find((h) => h.taskId === "task-z")!;
+      expect(live.speakerId, "the sender is speaking, so the box lookup is genuinely reached").toBe("agent-a");
+      expect(live.box, "the superseding record was handed the previous record's rect").toBeNull();
+
+      // ...and it comes back as soon as a frame paints for the new record.
+      renderFrameBoxFills();
+      expect(activeHandoffs().find((h) => h.taskId === "task-z")!.box).not.toBeNull();
+    });
+
     it("retiring a record clears a line only when that line is its own", () => {
       const { b } = bothAccepted();
       const displayed = b.bubbleText;

@@ -1094,10 +1094,13 @@ async function main() {
     // TRUTH 5 (during) — the sender stands on the receiver's fixed aisle slot
     // (05-34, G-05-P2, superseding 05-27's tile beside the receiver) in its
     // own status pose (TYPE for this running, so CODING, sender; 05-19) and
-    // speaks the requested line. No task.created is posted and the
-    // receiver has no name, so the line interpolates the raw 23-char task id
-    // and 19-char agent id — both over 05-13's caps: the pixels counted are a
-    // capped line.
+    // speaks the requested line. No task.created is posted, so no title is
+    // known: since 05-40 (G-05-1b) the line is the fixed `hands off to <name>`
+    // rather than the raw task id capped to a fragment. The receiver has no
+    // name either, so <name> is its 19-char agent id capped to 10 code points —
+    // the pixels counted are a capped line. The assertions below are
+    // presence-only (bubble px > 0, text px > 0), so the line's LENGTH changing
+    // needs no re-derivation here.
     // 05-33 (G-05-P1) rebases this on the candidate placement rule, superseding
     // 05-28's fixed band under the pair's feet: the bubble is wherever the
     // frame's obstacles allow, so what is asserted is the PROPERTY — inside the

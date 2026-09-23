@@ -537,9 +537,12 @@ describe("handoff speech bubble (05-28, G-05-4 / G-05-1b)", () => {
   it("every home, full office: in the floor, off every glyph, tail on the speaker, desk-free whenever a valid candidate is", async () => {
     const { lastDialoguePlacements } = await import("./renderer.js");
     const { MAX_DIALOGUE_NAME_CHARS, MAX_DIALOGUE_TITLE_CHARS } = await import("../handoff/dialogue-templates.js");
-    // The WIDEST line the caps can produce, so the sweep scores the worst case
-    // rather than one ~6 px short of it (review WR-01): the accepted template is
-    // `${name} accepts ${title}`, both operands at their cap.
+    // The widest ACCEPTED line the caps can produce, so the sweep scores the
+    // worst case rather than one ~6 px short of it (review WR-01): the accepted
+    // template is `${name} accepts ${title}`, both operands at their cap.
+    // 05-40 (G-05-1b) made the verb-led REQUESTED line the wider of the two
+    // (`hands ${title} to ${name}`, 34 cps against 33) — the requested leg of
+    // each sweep below already renders exactly that line, at the same caps.
     const WIDE_NAME = "N".repeat(MAX_DIALOGUE_NAME_CHARS);
     const WIDE_TITLE = "T".repeat(MAX_DIALOGUE_TITLE_CHARS);
     const WIDEST_LINE_CHARS = MAX_DIALOGUE_NAME_CHARS + " accepts ".length + MAX_DIALOGUE_TITLE_CHARS;
