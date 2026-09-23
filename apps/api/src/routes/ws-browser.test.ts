@@ -255,3 +255,39 @@ describe("GET /ws/browser ordering (WR-01 regression)", () => {
     result.ws.close();
   });
 });
+
+describe("GET /ws/browser rate limiting (T-05-04)", () => {
+  it("the 21st upgrade attempt within a minute is rejected with 429", async () => {
+    // Dedicated server so the quota isn't shared with the tests above.
+    const limited = buildServer();
+    await limited.listen({ port: 0 });
+    const address = limited.server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    const url = `ws://127.0.0.1:${port}/ws/browser`;
+
+    const statuses: number[] = [];
+    try {
+      for (let i = 0; i < 21; i++) {
+        statuses.push(
+          await new Promise<number>((resolve) => {
+            const ws = new WebSocket(url);
+            ws.once("open", () => {
+              ws.close();
+              resolve(101);
+            });
+            ws.once("unexpected-response", (_req, res) => {
+              res.resume();
+              resolve(res.statusCode ?? 0);
+            });
+          }),
+        );
+      }
+    } finally {
+      await limited.close();
+    }
+
+    // Unauthenticated attempts still count: limiter runs before auth.
+    expect(statuses.slice(0, 20).every((s) => s === 401)).toBe(true);
+    expect(statuses[20]).toBe(429);
+  });
+});
