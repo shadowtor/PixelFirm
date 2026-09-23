@@ -202,3 +202,11 @@ shows a task icon at its own desk — a fabricated arrival. Latent for the same
 reason as 05-VERIFICATION.md gap 3: nothing emits OFFLINE today. Fix when an
 OFFLINE producer lands: drop handoff records involving an agent when it
 despawns. (Recorded by 05-14, 2026-09-22.)
+
+## Flaky under parallel load: one `apps/worker` test (found during 05-41)
+
+The first `pnpm turbo run test --force` in 05-41 reported `worker#test` with
+1 failed / 20 passed. `pnpm --filter worker test` alone then passed 21/21, and
+an immediate second uncached turbo run passed 10/10 tasks. 05-41 does not touch
+`apps/worker`. The failing test's name was not captured; it looks timing-bound
+under turbo's parallel load. Worth identifying and de-flaking in a future plan.
