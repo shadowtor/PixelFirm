@@ -946,6 +946,49 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       for (const ch of [a, c, f2]) expect(ch.bubbleType).toBe("handoff-task");
     });
 
+    // review WR-08: a completion flips the record to RETURNING_TO_DESK and the
+    // sender to WALK on the same tick, so a phase-exempted target is a tile the
+    // sender is still physically standing on.
+    it("a departing sender keeps its aisle slot reserved until it is home", () => {
+      const { a, b } = toIconVisible();
+      const c = getCharacter("agent-c")!;
+      const aTile = { col: a.tileCol, row: a.tileRow };
+      expect(aTile).toEqual(slotsOfHome(b)[0]);
+
+      // Same tick, no frame stepped between the two events: a is still drawn on
+      // aTile when the second request asks for a slot at the same receiver.
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      handleHandoffEvent(requestedEvent("task-2", "agent-c", "agent-b", NEW_REQUEST_ID));
+
+      const target = c.path[c.path.length - 1]!;
+      expect(target, "the second sender was handed the tile the first is still standing on").not.toEqual(aTile);
+      expect(Math.max(Math.abs(target.col - aTile.col), Math.abs(target.row - aTile.row))).toBeGreaterThan(1);
+
+      run(WALK_SECONDS);
+      expect({ col: c.tileCol, row: c.tileRow }).toEqual(slotsOfHome(b)[1]);
+      expect(c.bubbleType).toBe("handoff-task");
+      expectHomeIdle(a);
+    });
+
+    it("the slot is free again once the record retires", () => {
+      const { a, b } = toIconVisible();
+      const c = getCharacter("agent-c")!;
+      const aTile = { col: a.tileCol, row: a.tileRow };
+      expect(aTile).toEqual(slotsOfHome(b)[0]);
+
+      handleHandoffEvent(completedEvent("task-1", "agent-b"));
+      run(WALK_SECONDS);
+      expectHomeIdle(a);
+
+      // retireHandoff is the only record exit, and it has now run: the
+      // reservation is bounded by the record, it does not accumulate.
+      handleHandoffEvent(requestedEvent("task-2", "agent-c", "agent-b", NEW_REQUEST_ID));
+      expect(c.path[c.path.length - 1]).toEqual(aTile);
+      run(WALK_SECONDS);
+      expect({ col: c.tileCol, row: c.tileRow }).toEqual(aTile);
+      expect(c.bubbleType).toBe("handoff-task");
+    });
+
     it("the interaction tile is always a fixed slot of the receiver's home", () => {
       const homes = [...SEATS, ...STANDING_SPOTS];
       expect(homes.length).toBe(20);
