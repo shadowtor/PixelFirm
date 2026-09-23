@@ -31,7 +31,11 @@
 // choreography -> painted canvas.
 //
 // Truths: (0) the office is presented at an integer scale >= MIN_DISPLAY_SCALE,
-// never native (05-21, G-05-1a); (1) a live agent paints a sprite; (2) a live blocked status paints
+// never native (05-21, G-05-1a), at three viewports — 800x480 (below the
+// 960x528 canvas floor, so the canvas overflows and scrolls under the pinned
+// footer), 1920x1080 and 1280x720 — with the attribution footer carrying its
+// own WALL_COLOR backdrop at every one of them, so its contrast never depends
+// on what is behind it (05-36, WR-02); (1) a live agent paints a sprite; (2) a live blocked status paints
 // its glyph; (3) a handoff pair paints the task icon, then clears it; (4) the
 // blocked glyph is owner-bound; (5) the handoff speech bubble is painted in the
 // band under the pair, spanning sender and receiver (05-28), the accepted line is
@@ -307,8 +311,15 @@ const hexToRgb = (hex) => [
   parseInt(hex.slice(3, 5), 16),
   parseInt(hex.slice(5, 7), 16),
 ];
+/** `#RRGGBB` -> the `rgb(r, g, b)` form getComputedStyle reports (05-36, WR-02). */
+const hexToRgbCss = (hex) => `rgb(${hexToRgb(hex).join(", ")})`;
 const FALLBACK_FLOOR_COLOR = readColorConst("FALLBACK_FLOOR_COLOR");
 const FALLBACK_FLOOR_RGB = hexToRgb(FALLBACK_FLOOR_COLOR);
+// 05-36 (WR-02): TRUTH 0 asserts the footer's computed backdrop equals this.
+// Read from the engine's own source like every other constant here, so the
+// harness cannot drift from what the app actually renders (the rule IN-05
+// flagged the hardcoded TAIL_REACH_PX for breaking).
+const WALL_COLOR = readColorConst("WALL_COLOR");
 
 /** Every non-empty colour string anywhere under `v` (nested sprite arrays). */
 function collectColors(v, set = new Set()) {
@@ -320,7 +331,7 @@ function collectColors(v, set = new Set()) {
 /** Every colour the office itself can paint: all office sprites (floor tiles
  *  included), the flat wall fill, and the fallback floor constant. */
 const OFFICE_COLORS = collectColors(Object.values(OFFICE_SPRITES).map((s) => s.data));
-OFFICE_COLORS.add(readColorConst("WALL_COLOR").toLowerCase());
+OFFICE_COLORS.add(WALL_COLOR.toLowerCase());
 OFFICE_COLORS.add(FALLBACK_FLOOR_COLOR.toLowerCase());
 
 /** Every colour any character sprite frame can paint. */
@@ -803,16 +814,27 @@ async function main() {
     // ── TRUTH 0 — the frame shows ONLY the office (05-21 G-05-1a, 05-31
     // G-05-P6): at each documented OBS source size the office is presented at
     // an integer scale >= MIN_DISPLAY_SCALE, drawn 1:1 in CSS with pixelated
-    // scaling, centred, the attribution overlaying the bottom wall row, and not
-    // one near-black pixel anywhere in the viewport. 1920x1080 is checked first
-    // so the run ENDS back at 1280x720 and every later truth sees the viewport
-    // it always has.
+    // scaling, the attribution carrying its own WALL_COLOR backdrop, and not
+    // one near-black pixel anywhere in the viewport. Centred and sitting on the
+    // bottom wall row only where the canvas FITS.
+    //
+    // 05-36 (WR-02): 800x480 is below the MIN_DISPLAY_SCALE canvas floor
+    // (960x528) on both axes, so the canvas overflows, the wrapper scrolls it
+    // under the position:fixed footer, and the footer can land on the floor —
+    // the case the backdrop exists for, and the one OBS_SIZES could never see.
+    // Its obsScale is written as a literal 3 on purpose: that makes the
+    // `expected === obsScale` check below pin the floor rather than compare
+    // MIN_DISPLAY_SCALE against itself.
+    //
+    // 800x480 and 1920x1080 are checked first so the run ENDS back at 1280x720
+    // and every later truth sees the viewport it always has.
     const OBS_SIZES = [
-      { w: 1920, h: 1080, obsScale: 6 },
-      { w: 1280, h: 720, obsScale: 4 },
+      { w: 800, h: 480, obsScale: 3, fits: false },
+      { w: 1920, h: 1080, obsScale: 6, fits: true },
+      { w: 1280, h: 720, obsScale: 4, fits: true },
     ];
     const truth0 = [];
-    for (const { w, h, obsScale } of OBS_SIZES) {
+    for (const { w, h, obsScale, fits } of OBS_SIZES) {
       // The same floor the host computes, restated from the engine's own
       // constants — with NO footer allowance, which is the whole of G-05-P6.
       const expected = Math.max(MIN_DISPLAY_SCALE, Math.floor(Math.min(w / MAP_W, h / MAP_H)));
@@ -855,6 +877,7 @@ async function main() {
           bottom: c.bottom,
           rendering: getComputedStyle(canvas).imageRendering,
           footer: f ? { top: f.top, bottom: f.bottom } : null,
+          footerBg: footer ? getComputedStyle(footer).backgroundColor : null,
           footerText: footer?.textContent ?? "",
           viewW: window.innerWidth,
           viewH: window.innerHeight,
@@ -879,31 +902,55 @@ async function main() {
       );
       assert(geom.rendering === "pixelated", `canvas image-rendering is not pixelated (${where})`);
 
-      // 05-31: the remainder is split evenly, so the surround reads as a border
-      // rather than the canvas being pinned to one corner.
-      assert(
-        Math.abs(geom.left - (geom.viewW - geom.cssW) / 2) <= 0.5,
-        `the office is not horizontally centred — left ${geom.left}, expected ${(geom.viewW - geom.cssW) / 2} (${where})`,
-      );
-      assert(
-        Math.abs(geom.top - (geom.viewH - geom.cssH) / 2) <= 0.5,
-        `the office is not vertically centred — top ${geom.top}, expected ${(geom.viewH - geom.cssH) / 2} (${where})`,
-      );
-
-      // OFFICE-02 / SC4: the credit is still on screen, and it sits over the
-      // office's bottom wall row (one tile tall at this scale) plus whatever
-      // remainder strip is below it — never over the floor.
+      // OFFICE-02 / SC4: the credit is still on screen, naming the fork.
       assert(geom.footer !== null, `no attribution <footer> is in the DOM (${where})`);
-      const bandTop = geom.bottom - TILE_SIZE * scale;
-      assert(
-        geom.footer.top >= bandTop - 0.5 && geom.footer.bottom <= geom.viewH + 0.5,
-        `the attribution footer (${geom.footer.top}..${geom.footer.bottom}) is outside the bottom wall row and remainder ` +
-          `(${bandTop}..${geom.viewH}) (${where})`,
-      );
       assert(
         geom.footerText.includes("pixel-agents-hq/pixel-agents"),
         `the attribution footer does not name the fork it credits (${where})`,
       );
+
+      // 05-36 (WR-02) — asserted at EVERY entry, deliberately outside the
+      // `fits` branch below: an unconditional contrast guarantee is exactly
+      // what must not be conditional. #cccccc is 6.74:1 on WALL_COLOR but
+      // 4.40:1 and 3.21:1 on the two MetroCity floor planks.
+      const wantFooterBg = hexToRgbCss(WALL_COLOR);
+      assert(
+        geom.footerBg === wantFooterBg,
+        `the attribution footer's backdrop is ${geom.footerBg}, not the office border colour ${wantFooterBg} ` +
+          `(${WALL_COLOR}) — the credit's contrast now depends on whatever happens to be behind it (${where})`,
+      );
+
+      if (fits) {
+        // 05-31: the remainder is split evenly, so the surround reads as a
+        // border rather than the canvas being pinned to one corner. Centring
+        // and "the footer sits on the bottom wall row" are properties of the
+        // case where the canvas FITS — the overflow entry exists precisely
+        // because neither holds there, so they are scoped rather than relaxed.
+        assert(
+          Math.abs(geom.left - (geom.viewW - geom.cssW) / 2) <= 0.5,
+          `the office is not horizontally centred — left ${geom.left}, expected ${(geom.viewW - geom.cssW) / 2} (${where})`,
+        );
+        assert(
+          Math.abs(geom.top - (geom.viewH - geom.cssH) / 2) <= 0.5,
+          `the office is not vertically centred — top ${geom.top}, expected ${(geom.viewH - geom.cssH) / 2} (${where})`,
+        );
+
+        // The footer overlays the office's bottom wall row (one tile tall at
+        // this scale) plus whatever remainder strip is below it.
+        const bandTop = geom.bottom - TILE_SIZE * scale;
+        assert(
+          geom.footer.top >= bandTop - 0.5 && geom.footer.bottom <= geom.viewH + 0.5,
+          `the attribution footer (${geom.footer.top}..${geom.footer.bottom}) is outside the bottom wall row and remainder ` +
+            `(${bandTop}..${geom.viewH}) (${where})`,
+        );
+      } else {
+        // The overflow entry only proves something if it genuinely overflows.
+        assert(
+          geom.cssW > geom.viewW || geom.cssH > geom.viewH,
+          `the overflow case under test did not actually overflow — canvas ${geom.cssW}x${geom.cssH} fits the ` +
+            `${geom.viewW}x${geom.viewH} viewport, so this entry proves nothing (${where})`,
+        );
+      }
 
       // The defect itself: any unpainted host-page background left in the frame.
       const black = await scanViewportForBlack(page);
@@ -914,9 +961,13 @@ async function main() {
       );
 
       await shot(page, `viewport-${w}x${h}.png`);
-      truth0.push(`${w}x${h}: scale ${scale} (backing ${geom.w}x${geom.h})`);
+      truth0.push(`${w}x${h}: scale ${scale} (backing ${geom.w}x${geom.h}, ${fits ? "fits" : "overflows"})`);
     }
-    log(`TRUTH 0 PASS — ${truth0.join(", ")}; centred, pixelated, CSS box == backing store, credit on the bottom wall, 0 near-black px`);
+    log(
+      `TRUTH 0 PASS — ${truth0.join(", ")}; pixelated, CSS box == backing store, credit backed by ` +
+        `${hexToRgbCss(WALL_COLOR)} (${WALL_COLOR}) at every viewport, centred and on the bottom wall where the ` +
+        `canvas fits, 0 near-black px`,
+    );
 
     // ── TRUTH 6 — the office is furnished (05-26, G-05-1e): (a) the bare grey
     // floor is gone; (b) every desk paints at its layout rectangle, placed by
