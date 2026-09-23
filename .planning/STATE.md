@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-33-PLAN.md
-last_updated: "2026-09-22T23:43:08.146Z"
+stopped_at: Completed 05-34-PLAN.md
+last_updated: "2026-09-23T00:28:49.527Z"
 last_activity: 2026-09-23
 last_activity_desc: Phase 05 execution started
-state_head: 3028b786e99d0f4df4090ef409ea043ea9d8df67
+state_head: 01e361cb479c63d69b6e608e03507219902d4519
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 50
-  completed_plans: 48
+  completed_plans: 49
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 4 of 35
+Plan: 5 of 35
 Status: Ready to execute
 Last activity: 2026-09-23 — Phase 05 execution started
 
@@ -108,6 +108,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P31 | 9 min | 2 tasks | 6 files |
 | Phase 05 P32 | 12 min | 3 tasks | 6 files |
 | Phase 05 P33 | 33 min | 3 tasks | 5 files |
+| Phase 05 P34 | 26 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -222,6 +223,9 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-32: the sitting rule is expressed negatively (state !== WALK) so a future CharacterState defaults to seated at its own desk rather than silently reopening G-05-P3
 - [Phase 05]: 05-32: seated-vs-standing legibility is measured by compositing difference (visible body rows: 17 seated vs 28 standing), not by sprite geometry — only a two-render diff proves the desk removed rows rather than shifting them
 - [Phase 05]: 05-32: bubble-waiting redrawn as a true hourglass (widths 11/9/7/5/3/5/7/9/11, 1 px-fill waist, sand in the lower bulb) with its palette frozen, so every existing contrast test and the live harness colour sets stay valid
+- [Phase 05]: 05-34: handoff senders wait on fixed aisle slots from layout data (office-layout.json interaction row 6, offsets +1/-1/+3/-3 from the receiver's home), superseding 05-27's seat-row search; slot occupancy is Chebyshev 1 so a second sender never stands beside the first
+- [Phase 05]: 05-34: row 6 is the only interior row two tiles from every seat and standing spot, so slot clearance is a property of the ROW, not the offsets; a layout-data guard test proves it without running a scene
+- [Phase 05]: 05-34: the waiting sender is faced on the DOMINANT axis (UP across the desk to a row-4 receiver, DOWN to a row-8 one); measured visible-ink separation 4 px over 86 neighbour pairs, against 2 px for the seat-row layout
 
 ### Pending Todos
 
@@ -250,6 +254,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-22T23:43:07.918Z
-Stopped at: Completed 05-33-PLAN.md
+Last session: 2026-09-23T00:28:08.128Z
+Stopped at: Completed 05-34-PLAN.md
 Resume file: None
