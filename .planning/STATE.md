@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 05
-current_phase_name: pixel-office-renderer
+current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-40-PLAN.md
-last_updated: "2026-09-23T09:55:40.149Z"
+stopped_at: Completed 05-41-PLAN.md
+last_updated: "2026-09-23T10:45:08.870Z"
 last_activity: 2026-09-23
 last_activity_desc: Phase 05 execution started
-state_head: de1faebe06a68356b26a68186757613331fcd7b5
+state_head: 5149bddeaad11fd4bf93221e83f03f0be4ca7c4e
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 56
-  completed_plans: 55
+  completed_plans: 56
   percent: 50
 ---
 
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 
 ## Current Position
 
-Phase: 05 (pixel-office-renderer) — READY TO EXECUTE
-Plan: 4 of 40
+Phase: 05 (Pixel Office Renderer) — EXECUTING
+Plan: 2 of 41
 Status: Ready to execute
 Last activity: 2026-09-23 — Phase 05 execution started
 
@@ -115,6 +115,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P38 | 13 min | 2 tasks | 4 files |
 | Phase 05 P39 | 8 min | 1 tasks | 2 files |
 | Phase 05 P40 | 16 min | 3 tasks | 8 files |
+| Phase 05 P41 | 9 min | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -243,6 +244,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-38: the live TRUTH 4 gap bound guards renderer-vs-constant drift, not a constant revert - the harness reads the same constant the renderer compiles from, so both sides move together; the unit literal pins are the revert guards
 - [Phase 05]: 05-38: every widening ships with the bound that catches its over-correction - the raised glyph gap got a two-sided live bound, and the deeper seated sink got a head-visibility floor (seatedRows >= 10, measured 13)
 - [Phase 05]: Repaint over redraw for G-05-1a: the waiting glyph silhouette was already correct, so only the FILL changed (glass #a9bcff to #c8d4ff, upper bulb emptied). Zero opaque cells moved, so all four 05-32 silhouette guards stayed green untouched. — Raising the light fill opens the glass/sand gap to 3.423:1 without spending the sand-vs-outline contrast that the G-05-2 frozen-glyph rule measures independently.
+- [Phase 05]: 05-41: blank title means no title known; titleOrNull in dialogue-templates.ts is the single rule for the bubble and getActiveHandoffs (fullTitle is string | null)
+- [Phase 05]: 05-41: TaskCreatedPayload.title not tightened (replay re-validates stored rows); App.tsx entry guard is the belt
 
 ### Pending Todos
 
@@ -271,6 +274,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-23T07:51:12.699Z
-Stopped at: Completed 05-40-PLAN.md
+Last session: 2026-09-23T10:45:08.737Z
+Stopped at: Completed 05-41-PLAN.md
 Resume file: None
