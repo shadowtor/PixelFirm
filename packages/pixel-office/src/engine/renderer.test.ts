@@ -572,6 +572,15 @@ describe("handoff speech bubble (05-28, G-05-4 / G-05-1b)", () => {
         w: box.w,
         h: box.h,
       });
+      // The tail belongs to the box, not merely to the speaker (review WR-05):
+      // for below/above it must lie inside the box's own x-span, or it is a
+      // detached 1-px stub in open floor. (The side tails span the gap between
+      // the box edge and the sprite, so they are outside by construction.)
+      if (pl.kind === "below" || pl.kind === "above") {
+        expect(spansX(box, pl.tail.x) && spansX(box, pl.tail.x + pl.tail.w), `${where}: ${pl.kind} tail outside its box`).toBe(
+          true,
+        );
+      }
       const chosen = pl.candidates.find((c) => c.kind === pl.kind)!;
       expect(chosen, where).toBeDefined();
       expect(chosen.valid, `${where}: chose an invalid candidate (${pl.kind})`).toBe(true);
@@ -797,6 +806,23 @@ describe("resolveDialogueBox candidate scoring (05-33, G-05-P1)", () => {
     expect({ x: p.x, y: p.y, w: p.w, h: p.h }).toEqual({ x: best.x, y: best.y, w: best.w, h: best.h });
   });
 
+  it("a pair wide enough to clamp the box keeps the tail inside it (review WR-05)", async () => {
+    const { resolveDialogueBox } = await import("./renderer.js");
+    // Partner far to the right: the midpoint drags the box past the speaker by
+    // more than its half-width, and the box is then clamped to the floor edge.
+    for (const partner of [SP.centerX + 200, SP.centerX - 200]) {
+      const p = resolveDialogueBox(SP, partner, TEXT, 1, FLOOR, NO_OBSTACLES);
+      const where = `partner at ${partner}, box ${JSON.stringify({ x: p.x, w: p.w })}`;
+      expect(spansX(p, SP.centerX), `${where}: the box still contains the speaker, nothing to clamp`).toBe(false);
+      for (const c of p.candidates) {
+        if (c.kind !== "below" && c.kind !== "above") continue;
+        expect(spansX(c, c.tail.x), `${where}: ${c.kind} tail starts outside its box`).toBe(true);
+        expect(spansX(c, c.tail.x + c.tail.w), `${where}: ${c.kind} tail ends outside its box`).toBe(true);
+      }
+      expect(spansX(p, p.tail.x) && spansX(p, p.tail.x + p.tail.w), `${where}: chosen tail outside its box`).toBe(true);
+    }
+  });
+
   it("with no valid candidate it still ranks: the least-bad invalid box wins, not the first one (review WR-01)", async () => {
     // A glyph on all four candidates, so none is valid; "below" covers a desk
     // and "above" covers nothing, so the ranking — not the index — must decide.
@@ -833,6 +859,7 @@ describe("resolveDialogueBox candidate scoring (05-33, G-05-P1)", () => {
     expect(p.y).toBeGreaterThanOrEqual(floor.top);
     expect(p.x).toBeGreaterThanOrEqual(floor.left);
     expect(p.x + p.w).toBeLessThanOrEqual(floor.right);
+    expect(spansX(p, p.tail.x) && spansX(p, p.tail.x + p.tail.w), "the clamped box left its tail behind").toBe(true);
   });
 
   it("each candidate's tail is 1 px across, shares an edge with its box, and reaches the speaker", async () => {

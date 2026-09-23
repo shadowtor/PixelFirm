@@ -302,6 +302,14 @@ export function resolveDialogueBox(
   const aboveY = speaker.headTop - (GLYPH_ROWS + BUBBLE_ICON_GAP_PX) * zoom - gap - h;
   const sideY = speaker.headTop + Math.floor(DIALOGUE_BOX_HEIGHT_PX / 2) * zoom;
   const leftX = speaker.left - gap - w;
+  /** The tail's x for a below/above box, clamped into that box's own span.
+   *  `pairX` is clamped into the floor interior while the tail is anchored on
+   *  the speaker, with nothing connecting the two: widen the pair (interaction
+   *  colOffsets, or any sender further from its receiver) and the tail detaches
+   *  — a 1-px ink stub in open floor pointing at nothing while the bubble sits
+   *  elsewhere (review WR-05). Clamped, the tail stays part of its bubble and
+   *  leans as far toward the speaker as the box allows. */
+  const tailXIn = (boxX: number): number => Math.min(Math.max(tailX, boxX), boxX + w - zoom);
   /** The ink stub binding a box AT (x, y) to its speaker. One function and one
    *  call per box, so a candidate's tail and the returned winner's tail can
    *  never disagree about where the box ended up (review WR-01: the winner is
@@ -309,9 +317,9 @@ export function resolveDialogueBox(
   const tailFor = (kind: DialogueCandidateKind, x: number, y: number): DialogueRect => {
     switch (kind) {
       case "below":
-        return { x: tailX, y: speaker.footY, w: zoom, h: Math.max(0, y - speaker.footY) };
+        return { x: tailXIn(x), y: speaker.footY, w: zoom, h: Math.max(0, y - speaker.footY) };
       case "above":
-        return { x: tailX, y: y + h, w: zoom, h: Math.max(0, speaker.headTop - (y + h)) };
+        return { x: tailXIn(x), y: y + h, w: zoom, h: Math.max(0, speaker.headTop - (y + h)) };
       case "right":
         return { x: speaker.right, y: sideY, w: Math.max(0, x - speaker.right), h: zoom };
       case "left":
