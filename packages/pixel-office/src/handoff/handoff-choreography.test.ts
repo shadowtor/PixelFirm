@@ -18,6 +18,7 @@ import { FURNITURE, FURNITURE_BLOCKED_TILES, SEATS, STANDING_SPOTS } from "../la
 import { TileType } from "../types";
 import { renderScene } from "../engine/renderer";
 import { handleHandoffEvent, checkHandoffArrivals, isWaitingHandoffSender, blockedTilesFor } from "./handoff-choreography";
+import { resolveHandoffDialogue } from "./dialogue-templates";
 
 type TileRef = { col: number; row: number };
 
@@ -1332,6 +1333,140 @@ describe("host read path (05-35, G-05-P4)", () => {
     toIconVisible(null);
     renderFrameBoxFills();
     expect(activeHandoffs()[0]?.fullTitle).toBe("task-1");
+  });
+
+  // review WR-07: speaker attribution used to be a string comparison, so two
+  // records whose lines cap to the same text both claimed the same bubble and
+  // the same rect. Identity comes from the stamp the writer left instead.
+  describe("colliding dialogue lines (review WR-07)", () => {
+    /** Distinct titles that cap to the same bubble line. The cut keeps 11 code
+     *  points plus U+2026, so anything sharing that prefix collides — but the
+     *  collision is ASSERTED below, never assumed, so a change to the caps
+     *  cannot silently stop this describe testing the property (A4). */
+    const TITLE_X = "Refactor the billing exporter";
+    const TITLE_Y = "Refactor the billing importer";
+    const REQ_X = "a1a85f64-5717-4562-b3fc-2c963f66afa6";
+    const REQ_Y = "a2a85f64-5717-4562-b3fc-2c963f66afa6";
+    const REQ_Z = "a3a85f64-5717-4562-b3fc-2c963f66afa6";
+    const REQ_X2 = "a4a85f64-5717-4562-b3fc-2c963f66afa6";
+    const REQ_Y2 = "a5a85f64-5717-4562-b3fc-2c963f66afa6";
+    const COMP_X = "b1a85f64-5717-4562-b3fc-2c963f66afa6";
+    const COMP_Y = "b2a85f64-5717-4562-b3fc-2c963f66afa6";
+
+    /** The record whose line `ch` is showing, by identity — the field this
+     *  describe exists to introduce (Character.bubbleTextTaskId). */
+    const stampOf = (ch: Character): string | null | undefined =>
+      (ch as { bubbleTextTaskId?: string | null }).bubbleTextTaskId;
+
+    /** a -> b (task-x) and c -> b (task-y), both waiting at b's aisle slots,
+     *  with both lines proven byte-identical. */
+    function twoSendersOneReceiver(): { a: Character; b: Character; c: Character } {
+      for (const id of ["agent-a", "filler-1", "filler-2", "filler-3", "agent-b", "agent-c"]) {
+        upsertCharacterFromAgent(id, AgentStatus.IDLE);
+      }
+      registerTaskTitle("task-x", TITLE_X);
+      registerTaskTitle("task-y", TITLE_Y);
+      const a = getCharacter("agent-a")!;
+      const b = getCharacter("agent-b")!;
+      const c = getCharacter("agent-c")!;
+      const toName = b.name ?? "agent-b";
+      expect(TITLE_X, "the two titles must be genuinely different tasks").not.toBe(TITLE_Y);
+      expect(resolveHandoffDialogue("accepted", TITLE_X, toName)).toBe(
+        resolveHandoffDialogue("accepted", TITLE_Y, toName),
+      );
+      expect(resolveHandoffDialogue("requested", TITLE_X, toName)).toBe(
+        resolveHandoffDialogue("requested", TITLE_Y, toName),
+      );
+      handleHandoffEvent(requestedEvent("task-x", "agent-a", "agent-b", REQ_X));
+      handleHandoffEvent(requestedEvent("task-y", "agent-c", "agent-b", REQ_Y));
+      run(10);
+      expect(a.bubbleType).toBe("handoff-task");
+      expect(c.bubbleType).toBe("handoff-task");
+      return { a, b, c };
+    }
+
+    /** Both records completed, so both computed the SAME accepted line and the
+     *  receiver's bubble can only be carrying the later writer's. */
+    function bothAccepted(): { a: Character; b: Character; c: Character } {
+      const chars = twoSendersOneReceiver();
+      handleHandoffEvent(completedEvent("task-x", "agent-b", COMP_X));
+      handleHandoffEvent(completedEvent("task-y", "agent-b", COMP_Y));
+      expect(chars.b.bubbleText).toContain("accepts");
+      return chars;
+    }
+
+    it("only the record whose line the receiver is actually showing reports a speaker and a box", () => {
+      const { b } = bothAccepted();
+      expect(stampOf(b), "the receiver's line must name the record that wrote it").toBe("task-y");
+      renderFrameBoxFills();
+
+      const live = activeHandoffs();
+      expect(live.map((h) => h.taskId)).toEqual(["task-x", "task-y"]);
+      expect(live.filter((h) => h.speakerId !== null), "two records claimed one bubble").toHaveLength(1);
+
+      const [x, y] = live;
+      expect(x!.speakerId, "the overwritten record claimed the receiver").toBeNull();
+      expect(x!.box, "the overwritten record was handed another record's rect").toBeNull();
+      expect(y!.speakerId).toBe("agent-b");
+      expect(y!.box).not.toBeNull();
+      // Each record still carries its own untruncated title (05-35 unchanged).
+      expect(x!.fullTitle).toBe(TITLE_X);
+      expect(y!.fullTitle).toBe(TITLE_Y);
+    });
+
+    it("a sender's colliding re-request leaves exactly one record claiming that sender's bubble", () => {
+      const { a, b } = twoSendersOneReceiver();
+      // A character can be in only one walk, so a second request from the same
+      // sender supersedes its record (05-19, WR-01) — that is the FSM's own
+      // bound on "one sender holding two live records", and it is why the
+      // sender-side collision cannot arise today. Asserted so a future change
+      // that lets one sender hold two records is caught here.
+      registerTaskTitle("task-z", TITLE_Y);
+      handleHandoffEvent(requestedEvent("task-z", "agent-a", "agent-b", REQ_Z));
+      run(10);
+
+      const live = activeHandoffs();
+      expect([...live.map((h) => h.taskId)].sort()).toEqual(["task-y", "task-z"]);
+      expect(stampOf(a)).toBe("task-z");
+      const claimingA = live.filter((h) => h.speakerId === "agent-a");
+      expect(claimingA).toHaveLength(1);
+      expect(claimingA[0]!.taskId).toBe("task-z");
+      expect(b.bubbleText ?? null).toBeNull();
+    });
+
+    it("retiring a record clears a line only when that line is its own", () => {
+      const { b } = bothAccepted();
+      const displayed = b.bubbleText;
+      expect(stampOf(b)).toBe("task-y");
+
+      // Retires task-x's record deterministically (a fresh request for the same
+      // taskId supersedes it, 05-19/WR-01) without touching task-y's.
+      handleHandoffEvent(requestedEvent("task-x", "filler-1", "agent-b", REQ_X2));
+      expect(b.bubbleText, "a retiring record wiped another record's identical-looking line").toBe(displayed);
+      expect(stampOf(b)).toBe("task-y");
+
+      // The record that DOES own the line clears text, partner and stamp together.
+      handleHandoffEvent(requestedEvent("task-y", "filler-2", "agent-b", REQ_Y2));
+      expect(b.bubbleText ?? null).toBeNull();
+      expect(b.bubbleTextPartnerId ?? null).toBeNull();
+      expect(stampOf(b) ?? null).toBeNull();
+    });
+
+    it("stays read-only with the stamp in play: mutating a returned entry changes neither the stamps nor the next call", () => {
+      const { b } = bothAccepted();
+      renderFrameBoxFills();
+
+      const before = activeHandoffs();
+      before[0]!.taskId = "task-y";
+      before[0]!.speakerId = "agent-b";
+      before[1]!.speakerId = null;
+
+      const after = activeHandoffs();
+      expect(after[0]!.taskId).toBe("task-x");
+      expect(after[0]!.speakerId).toBeNull();
+      expect(after[1]!.speakerId).toBe("agent-b");
+      expect(stampOf(b)).toBe("task-y");
+    });
   });
 
   it("is read-only: mutating a returned entry changes neither the next call nor the FSM", () => {
