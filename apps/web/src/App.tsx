@@ -163,9 +163,18 @@ export function App() {
           05-26: the office art (MetroCity Interior, ASSET-LICENSES §1a) is
           credited alongside the character pack — still credit-only, because
           §1's hair layer is.
-          05-31 (G-05-P6): the black strip is gone — the footer is transparent
-          and overlays the office's own bottom wall row (and the WALL_COLOR
-          remainder below it), never the floor. The sentence is unchanged. */}
+          05-31 (G-05-P6): the black rgba(0,0,0,0.6) strip is gone.
+          05-36 (WR-02): it was replaced by a WALL_COLOR backdrop rather than by
+          nothing. WALL_COLOR is the same value the surround uses, so no black
+          strip returns — but the footer now carries its own contrast instead of
+          inheriting whatever is behind it. That matters because 05-31's "never
+          over the floor" claim held only while the canvas fitted the viewport:
+          MIN_DISPLAY_SCALE floors the canvas at 960x528 while this footer is
+          position:fixed, so on a smaller viewport the wrapper's overflow:auto
+          scrolls the canvas UNDER the footer and the footer does sit over the
+          floor. Measured: #cccccc is 6.74:1 on WALL_COLOR, but 4.40:1 on floor
+          plank #7d4e13 and 3.21:1 on #926429 — both below WCAG AA. The
+          sentence is unchanged. */}
       <footer
         style={{
           position: "fixed",
@@ -176,6 +185,7 @@ export function App() {
           fontSize: "11px",
           fontFamily: "monospace",
           color: "#cccccc",
+          background: WALL_COLOR,
         }}
       >
         Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character and
