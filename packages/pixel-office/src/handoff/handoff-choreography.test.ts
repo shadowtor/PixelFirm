@@ -6,8 +6,22 @@ import { CharacterState, Direction } from "../types";
 import type { Character } from "../types";
 import { findPath } from "../layout/tileMap";
 import { FURNITURE_BLOCKED_TILES, SEATS, STANDING_SPOTS } from "../layout/officeLayout";
+import { TileType } from "../types";
 import { renderScene } from "../engine/renderer";
 import { handleHandoffEvent, checkHandoffArrivals, isWaitingHandoffSender, blockedTilesFor } from "./handoff-choreography";
+
+type TileRef = { col: number; row: number };
+
+// 05-34 (G-05-P2): the new officeLayout export is reached through a dynamic
+// import so a RED run fails on assertions rather than crashing at ESM link
+// time (05-33/05-10 precedent). `slotsFor` is the only way this file names a
+// waiting sender's tile — no test restates the aisle row or the offsets.
+const officeLayoutModule = (await import("../layout/officeLayout")) as {
+  interactionSlotsFor?: (home: TileRef) => ReadonlyArray<TileRef>;
+};
+const slotsFor = (home: TileRef): ReadonlyArray<TileRef> => officeLayoutModule.interactionSlotsFor?.(home) ?? [];
+/** The fixed slots of a character's HOME — where a sender handing off to it waits. */
+const slotsOfHome = (ch: Character): ReadonlyArray<TileRef> => slotsFor({ col: ch.seatCol, row: ch.seatRow });
 
 function requestedEvent(
   taskId: string,
@@ -57,6 +71,38 @@ beforeEach(() => {
   _resetForTests();
 });
 
+describe("interaction slots (05-34, G-05-P2): layout data alone", () => {
+  it("every home has a slot, and every slot the layout can produce is clear floor two tiles from every home", () => {
+    expect(typeof officeLayoutModule.interactionSlotsFor, "officeLayout must export interactionSlotsFor (05-34)").toBe(
+      "function",
+    );
+    const homes = [...SEATS, ...STANDING_SPOTS];
+    expect(homes.length).toBe(20);
+    const tileMap = getTileMap();
+    for (const home of homes) {
+      const slots = slotsFor(home);
+      expect(slots.length, `home (${home.col},${home.row}) has no interaction slot`).toBeGreaterThan(0);
+      for (const s of slots) {
+        const where = `slot (${s.col},${s.row}) of home (${home.col},${home.row})`;
+        expect(tileMap[s.row]?.[s.col], `${where} is not a floor tile`).toBe(TileType.FLOOR_1);
+        expect(FURNITURE_BLOCKED_TILES.has(`${s.col},${s.row}`), `${where} is furniture`).toBe(false);
+        expect(
+          homes.some((h) => h.col === s.col && h.row === s.row),
+          `${where} is itself a home (review WR-05)`,
+        ).toBe(false);
+        // The whole point of the aisle row: no slot can ever be
+        // shoulder-to-shoulder with a seated or standing agent.
+        for (const h of homes) {
+          const chebyshev = Math.max(Math.abs(h.col - s.col), Math.abs(h.row - s.row));
+          expect(chebyshev, `${where} is only ${chebyshev} tile(s) from home (${h.col},${h.row})`).toBeGreaterThanOrEqual(
+            2,
+          );
+        }
+      }
+    }
+  });
+});
+
 describe("handleHandoffEvent — agent.handoff_requested", () => {
   it("sets the sending character's state to WALK with a non-empty path computed via the real forked findPath (not a stub)", () => {
     upsertCharacterFromAgent("agent-a", AgentStatus.IDLE); // first desk of row DESK_ROW_START
@@ -69,15 +115,15 @@ describe("handleHandoffEvent — agent.handoff_requested", () => {
     expect(fromChar.state).toBe(CharacterState.WALK);
     expect(fromChar.path.length).toBeGreaterThan(0);
 
-    // 05-27: the target is the interaction tile beside the receiver (a at
-    // (1,4), b at (3,4) -> (2,4)), pathed with the same occupancy-aware set.
-    const target = { col: 2, row: 4 };
+    // 05-34: the target is the receiver's FIRST fixed aisle slot (b at (3,4),
+    // so its home's first offset), pathed with the same occupancy-aware set.
+    const target = slotsOfHome(toChar)[0]!;
+    expect(target, "the receiver's home has no interaction slot").toBeDefined();
     const realPath = findPath(fromChar.tileCol, fromChar.tileRow, target.col, target.row, getTileMap(), blockedTilesFor(fromChar, target));
     expect(fromChar.path).toEqual(realPath);
     expect(fromChar.path[0]).toBeDefined();
     expect(fromChar.path[fromChar.path.length - 1]).toEqual(target);
-    expect(target.row).toBe(toChar.seatRow);
-    expect(Math.abs(target.col - toChar.seatCol)).toBe(1);
+    expect(target.row).not.toBe(toChar.seatRow);
   });
 
   it("the receiving character's state remains whatever it already was — NOT TYPE — immediately after agent.handoff_requested alone", () => {
@@ -259,23 +305,25 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     return ch.tileCol === other.seatCol && ch.tileRow === other.seatRow;
   }
 
-  /** 05-27: the waiting sender stands on its interaction tile — the receiver's
-   *  seat row, 4-adjacent to the receiver, never on it. */
-  function besideReceiver(ch: Character, other: Character): boolean {
-    return (
-      ch.tileRow === other.seatRow &&
-      Math.abs(ch.tileCol - other.tileCol) + Math.abs(ch.tileRow - other.tileRow) === 1
-    );
+  /** 05-34 (G-05-P2, superseding 05-27's seat-row rule): the waiting sender
+   *  stands on one of the receiver HOME's fixed aisle slots — never on the
+   *  receiver, never beside a seat. */
+  function atInteractionSlot(ch: Character, other: Character): boolean {
+    return slotsOfHome(other).some((s) => s.col === ch.tileCol && s.row === ch.tileRow);
   }
+
+  /** Walks to an aisle slot cross the office (up to ~15 tiles plus a lane
+   *  detour), so every handoff leg here is timed generously rather than pinned
+   *  to one layout's step count. */
+  const WALK_SECONDS = 10;
 
   function toIconVisible(): { a: Character; b: Character } {
     seatAll();
     const a = getCharacter("agent-a")!;
     const b = getCharacter("agent-b")!;
     handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
-    // 05-27: 9 steps (detour via row 3 around the fillers' seats), 3.0 s.
-    run(4);
-    expect(besideReceiver(a, b)).toBe(true);
+    run(WALK_SECONDS);
+    expect(atInteractionSlot(a, b)).toBe(true);
     expect(a.bubbleType).toBe("handoff-task");
     expect(a.bubbleText).toContain(" → ");
     return { a, b };
@@ -293,7 +341,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
   it("a1: a CODING status mid-return does not stop the walk home, and both lines clear", () => {
     const { a, b } = toReturningMidWalk();
     upsertCharacterFromAgent("agent-a", AgentStatus.CODING);
-    run(5);
+    run(WALK_SECONDS);
     // 05-19 (IN-03): the CODING pose that landed mid-return applies when the walk ends.
     expectHome(a, CharacterState.TYPE);
     expect(b.bubbleText).toBeNull();
@@ -306,21 +354,24 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     const b = getCharacter("agent-b")!;
     handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
     run(0.2);
-    expect(a.path.length).toBe(9); // 05-27: 8 columns + the row-3 detour around the fillers' seats
+    // 05-34: measured from the walk itself, not pinned to one layout's step
+    // count — the aisle slot is further away than 05-27's seat-row tile.
+    const steps = a.path.length;
+    expect(steps).toBeGreaterThan(0);
     upsertCharacterFromAgent("agent-a", AgentStatus.WAITING_FOR_AGENT);
     run(0.5);
     expect(a.frame).toBe(0);
     expect(a.frozen).toBe(true);
-    expect(a.path.length).toBeLessThan(9);
+    expect(a.path.length).toBeLessThan(steps);
 
-    run(3);
-    expect(besideReceiver(a, b)).toBe(true);
+    run(WALK_SECONDS);
+    expect(atInteractionSlot(a, b)).toBe(true);
     expect(a.bubbleText).toContain(" → ");
 
     handleHandoffEvent(completedEvent("task-1", "agent-b"));
     expect(b.state).toBe(CharacterState.TYPE);
 
-    run(5);
+    run(WALK_SECONDS);
     expectHomeIdle(a);
     expect(a.bubbleText ?? null).toBeNull();
     expect(b.bubbleText).toBeNull();
@@ -334,10 +385,10 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     const homePath = a.path.length;
     run(0.5);
     expect(a.frame).toBe(0);
-    expect(!besideReceiver(a, b) || a.path.length < homePath).toBe(true);
+    expect(!atInteractionSlot(a, b) || a.path.length < homePath).toBe(true);
     expect(pathBefore).toBe(0);
 
-    run(5);
+    run(WALK_SECONDS);
     expectHomeIdle(a);
     expect(a.bubbleText).toBeNull();
     expect(b.bubbleText).toBeNull();
@@ -381,7 +432,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     const { a, b } = toReturningMidWalk();
     handleHandoffEvent(requestedEvent("task-1", "agent-c", "agent-b", NEW_REQUEST_ID));
     expect(b.bubbleText).toBeNull();
-    run(5);
+    run(WALK_SECONDS);
     expectHomeIdle(a);
   });
 
@@ -390,10 +441,10 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     handleHandoffEvent(requestedEvent("task-1", "agent-c", "agent-b", NEW_REQUEST_ID));
     expect(a.bubbleText).toBeNull();
     expect(a.bubbleType).toBeNull();
-    run(5);
+    run(WALK_SECONDS);
     expectHomeIdle(a);
     const c = getCharacter("agent-c")!;
-    expect(besideReceiver(c, b)).toBe(true);
+    expect(atInteractionSlot(c, b)).toBe(true);
     expect(c.bubbleType).toBe("handoff-task");
   });
 
@@ -401,12 +452,12 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     const { a, b } = toIconVisible();
     handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b", NEW_REQUEST_ID));
     run(0.5);
-    expect(besideReceiver(a, b)).toBe(true);
+    expect(atInteractionSlot(a, b)).toBe(true);
     expect(a.bubbleType).toBe("handoff-task");
     expect(a.bubbleText).toContain(" → ");
 
     handleHandoffEvent(completedEvent("task-1", "agent-b"));
-    run(5);
+    run(WALK_SECONDS);
     expectHomeIdle(a);
     expect(b.bubbleText).toBeNull();
   });
@@ -415,7 +466,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     const { a } = toIconVisible();
     upsertCharacterFromAgent("agent-a", AgentStatus.BLOCKED);
     handleHandoffEvent(completedEvent("task-1", "agent-b"));
-    run(5);
+    run(WALK_SECONDS);
     expectHomeIdle(a);
     expect(a.bubbleType).toBe("blocked");
   });
@@ -423,7 +474,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
   describe("CR-01 stranding paths (05-19): real update loop", () => {
     /** Steps the real loop until the path empties: the one frame where state is still WALK. */
     function stepToArrivalFrame(ch: Character): void {
-      for (let i = 0; i < 600 && ch.path.length > 0; i++) stepOffice(1 / 60);
+      for (let i = 0; i < 1800 && ch.path.length > 0; i++) stepOffice(1 / 60);
     }
 
     it("(a) a CODING status in the arrival frame does not strand the sender", () => {
@@ -436,15 +487,15 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       expect(a.state).toBe(CharacterState.WALK);
 
       upsertCharacterFromAgent("agent-a", AgentStatus.CODING);
-      run(5);
-      expect(besideReceiver(a, b)).toBe(true);
+      run(WALK_SECONDS);
+      expect(atInteractionSlot(a, b)).toBe(true);
       expect(a.bubbleType).toBe("handoff-task");
       expect(a.bubbleText).toContain(" → ");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       expect(b.state).toBe(CharacterState.TYPE);
 
-      run(5);
+      run(WALK_SECONDS);
       expectHome(a, CharacterState.TYPE);
       expect(a.bubbleText ?? null).toBeNull();
       expect(b.bubbleText ?? null).toBeNull();
@@ -457,14 +508,14 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
 
       handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b", NEW_REQUEST_ID));
       run(0.5);
-      expect(besideReceiver(a, b)).toBe(true);
+      expect(atInteractionSlot(a, b)).toBe(true);
       expect(a.bubbleType).toBe("handoff-task");
       expect(a.bubbleText).toContain(" → ");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       expect(b.state).toBe(CharacterState.TYPE);
 
-      run(5);
+      run(WALK_SECONDS);
       expectHome(a, CharacterState.TYPE);
       expect(a.bubbleText ?? null).toBeNull();
       expect(b.bubbleText ?? null).toBeNull();
@@ -472,21 +523,21 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
 
     it("(b2) a same-sender re-request just after leaving the receiver's tile brings it back there", () => {
       const { a, b } = toReturningMidWalk();
-      expect(besideReceiver(a, b)).toBe(true);
+      expect(atInteractionSlot(a, b)).toBe(true);
       expect(a.path.length).toBeGreaterThan(0);
 
       handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b", NEW_REQUEST_ID));
       expect(b.bubbleText ?? null).toBeNull();
 
-      run(3);
-      expect(besideReceiver(a, b)).toBe(true);
+      run(WALK_SECONDS);
+      expect(atInteractionSlot(a, b)).toBe(true);
       expect(a.bubbleType).toBe("handoff-task");
       expect(a.bubbleText).toContain(" → ");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b", "5fa85f64-5717-4562-b3fc-2c963f66afa6"));
       expect(b.bubbleText).toContain("accepts");
 
-      run(5);
+      run(WALK_SECONDS);
       expectHome(a, CharacterState.IDLE);
       expect(a.bubbleText ?? null).toBeNull();
       expect(b.bubbleText ?? null).toBeNull();
@@ -501,7 +552,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       const c = getCharacter("agent-c")!;
 
       handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
-      run(2);
+      run(WALK_SECONDS);
       expect(a.bubbleType).toBe("handoff-task");
 
       handleHandoffEvent(requestedEvent("task-2", "agent-b", "agent-c", NEW_REQUEST_ID));
@@ -518,14 +569,14 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       run(0.4);
       expect(b.path.length).toBeLessThan(pathBefore);
 
-      run(3);
-      expect(besideReceiver(b, c)).toBe(true);
+      run(WALK_SECONDS);
+      expect(atInteractionSlot(b, c)).toBe(true);
       expect(b.bubbleType).toBe("handoff-task");
 
       handleHandoffEvent(completedEvent("task-2", "agent-c", "5fa85f64-5717-4562-b3fc-2c963f66afa6"));
       expect(c.state).toBe(CharacterState.TYPE);
 
-      run(5);
+      run(WALK_SECONDS);
       expectHome(a, CharacterState.IDLE);
       expectHome(b, CharacterState.TYPE);
       expect(a.bubbleText ?? null).toBeNull();
@@ -539,13 +590,13 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       const { a, b } = toIconVisible();
       const c = getCharacter("agent-c")!;
       handleHandoffEvent(requestedEvent("task-2", "agent-a", "agent-c", NEW_REQUEST_ID));
-      run(2); // 05-27: 4 steps (a detours via row 3 around b to c's left), 1.33 s
-      expect(besideReceiver(a, c)).toBe(true);
+      run(WALK_SECONDS);
+      expect(atInteractionSlot(a, c)).toBe(true);
       expect(a.bubbleText).toContain("task-2");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       run(0.2);
-      expect(besideReceiver(a, c)).toBe(true);
+      expect(atInteractionSlot(a, c)).toBe(true);
       expect(a.bubbleType).toBe("handoff-task");
       expect(a.bubbleText).toContain("task-2");
       expect(b.state).not.toBe(CharacterState.TYPE);
@@ -555,7 +606,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       run(0.2);
       expect(c.bubbleText).toContain("accepts");
 
-      run(5);
+      run(WALK_SECONDS);
       expectHomeIdle(a);
       expect(a.bubbleText ?? null).toBeNull();
       expect(b.bubbleText ?? null).toBeNull();
@@ -572,7 +623,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       expect(a.bubbleType).toBe("handoff-task");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
-      run(5);
+      run(WALK_SECONDS);
       expectHome(a, CharacterState.TYPE);
       expect(a.bubbleType).toBeNull();
     });
@@ -607,15 +658,15 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       const a = getCharacter("agent-a")!;
       const b = getCharacter("agent-b")!;
       handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
-      run(4); // 05-27: 9-step detour, 3.0 s
-      expect(besideReceiver(a, b)).toBe(true);
+      run(WALK_SECONDS);
+      expect(atInteractionSlot(a, b)).toBe(true);
       expect(a.bubbleType).toBe(atReceiver);
       expect(a.bubbleText).toContain(" → ");
 
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       expect(b.state).toBe(CharacterState.TYPE);
 
-      run(5);
+      run(WALK_SECONDS);
       expectHome(a, pose);
       expect(a.bubbleType).toBe(home);
       expect(a.bubbleText ?? null).toBeNull();
@@ -629,17 +680,17 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       const b = getCharacter("agent-b")!;
       const c = getCharacter("agent-c")!;
       handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
-      run(4); // 05-27: 9-step detour, 3.0 s
+      run(WALK_SECONDS);
       expect(a.bubbleType).toBe("handoff-task");
 
       handleHandoffEvent(requestedEvent("task-1", "agent-c", "agent-b", NEW_REQUEST_ID));
       expect(a.bubbleType).toBe("testing");
 
-      run(5);
+      run(WALK_SECONDS);
       expectHome(a, CharacterState.TYPE);
       expect(a.bubbleType).toBe("testing");
       expect(a.bubbleText ?? null).toBeNull();
-      expect(besideReceiver(c, b)).toBe(true);
+      expect(atInteractionSlot(c, b)).toBe(true);
       expect(c.bubbleType).toBe("handoff-task");
     });
 
@@ -653,7 +704,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       expect(b.state).toBe(CharacterState.TYPE);
 
-      run(5);
+      run(WALK_SECONDS);
       expectHome(a, CharacterState.IDLE);
       expect(a.bubbleType).toBe("permission");
       expect(a.bubbleText ?? null).toBeNull();
@@ -696,7 +747,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
     });
   });
 
-  describe("interaction tile (05-27, G-05-1d): real update loop", () => {
+  describe("interaction tile (05-27, G-05-1d; fixed slots 05-34, G-05-P2): real update loop", () => {
     const key = (col: number, row: number): string => `${col},${row}`;
 
     /** Tiles and seats of every present character other than `walker`. */
@@ -720,28 +771,47 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       }
     }
 
-    const adjacent = (p: Character, q: Character): boolean =>
-      Math.abs(p.tileCol - q.tileCol) + Math.abs(p.tileRow - q.tileRow) === 1;
+    /** 05-34's tracer pin: the first (preferred) slot of the receiver HOME's fixed list. */
+    const firstSlotOf = (receiver: Character): TileRef => {
+      const slot = slotsOfHome(receiver)[0];
+      expect(slot, `${receiver.id}'s home has no interaction slot`).toBeDefined();
+      return slot!;
+    };
 
-    it("the sender stops beside the receiver, never on it", () => {
+    it("the sender stops on the receiver's first fixed slot, never on the receiver", () => {
       const { a, b } = toIconVisible();
-      expect(adjacent(a, b)).toBe(true);
       expect(onSeatOf(a, b)).toBe(false);
-      expect({ col: a.tileCol, row: a.tileRow }).toEqual({ col: 8, row: 4 });
+      expect({ col: a.tileCol, row: a.tileRow }).toEqual(firstSlotOf(b));
+      // The pin the gap is about: b's home is (9,4), so the slot is the aisle
+      // tile at +1 col, two rows clear of every seat.
+      expect({ col: a.tileCol, row: a.tileRow }).toEqual({ col: 10, row: 6 });
+    });
+
+    it("a row-8 receiver is faced DOWN from the aisle, a row-4 receiver UP", () => {
+      for (let i = 0; i < 12; i++) upsertCharacterFromAgent(`agent-${i}`, AgentStatus.IDLE);
+      const sender = getCharacter("agent-0")!;
+      const receiver = getCharacter("agent-9")!;
+      expect(receiver.seatRow).toBe(8);
+      expect(sender.seatRow).toBe(4);
+      handleHandoffEvent(requestedEvent("task-1", sender.id, receiver.id));
+      run(WALK_SECONDS);
+      expect(sender.bubbleType).toBe("handoff-task");
+      expect({ col: sender.tileCol, row: sender.tileRow }).toEqual(firstSlotOf(receiver));
+      expect(sender.dir).toBe(Direction.DOWN);
     });
 
     it("the walk never enters furniture or another agent's tile", () => {
       seatAll();
       const a = getCharacter("agent-a")!;
+      const b = getCharacter("agent-b")!;
       handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
       expect(a.path.length).toBeGreaterThan(0);
       expectPathClear(a);
-      expect(a.path[a.path.length - 1]).toEqual({ col: 8, row: 4 });
+      expect(a.path[a.path.length - 1]).toEqual(firstSlotOf(b));
     });
 
     it("both stay visible", () => {
       const { a, b } = toIconVisible();
-      expect(b.x - a.x).toBe(16);
       /** Cells ("x,y" -> colour) of `ch`'s body sprite alone (no bubble, no line). */
       const cells = (chars: Character[]): Map<string, string> => {
         const out = new Map<string, string>();
@@ -768,22 +838,26 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       }
     });
 
-    it("the sender faces the receiver on arrival", () => {
+    it("the sender faces the receiver on arrival, on the dominant axis", () => {
       const { a, b } = toIconVisible();
-      expect({ col: a.tileCol, row: a.tileRow }).toEqual({ col: 8, row: 4 });
+      expect({ col: a.tileCol, row: a.tileRow }).toEqual({ col: 10, row: 6 });
       expect({ col: b.tileCol, row: b.tileRow }).toEqual({ col: 9, row: 4 });
-      expect(a.dir).toBe(Direction.RIGHT);
+      // |dr| (2) beats |dc| (1): the sender looks UP across the receiver's desk.
+      expect(a.dir).toBe(Direction.UP);
     });
 
-    it("two concurrent senders get two tiles", () => {
+    it("the second concurrent sender gets the next fixed slot", () => {
       const { a, b } = toIconVisible();
       const c = getCharacter("agent-c")!;
       handleHandoffEvent(requestedEvent("task-2", "agent-c", "agent-b", NEW_REQUEST_ID));
-      run(2);
+      run(WALK_SECONDS);
       expect(c.bubbleType).toBe("handoff-task");
-      expect({ col: c.tileCol, row: c.tileRow }).toEqual({ col: 10, row: 4 });
-      expect(adjacent(c, b)).toBe(true);
-      expect({ col: a.tileCol, row: a.tileRow }).toEqual({ col: 8, row: 4 });
+      const slots = slotsOfHome(b);
+      expect({ col: a.tileCol, row: a.tileRow }).toEqual(slots[0]);
+      expect({ col: c.tileCol, row: c.tileRow }).toEqual(slots[1]);
+      expect({ col: c.tileCol, row: c.tileRow }).toEqual({ col: 8, row: 6 });
+      // Two slots apart: never shoulder-to-shoulder with each other either.
+      expect(Math.max(Math.abs(a.tileCol - c.tileCol), Math.abs(a.tileRow - c.tileRow))).toBeGreaterThan(1);
       expect(a.bubbleType).toBe("handoff-task");
     });
 
@@ -792,28 +866,39 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       handleHandoffEvent(completedEvent("task-1", "agent-b"));
       expect(a.path[a.path.length - 1]).toEqual({ col: a.seatCol, row: a.seatRow });
       expectPathClear(a);
-      run(5);
+      run(WALK_SECONDS);
       expectHomeIdle(a);
       expect(a.dir).toBe(Direction.DOWN);
     });
 
-    it("search order stays on the seat row", () => {
+    it("three senders take the fixed preference order", () => {
       seatAll();
       const a = getCharacter("agent-a")!;
+      const b = getCharacter("agent-b")!;
       const c = getCharacter("agent-c")!;
       const f2 = getCharacter("filler-2")!;
       expect({ col: f2.seatCol, row: f2.seatRow }).toEqual({ col: 5, row: 4 });
       handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
       handleHandoffEvent(requestedEvent("task-2", "agent-c", "agent-b", NEW_REQUEST_ID));
       handleHandoffEvent(requestedEvent("task-3", "filler-2", "agent-b", "9fa85f64-5717-4562-b3fc-2c963f66afa6"));
-      run(6);
-      expect({ col: a.tileCol, row: a.tileRow }).toEqual({ col: 8, row: 4 });
-      expect({ col: c.tileCol, row: c.tileRow }).toEqual({ col: 10, row: 4 });
-      expect({ col: f2.tileCol, row: f2.tileRow }).toEqual({ col: 6, row: 4 });
+      run(WALK_SECONDS);
+      const slots = slotsOfHome(b);
+      expect({ col: a.tileCol, row: a.tileRow }).toEqual(slots[0]);
+      expect({ col: c.tileCol, row: c.tileRow }).toEqual(slots[1]);
+      expect({ col: f2.tileCol, row: f2.tileRow }).toEqual(slots[2]);
+      expect([
+        { col: a.tileCol, row: a.tileRow },
+        { col: c.tileCol, row: c.tileRow },
+        { col: f2.tileCol, row: f2.tileRow },
+      ]).toEqual([
+        { col: 10, row: 6 },
+        { col: 8, row: 6 },
+        { col: 12, row: 6 },
+      ]);
       for (const ch of [a, c, f2]) expect(ch.bubbleType).toBe("handoff-task");
     });
 
-    it("the interaction tile is always on the receiver's seat row", () => {
+    it("the interaction tile is always a fixed slot of the receiver's home", () => {
       const homes = [...SEATS, ...STANDING_SPOTS];
       expect(homes.length).toBe(20);
       for (let r = 0; r < homes.length; r++) {
@@ -824,13 +909,14 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
         const sender = getCharacter(`agent-${s}`)!;
         expect(sender.seatRow).not.toBe(receiver.seatRow);
         handleHandoffEvent(requestedEvent(`task-${r}`, sender.id, receiver.id));
-        run(12);
+        run(WALK_SECONDS + 6);
         expect(sender.bubbleType, `receiver ${r}`).toBe("handoff-task");
-        expect(sender.tileRow, `receiver ${r}`).toBe(receiver.seatRow);
-        expect(Math.abs(sender.tileCol - receiver.seatCol), `receiver ${r}`).toBeGreaterThan(0);
+        expect(atInteractionSlot(sender, receiver), `receiver ${r}: sender at (${sender.tileCol},${sender.tileRow})`).toBe(
+          true,
+        );
       }
 
-      // Receiver mid-walk at request time: the target is still on its seat row.
+      // Receiver mid-walk at request time: the target is still a slot of its HOME.
       _resetForTests();
       seatAll();
       for (let i = 0; i < 10; i++) upsertCharacterFromAgent(`more-${i}`, AgentStatus.IDLE);
@@ -842,10 +928,11 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       expect(b.state).toBe(CharacterState.WALK);
       expect(onSeatOf(b, b)).toBe(false);
       handleHandoffEvent(requestedEvent("task-y", "agent-a", "agent-b"));
-      expect(a.path[a.path.length - 1].row).toBe(b.seatRow);
-      run(8);
+      const last = a.path[a.path.length - 1]!;
+      expect(slotsOfHome(b).some((s) => s.col === last.col && s.row === last.row)).toBe(true);
+      run(WALK_SECONDS + 4);
       expect(a.bubbleType).toBe("handoff-task");
-      expect(a.tileRow).toBe(b.seatRow);
+      expect(atInteractionSlot(a, b)).toBe(true);
     });
   });
 });
