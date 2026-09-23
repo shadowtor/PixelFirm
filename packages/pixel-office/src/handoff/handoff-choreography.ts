@@ -81,9 +81,15 @@ export function blockedTilesFor(walker: Character, target: Tile): Set<string> {
  * — including diagonals — so a second concurrent sender takes the NEXT fixed
  * slot instead of standing beside the first.
  *
- * ponytail: null needs every slot of one receiver blocked, i.e. 5+ concurrent
- * senders or loiterers in that stretch of aisle; the caller then shows the icon
- * where the sender stands instead of stacking it on someone.
+ * ponytail: null needs every SURVIVING slot of one receiver blocked, which is
+ * far cheaper than "5+ occupants" (review WR-03). The wall/off-map filter leaves
+ * the corner homes (cols 1 and 18) only 3 of the 6 offsets, and since slots sit
+ * 2 columns apart while occupancy rejects at Chebyshev 1, ONE occupant standing
+ * between two slots blocks both: two well-placed aisle occupants null a corner
+ * home, four an interior one. With the previous 4 offsets a corner home kept
+ * just 2 slots and a SINGLE loiterer nulled it. The caller then falls back to
+ * the sender's own tile, so the icon shows where the sender stands instead of
+ * stacking it on someone — which reads as "the sender didn't go anywhere".
  */
 function interactionTileFor(toChar: Character, fromChar: Character): Tile | null {
   const tileMap = getTileMap();

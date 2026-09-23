@@ -112,6 +112,27 @@ describe("interaction slots (05-34, G-05-P2): layout data alone", () => {
   });
 });
 
+describe("interaction slots: no home is one loiterer away from having none (review WR-03)", () => {
+  it("every home keeps 3+ slots, and no single aisle column is within one tile of all of them", () => {
+    const homes = [...SEATS, ...STANDING_SPOTS];
+    const cols = getTileMap()[0].length;
+    for (const home of homes) {
+      const slots = slotsFor(home);
+      // The corner homes (cols 1 and 18) are the weak point: the wall/off-map
+      // filter cuts them hardest, and with only two slots left a single
+      // occupant standing between them blocked both, since occupancy rejects
+      // at Chebyshev distance 1 and the slots are 2 columns apart.
+      expect(slots.length, `home (${home.col},${home.row}) keeps only ${slots.length} slot(s)`).toBeGreaterThanOrEqual(3);
+      for (let col = 0; col < cols; col++) {
+        expect(
+          slots.every((s) => Math.abs(s.col - col) <= 1),
+          `one occupant at aisle col ${col} blocks every slot of home (${home.col},${home.row})`,
+        ).toBe(false);
+      }
+    }
+  });
+});
+
 describe("handleHandoffEvent — agent.handoff_requested", () => {
   it("sets the sending character's state to WALK with a non-empty path computed via the real forked findPath (not a stub)", () => {
     upsertCharacterFromAgent("agent-a", AgentStatus.IDLE); // first desk of row DESK_ROW_START
