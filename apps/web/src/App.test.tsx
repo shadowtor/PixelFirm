@@ -113,4 +113,27 @@ describe("App viewport fill", () => {
   it("backs the attribution with the office border colour, so its contrast never depends on what is underneath", () => {
     expect(backgroundDeclarations(markup, "footer")).toEqual([`background:${WALL_COLOR.toLowerCase()}`]);
   });
+
+  // 05-36 (WR-02): the case the backdrop exists FOR, made explicit rather than
+  // implied. 800x480 is below the MIN_DISPLAY_SCALE canvas floor on BOTH axes,
+  // so the assertion does not depend on which axis the clamp binds on. Every
+  // number it compares against is computed from the package's own exported
+  // constants, so moving MIN_DISPLAY_SCALE moves this assertion with it instead
+  // of silently invalidating it.
+  const OVERFLOW_VIEWPORT = { w: 800, h: 480 };
+
+  it("keeps the credit legible where the canvas overflows the viewport and scrolls under it", () => {
+    // The clamp fires: the office is NOT scaled down to fit this viewport.
+    expect(displayScaleFor(OVERFLOW_VIEWPORT.w, OVERFLOW_VIEWPORT.h)).toBe(MIN_DISPLAY_SCALE);
+
+    // So the canvas cannot fit on either axis — the wrapper's overflow:auto
+    // scrolls it under the position:fixed footer, which therefore CAN sit over
+    // the floor, where #cccccc alone would be 4.40:1 / 3.21:1.
+    expect(DEFAULT_COLS * TILE_SIZE * MIN_DISPLAY_SCALE).toBeGreaterThan(OVERFLOW_VIEWPORT.w);
+    expect(DEFAULT_ROWS * TILE_SIZE * MIN_DISPLAY_SCALE).toBeGreaterThan(OVERFLOW_VIEWPORT.h);
+
+    // And the backdrop that saves it is a static declaration on a static
+    // element: it does not vary with viewport, which is the whole property.
+    expect(backgroundDeclarations(markup, "footer")).toEqual([`background:${WALL_COLOR.toLowerCase()}`]);
+  });
 });
