@@ -32,7 +32,10 @@ function sleep(ms: number): Promise<void> {
 // too few events. Wait for the expected count instead of a wall-clock guess.
 // Absence assertions ("zero more events") keep a fixed sleep — a slow tick
 // cannot falsify those.
-async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
+// 3s, not 5s: test 1 makes two waits inside a 10s it() timeout, so a larger
+// budget lets a genuinely broken loop hit the opaque "Test timed out" instead
+// of the assertion shortfall this helper exists to report.
+async function waitFor(predicate: () => boolean, timeoutMs = 3_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!predicate()) {
     if (Date.now() > deadline) return; // let the caller's expect() report the real shortfall
