@@ -39,20 +39,36 @@ function capForDialogue(value: string, max: number): string {
 }
 
 /**
+ * A title with its surrounding whitespace removed, or null when none is known.
+ * - Blank means "no title known" (05-41, CR-01): an empty or whitespace-only
+ *   title reads exactly like an absent one, never as a present value.
+ * - Nullish coalescing only catches undefined, and task.created's title is an
+ *   unconstrained `z.string()`, so a blank title arrives as a present string.
+ * - This is the one place the rule is written: `resolveHandoffDialogue` and
+ *   `getActiveHandoffs` both route through it.
+ */
+export function titleOrNull(title: string | null | undefined): string | null {
+  const trimmed = title?.trim();
+  return trimmed ? trimmed : null;
+}
+
+/**
  * Resolves handoff dialogue text. Pure function — taskTitle/toAgentName are
  * the ONLY interpolated values, each length-capped before interpolation.
  * Callers must pass the task's plain `title` field (TaskState.title), never
  * payload/prompt/diff content (kept privacy prohibition, 05-04-PLAN.md), and
  * `null` when no title is known — never a task id, which is not a title
- * (05-40, G-05-1b).
+ * (05-40, G-05-1b). A blank string is treated exactly like null (`titleOrNull`,
+ * 05-41, CR-01).
  */
 export function resolveHandoffDialogue(
   kind: "requested" | "accepted",
   taskTitle: string | null,
   toAgentName: string,
 ): string {
+  const title = titleOrNull(taskTitle);
   return DIALOGUE_TEMPLATES[kind](
-    taskTitle === null ? null : capForDialogue(taskTitle, MAX_DIALOGUE_TITLE_CHARS),
+    title === null ? null : capForDialogue(title, MAX_DIALOGUE_TITLE_CHARS),
     capForDialogue(toAgentName, MAX_DIALOGUE_NAME_CHARS),
   );
 }
