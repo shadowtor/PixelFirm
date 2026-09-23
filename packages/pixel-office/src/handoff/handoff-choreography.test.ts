@@ -269,12 +269,19 @@ describe("handoff sequence end + re-delivery idempotence (05-13, CR-01)", () => 
     expect(fromChar.bubbleText).toBeNull();
   });
 
-  it("leaves the receiver's line alone if it was replaced by a different string before the sequence ended", () => {
+  it("leaves the receiver's line alone if it was replaced by a different record before the sequence ended", () => {
     const { fromChar, toChar } = toReturning();
+    // Written the way the only writer writes a line: text, partner and the
+    // record stamp together (review WR-07). Stamping is what makes "newer"
+    // observable — before 05-37 this test set bubbleText alone and leaned on
+    // the string differing from task-1's, which a colliding title defeats.
     toChar.bubbleText = "a newer line";
+    toChar.bubbleTextPartnerId = null;
+    toChar.bubbleTextTaskId = "task-2";
     finishWalk(fromChar);
     checkHandoffArrivals();
     expect(toChar.bubbleText).toBe("a newer line");
+    expect(toChar.bubbleTextTaskId).toBe("task-2");
   });
 
   it("never re-drives the walk when the same requested event is re-delivered after the sequence finished", () => {

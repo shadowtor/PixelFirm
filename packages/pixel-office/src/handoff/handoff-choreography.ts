@@ -144,6 +144,26 @@ function senderIsCurrent(record: HandoffRecord): boolean {
   return getCharacter(record.fromAgentId) === record.fromChar;
 }
 
+/**
+ * Whether `ch`'s bubble is currently carrying THIS record's line, by the stamp
+ * its writer left rather than by comparing the text (review WR-07). Two records
+ * to one receiver whose titles cap to the same 12 code points produce
+ * byte-identical lines, so equality names the wrong record roughly half the
+ * time — and does so identically on the read path and the clear paths, which is
+ * why both route through this one predicate.
+ */
+function showsLineOf(ch: Character, record: HandoffRecord): boolean {
+  return ch.bubbleTextTaskId === record.taskId;
+}
+
+/** Clears a dialogue line with its partner id and its stamp, so the stamp can
+ *  never outlive the text it names. */
+function clearLine(ch: Character): void {
+  ch.bubbleText = null;
+  ch.bubbleTextPartnerId = null;
+  ch.bubbleTextTaskId = null;
+}
+
 // Request event ids this FSM has already acted on — the FSM is the only
 // non-idempotent consumer of relayed events, so a re-delivered request must
 // never re-drive the walk (05-13, review CR-01).
@@ -162,14 +182,13 @@ function retireHandoff(record: HandoffRecord, sendSenderHome: boolean): void {
   // First, so applyBubble below no longer sees this record as waiting.
   handoffs.delete(record.taskId);
   const toChar = getCharacter(record.toAgentId);
-  if (toChar && record.acceptedText !== null && toChar.bubbleText === record.acceptedText) {
-    toChar.bubbleText = null;
+  if (toChar && record.acceptedText !== null && showsLineOf(toChar, record)) {
+    clearLine(toChar);
   }
   if (senderIsCurrent(record)) {
     const fromChar = record.fromChar;
-    if (record.requestedText !== null && fromChar.bubbleText === record.requestedText) {
-      fromChar.bubbleText = null;
-      fromChar.bubbleTextPartnerId = null;
+    if (record.requestedText !== null && showsLineOf(fromChar, record)) {
+      clearLine(fromChar);
     }
     applyBubble(fromChar);
     const last = fromChar.path[fromChar.path.length - 1];
@@ -246,10 +265,7 @@ export function handleHandoffEvent(event: CompanyEvent): void {
 
     // The sender's own status glyph comes back (05-20, review CR-01).
     applyBubble(fromChar);
-    if (fromChar.bubbleText === record.requestedText) {
-      fromChar.bubbleText = null;
-      fromChar.bubbleTextPartnerId = null;
-    }
+    if (showsLineOf(fromChar, record)) clearLine(fromChar);
     const seat = { col: fromChar.seatCol, row: fromChar.seatRow };
     walkCharacterTo(fromChar, seat.col, seat.row, getTileMap(), blockedTilesFor(fromChar, seat));
     if (toChar) {
@@ -263,6 +279,7 @@ export function handleHandoffEvent(event: CompanyEvent): void {
       record.acceptedText = resolveHandoffDialogue("accepted", taskTitle, toAgentName);
       toChar.bubbleText = record.acceptedText;
       toChar.bubbleTextPartnerId = null;
+      toChar.bubbleTextTaskId = record.taskId;
     }
     return;
   }
@@ -308,6 +325,7 @@ export function checkHandoffArrivals(): void {
       record.requestedText = resolveHandoffDialogue("requested", taskTitle, toAgentName);
       fromChar.bubbleText = record.requestedText;
       fromChar.bubbleTextPartnerId = record.toAgentId;
+      fromChar.bubbleTextTaskId = record.taskId;
       record.phase = "ICON_VISIBLE";
       applyBubble(fromChar);
       continue;
@@ -387,23 +405,25 @@ export function getActiveHandoffs(): ActiveHandoff[] {
   const out: ActiveHandoff[] = [];
   for (const record of handoffs.values()) {
     // Whose bubble is showing this handoff's line right now. A line the FSM has
-    // already cleared, or one a newer record overwrote, has no speaker — the
-    // text comparison is what makes that observable rather than assumed.
+    // already cleared, or one a newer record overwrote, has no speaker —
+    // showsLineOf reads the stamp the writer left, so two records whose lines
+    // cap to the same text can never both claim one bubble (review WR-07).
     let speakerId: string | null = null;
     // The line that speaker is showing, carried alongside so the box lookup can
-    // be matched against what the last frame actually painted (review CR-01).
+    // be matched against what the last frame actually painted. That remaining
+    // text comparison is CR-01's frame-freshness guard, NOT the attribution.
     let speakerText: string | null = null;
     if (
       record.phase === "ICON_VISIBLE" &&
       senderIsCurrent(record) &&
       record.requestedText !== null &&
-      record.fromChar.bubbleText === record.requestedText
+      showsLineOf(record.fromChar, record)
     ) {
       speakerId = record.fromAgentId;
       speakerText = record.requestedText;
     } else if (record.phase === "RETURNING_TO_DESK" && record.acceptedText !== null) {
       const toChar = getCharacter(record.toAgentId);
-      if (toChar && toChar.bubbleText === record.acceptedText) {
+      if (toChar && showsLineOf(toChar, record)) {
         speakerId = record.toAgentId;
         speakerText = record.acceptedText;
       }

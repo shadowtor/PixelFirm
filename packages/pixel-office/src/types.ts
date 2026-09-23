@@ -155,4 +155,12 @@ export interface Character {
    *  requested line), null for a line spoken alone (05-28, G-05-4). Written
    *  only by handoff-choreography.ts, together with bubbleText. */
   bubbleTextPartnerId?: string | null;
+  /** The `taskId` of the handoff record whose line `bubbleText` currently
+   *  holds. Written only by handoff-choreography.ts, together with bubbleText.
+   *  Exists so a handoff can recognise its OWN line rather than inferring
+   *  ownership from string equality: two records to one receiver whose titles
+   *  cap to the same 12 code points produce byte-identical lines, and the
+   *  older record would otherwise claim — and clear — the newer one's bubble
+   *  (review WR-07). */
+  bubbleTextTaskId?: string | null;
 }
