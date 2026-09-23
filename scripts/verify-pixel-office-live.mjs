@@ -256,17 +256,25 @@ const FURNITURE_RECTS = LAYOUT.furniture.map((f) => {
 /** The floor interior a bubble must stay inside (05-33, G-05-P1). */
 const FLOOR = { left: TILE_SIZE, top: TILE_SIZE, right: MAP_W - TILE_SIZE, bottom: MAP_H - TILE_SIZE };
 
-/** Where a handoff sender waits (05-27): outward along the receiver's seat row
- *  (-1, +1, -2, +2, ...), the first free walkable non-furniture tile.
- *  Mirrors `interactionTileFor` in handoff-choreography.ts and must change with it. */
-function interactionTile(receiverSeat, occupiedTiles) {
-  const row = receiverSeat.row;
-  for (let d = 1; d < DEFAULT_COLS; d++) {
-    for (const col of [receiverSeat.col - d, receiverSeat.col + d]) {
-      const key = `${col},${row}`;
-      if (LAYOUT.tiles[row]?.[col] !== "." || FURNITURE_BLOCKS.has(key) || occupiedTiles.has(key)) continue;
-      return { col, row };
-    }
+/** Every home tile ("col,row") — a slot may never be one (05-34, review WR-05). */
+const HOME_TILES = new Set(SPOTS.map((s) => `${s.col},${s.row}`));
+
+/** Where a handoff sender waits (05-34, G-05-P2, superseding 05-27's seat-row
+ *  search): the fixed slots of the receiver's HOME on `LAYOUT.interaction.row`
+ *  at `LAYOUT.interaction.colOffsets`, taken in that order; a slot must be a
+ *  floor tile that is neither furniture nor a home, with no occupied tile within
+ *  Chebyshev distance 1 of it.
+ *  Mirrors `interactionSlotsFor` + `interactionTileFor` in
+ *  packages/pixel-office/src, and must change with them. */
+function interactionTile(receiverHome, occupiedTiles) {
+  const { row, colOffsets } = LAYOUT.interaction;
+  const occupied = [...occupiedTiles].map((k) => k.split(",").map(Number));
+  for (const d of colOffsets) {
+    const col = receiverHome.col + d;
+    const key = `${col},${row}`;
+    if (LAYOUT.tiles[row]?.[col] !== "." || FURNITURE_BLOCKS.has(key) || HOME_TILES.has(key)) continue;
+    if (occupied.some(([c, r]) => Math.max(Math.abs(c - col), Math.abs(r - row)) <= 1)) continue;
+    return { col, row };
   }
   return null;
 }
@@ -996,21 +1004,42 @@ async function main() {
         `carried ${beforeHandoff.sprite} sprite px before the handoff — Truth 3 would be assuming live receiver ` +
         `creation rather than demonstrating it`,
     );
+    // Where the sender will wait, and therefore how long the walk can take —
+    // resolved BEFORE the post so the icon poll has a real deadline instead of
+    // 05-08's fixed sleep (05-34, G-05-P2: the aisle slot is two rows off the
+    // seat row, so a one-desk-gap sleep no longer covers the walk).
+    const senderHome = claimDesk(SENDER);
+    const othersSeats = new Set(
+      [...deskSlots.keys()].filter((id) => id !== SENDER).map((id) => `${claimDesk(id).col},${claimDesk(id).row}`),
+    );
+    const senderTile = interactionTile(receiverDesk, othersSeats);
+    assert(
+      senderTile !== null,
+      `no interaction slot free on aisle row ${LAYOUT.interaction.row} for the receiver's home ` +
+        `(${receiverDesk.col},${receiverDesk.row})`,
+    );
+    /** Walk budget: the Manhattan run to the slot plus 6 tiles of detour around
+     *  occupied seats and the desk rows (walks avoid both, 05-27). */
+    const walkMs =
+      ((Math.abs(senderTile.col - senderHome.col) + Math.abs(senderTile.row - senderHome.row) + 6) * TILE_SIZE * 1000) /
+      WALK_SPEED_PX_PER_SEC;
+
     await postEvent(token, {
       type: "agent.handoff_requested",
       taskId: HANDOFF_TASK,
       sourceAgentId: SENDER,
       payload: { taskId: HANDOFF_TASK, fromAgentId: SENDER, toAgentId: RECEIVER },
     });
-    await sleep(2500); // walk-and-arrive FSM (WALK_SPEED_PX_PER_SEC over one desk gap)
-    const handoffScan = await scanCanvas(page);
+    const handoffScan = await pollScan(page, (s) => s.handoffHits > 0, walkMs + RENDER_SETTLE_MS);
     log(`after handoff_requested: sprite=${handoffScan.sprite} blocked=${handoffScan.blockedHits} handoff=${handoffScan.handoffHits}`);
     assert(
       handoffScan.handoffHits > 0,
-      `bubble-handoff-task's distinctive colour(s) ${HANDOFF_COLORS.join(", ")} never appeared on canvas during the walk (0 px)`,
+      `bubble-handoff-task's distinctive colour(s) ${HANDOFF_COLORS.join(", ")} never appeared on canvas during the ` +
+        `walk to (${senderTile.col},${senderTile.row}) within ${Math.round(walkMs + RENDER_SETTLE_MS)} ms (0 px)`,
     );
 
-    // TRUTH 5 (during) — the sender stands beside the receiver (05-27) in its
+    // TRUTH 5 (during) — the sender stands on the receiver's fixed aisle slot
+    // (05-34, G-05-P2, superseding 05-27's tile beside the receiver) in its
     // own status pose (TYPE for this running, so CODING, sender; 05-19) and
     // speaks the requested line. No task.created is posted and the
     // receiver has no name, so the line interpolates the raw 23-char task id
@@ -1024,12 +1053,6 @@ async function main() {
     // The fill-colour extent is the bubble's interior (the 1 px ink border and
     // tail paint over the fill), so non-fill px inside it are the text, and the
     // box itself is one px larger on every side.
-    const senderHome = claimDesk(SENDER);
-    const othersSeats = new Set(
-      [...deskSlots.keys()].filter((id) => id !== SENDER).map((id) => `${claimDesk(id).col},${claimDesk(id).row}`),
-    );
-    const senderTile = interactionTile(receiverDesk, othersSeats);
-    assert(senderTile !== null, `no interaction tile on the receiver's seat row ${receiverDesk.row}`);
     /** Longest any 05-33 candidate's tail can be: the "above" candidate clears
      *  the whole glyph band (GLYPH_ROWS 13 + BUBBLE_ICON_GAP_PX 1) plus the
      *  DIALOGUE_TAIL_PX gap, then 2 px of slack for the interior inset. */
@@ -1086,9 +1109,11 @@ async function main() {
     const dlgWhere = await assertBubble(dlg, "requested", senderTile);
     log(`TRUTH 5 (during) PASS — ${dlgWhere}`);
 
-    // TRUTH 5 (sender visible) — 05-27 (G-05-1d): the sender waits on its own
-    // interaction tile beside the receiver, so each full sprite sits in its own
-    // tile column (the UAT defect left 22% of the sender visible).
+    // TRUTH 5 (sender visible) — 05-34 (G-05-P2), rebasing 05-27 (G-05-1d):
+    // the sender waits on the receiver's fixed aisle slot, two rows clear of
+    // every seat, so its full sprite sits in its own tile column with nobody
+    // beside it (the UAT defect left 22% of the sender visible; the seat-row
+    // tile it replaces left only 2 px between shoulders).
     // Only the standing sprite's own rows: the glyph and dialogue above it are not the body.
     const senderRows = { from: spriteTopY(senderTile.row), to: spriteTopY(senderTile.row) + SPRITE_HEIGHT };
     const senderBandScan = await scanCanvas(page, tileColumnRange(senderTile.col), null, senderRows);
