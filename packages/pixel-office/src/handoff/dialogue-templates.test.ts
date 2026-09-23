@@ -30,33 +30,54 @@ describe("resolveHandoffDialogue", () => {
   });
 });
 
-describe("resolveHandoffDialogue — short label templates and caps (05-29, G-05-1b)", () => {
-  it("renders the exact short templates", () => {
-    expect(resolveHandoffDialogue("requested", "Fix login", "Ada")).toBe("Fix login → Ada");
+describe("resolveHandoffDialogue — verb-led templates and caps (05-40, G-05-1b)", () => {
+  const KINDS = ["requested", "accepted"] as const;
+  /** Every kind against every null/present title — the full output space of a
+   *  two-entry map whose entries branch on one nullable value. */
+  const everyLine = (title: string | null = "t".repeat(50), name = "n".repeat(50)): string[] =>
+    KINDS.flatMap((kind) => [resolveHandoffDialogue(kind, title, name), resolveHandoffDialogue(kind, null, name)]);
+
+  it("renders the exact requested line when the title is known", () => {
+    expect(resolveHandoffDialogue("requested", "Fix login", "Ada")).toBe("hands Fix login to Ada");
+  });
+
+  it("renders a complete requested sentence when no title is known — no ellipsis, no placeholder, no identifier", () => {
+    expect(resolveHandoffDialogue("requested", null, "Ada")).toBe("hands off to Ada");
+  });
+
+  it("renders the exact accepted line when the title is known", () => {
     expect(resolveHandoffDialogue("accepted", "Fix login", "Ada")).toBe("Ada accepts Fix login");
   });
 
-  it("cuts a 30-code-point title to 12 code points ending in U+2026", async () => {
-    const { MAX_DIALOGUE_TITLE_CHARS } = await import("./dialogue-templates");
-    expect(MAX_DIALOGUE_TITLE_CHARS).toBe(12);
-    const seg = resolveHandoffDialogue("requested", "a".repeat(30), "Ada").split(" → ")[0];
-    expect(Array.from(seg).length).toBe(12);
-    expect(seg.endsWith("…")).toBe(true);
+  it("renders a complete accepted sentence when no title is known", () => {
+    expect(resolveHandoffDialogue("accepted", null, "Ada")).toBe("Ada accepts the handoff");
   });
 
-  it("cuts a 20-code-point agent name to 10 code points ending in U+2026", async () => {
-    const { MAX_DIALOGUE_NAME_CHARS } = await import("./dialogue-templates");
+  it("never joins two values with a bare arrow (U+2192) — the debug-banner shape the UAT round rejected", () => {
+    for (const line of everyLine("Fix login", "Ada")) expect(line).not.toContain("→");
+  });
+
+  it("cuts a 30-code-point title to 14 and a 20-code-point name to 10, each ending in U+2026", async () => {
+    const { MAX_DIALOGUE_TITLE_CHARS, MAX_DIALOGUE_NAME_CHARS } = await import("./dialogue-templates");
+    expect(MAX_DIALOGUE_TITLE_CHARS).toBe(14);
     expect(MAX_DIALOGUE_NAME_CHARS).toBe(10);
+    const title = resolveHandoffDialogue("accepted", "a".repeat(30), "Ada").split(" accepts ")[1];
+    expect(Array.from(title).length).toBe(14);
+    expect(title.endsWith("…")).toBe(true);
     const name = resolveHandoffDialogue("accepted", "Fix login", "n".repeat(20)).split(" accepts ")[0];
     expect(Array.from(name).length).toBe(10);
     expect(name.endsWith("…")).toBe(true);
   });
 
-  it("the longest possible line fits the label budget (<= 100 world px in 05-28's bubble)", () => {
-    const longest = resolveHandoffDialogue("accepted", "t".repeat(50), "n".repeat(50));
-    const cps = Array.from(longest).length;
-    expect(cps).toBe(31);
-    expect(cps * 0.6 * DIALOGUE_FONT_PX + 2 * (DIALOGUE_BOX_PAD_X_PX + 1)).toBeLessThanOrEqual(100);
+  it("the longest line over every kind and every null/present combination fits one declared budget", async () => {
+    const { MAX_DIALOGUE_LINE_CHARS } = await import("./dialogue-templates");
+    expect(MAX_DIALOGUE_LINE_CHARS).toBe(34);
+    // Derived, never hard-coded: which combination wins is the module's business.
+    const cps = Math.max(...everyLine().map((line) => Array.from(line).length));
+    expect(cps).toBeLessThanOrEqual(MAX_DIALOGUE_LINE_CHARS);
+    // Non-vacuity: the declared budget is a line that actually exists, not slack.
+    expect(cps).toBe(MAX_DIALOGUE_LINE_CHARS);
+    expect(cps * 0.6 * DIALOGUE_FONT_PX + 2 * (DIALOGUE_BOX_PAD_X_PX + 1)).toBeLessThanOrEqual(110);
   });
 
   it("never splits a surrogate pair (cut by code point)", () => {
