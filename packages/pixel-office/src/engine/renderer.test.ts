@@ -357,16 +357,17 @@ describe("renderScene over the real desk layout — CR-02 two-character composit
 
     // Concrete expected geometry, so a silent layout drift is caught too.
     // Both agents rest IDLE on their own seats, so both are sunk by
-    // CHARACTER_SITTING_OFFSET_PX (6) — 05-32 / G-05-P3, where before this plan
+    // CHARACTER_SITTING_OFFSET_PX (10) — 05-32 / G-05-P3, where before this plan
     // only TYPE sank and these boxes were y 40..72 and y 104..136.
-    // Seat rows 4 and 8 => foot y 72 and 136 => sprite boxes y 46..78 and
-    // y 110..142. agent-9's IDLE head ink starts at frame row 3 (y 113); the
-    // blocked glyph (ink rows 0..11, 12 rows) ends 3 px above it, y 98..110 —
-    // strictly below agent-1's box (05-30, gap raised by 05-38 / G-05-1c).
-    expect(firstBox).toMatchObject({ top: 46, bottom: 78 });
-    expect(laterBox.top).toBe(110);
-    expect(Math.min(...glyphRects.map((r) => r.y))).toBe(98);
-    expect(Math.max(...glyphRects.map((r) => r.y + r.h))).toBe(110);
+    // Seat rows 4 and 8 => foot y 72 and 136 => sprite boxes y 50..82 and
+    // y 114..146. agent-9's IDLE head ink starts at frame row 3 (y 117); the
+    // blocked glyph (ink rows 0..11, 12 rows) ends 3 px above it, y 102..114 —
+    // strictly below agent-1's box (05-30; both constants raised by 05-38,
+    // G-05-1c and G-05-2a).
+    expect(firstBox).toMatchObject({ top: 50, bottom: 82 });
+    expect(laterBox.top).toBe(114);
+    expect(Math.min(...glyphRects.map((r) => r.y))).toBe(102);
+    expect(Math.max(...glyphRects.map((r) => r.y + r.h))).toBe(114);
     expect(Math.min(...glyphRects.map((r) => r.y))).toBeGreaterThan(firstBox.bottom);
   });
 
@@ -1269,7 +1270,11 @@ describe("seated whenever resting on the own seat (05-25, G-05-P3)", () => {
     expect(drawYOf(visiting), "resting on someone else's seat").toBe(standingDrawY(visiting));
   });
 
-  it("a resting agent at its own desk shows at least 8 fewer visible body rows than the same agent standing in the aisle (G-05-P3)", () => {
+  it("a resting agent at its own desk shows at least 12 fewer visible body rows than the same agent standing in the aisle, and still shows its head (G-05-P3, 05-38 G-05-2a)", () => {
+    // The literal pin: reverting the widened sink turns this single assertion
+    // red, the same idiom the glyph-gap test uses for BUBBLE_ICON_GAP_PX.
+    expect(CHARACTER_SITTING_OFFSET_PX).toBe(10);
+
     const seated = createCharacter("r", SEATS[0].col, SEATS[0].row);
     expect(isOwnSeat(seated)).toBe(true);
     expect(seated.state).toBe(CharacterState.IDLE);
@@ -1288,7 +1293,14 @@ describe("seated whenever resting on the own seat (05-25, G-05-P3)", () => {
     expect(
       standingRows - seatedRows,
       `seated shows ${seatedRows} body rows, standing shows ${standingRows}`,
-    ).toBeGreaterThanOrEqual(8);
+    ).toBeGreaterThanOrEqual(12);
+    // The other side of the same change (05-38, G-05-2a): sinking the body is
+    // only a legibility win while the head survives the desk. A future offset
+    // that buries it "closes" the gap into a worse frame — this goes red first.
+    expect(
+      seatedRows,
+      `a seated agent must keep its head and shoulders above the desk, but only ${seatedRows} body rows survive the composite`,
+    ).toBeGreaterThanOrEqual(10);
   });
 
   const typer = (col: number, row: number) => {

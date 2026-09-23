@@ -21,7 +21,12 @@ export const WALK_FRAME_DURATION_SEC = 0.15;
 export const TYPE_FRAME_DURATION_SEC = 0.3;
 
 // ── Rendering ────────────────────────────────────────────────
-export const CHARACTER_SITTING_OFFSET_PX = 6;
+/** How far (unzoomed px) a character resting on its own seat is sunk so the
+ *  desk hides its lower body (05-32, G-05-P3). Raised 6 -> 10 by 05-38
+ *  (G-05-2a): every extra sunk row is a row the desk covers, so a seated agent
+ *  reads more distinctly from a standing handoff sender. The head must survive
+ *  — renderer.test.ts guards a floor of 10 visible body rows. */
+export const CHARACTER_SITTING_OFFSET_PX = 10;
 /** Visible air (unzoomed px) between a glyph's lowest ink row and its owner's
  *  first opaque sprite row, per frame (05-30, G-05-1c) — no longer the frame box.
  *  Raised 1 -> 3 by 05-38 (G-05-1c): at 1 px the glyph touched the head and read
