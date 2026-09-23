@@ -1,44 +1,44 @@
 ---
 gsd_state_version: "1.0"
-current_phase: 05
-current_phase_name: Pixel Office Renderer
-status: executing
-stopped_at: Completed 05-41-PLAN.md
-last_updated: "2026-09-23T10:45:08.870Z"
+current_phase: 6
+current_phase_name: CEO Dashboard & Approval Workflow
+status: planning
+stopped_at: Phase 05 complete, ready to plan Phase 6
+last_updated: "2026-09-23T12:50:13.182Z"
 last_activity: 2026-09-23
-last_activity_desc: Phase 05 execution started
-state_head: 5149bddeaad11fd4bf93221e83f03f0be4ca7c4e
+last_activity_desc: Phase 05 complete, transitioned to Phase 6
+state_head: 4373aef55fc0bb6de8c822315b0c02d0d3a29db8
 progress:
   total_phases: 8
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 56
   completed_plans: 56
-  percent: 50
+  percent: 63
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-09-21)
+See: .planning/PROJECT.md (updated 2026-09-23)
 
 **Core value:** The pixel office must accurately visualise a real Claude Code + GSD software project — agents genuinely performing the work and requesting CEO approval — using actual company events, never a prerecorded or faked animation.
-**Current focus:** Phase 05 — Pixel Office Renderer
+**Current focus:** Phase 6 — CEO Dashboard & Approval Workflow
 
 ## Current Position
 
-Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 2 of 41
-Status: Ready to execute
-Last activity: 2026-09-23 — Phase 05 execution started
+Phase: 6 — CEO Dashboard & Approval Workflow
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-09-23 — Phase 05 complete, transitioned to Phase 6
 
-Progress: [█████░░░░░] 50%
+Progress: [██████░░░░] 63%
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 15
+- Total plans completed: 56
 - Average duration: - min
 - Total execution time: 0 hours
 
@@ -50,6 +50,7 @@ Progress: [█████░░░░░] 50%
 | 02 | 4 | - | - |
 | 03 | 4 | - | - |
 | 04 | 4 | - | - |
+| 05 | 41 | - | - |
 
 **Recent Trend:**
 
@@ -255,14 +256,16 @@ None yet.
 
 - Phase 4 planning: apps/api's test suite has an intermittent parallel-test-file migration race (`pg_type_typname_nsp_index` duplicate-key error) when multiple test files apply the same enum-creating migration concurrently against the local test Postgres — observed twice in Phase 3, non-reproducible on rerun, does not affect production migrations (drizzle-kit migrate runs once, sequentially). Worth a proper fix (serialize test-DB migration application) before it masks a real regression.
 - [Phase 4]: CR-01/CR-02/CR-03 code-review fixes (ANTHROPIC_API_KEY env-stripping, terminal-status guard, runQuery reentrancy guard) have no dedicated unit regression test exercising the guard logic directly — real-subprocess integration coverage and direct code inspection back them today, but a future refactor could silently regress any of the three while the existing suite stays green. Non-blocking, flagged by the phase verifier.
-- Phase 5 planning: full asset-licence audit of the Pixel Agents fork beyond the credited CC0 character pack is still outstanding.
 - Phase 8 planning: verify current Twitch EventSub reconnect/signature details against live docs; budget subscription total_cost before choosing event types.
-- Phase 5 (05-01): pre-existing repo-wide TS module-resolution gap — event-schema/index.ts and company-core/index.ts re-export without .js extensions, which tsc --noEmit flags under moduleResolution NodeNext (pnpm --filter api typecheck already failed on this before 05-01). Doesn't block any required verify command for 05-01 through 05-04 but worth a dedicated fix pass. See deferred-items.md.
 - Phase 5 (05-08): still no producer of agent.online anywhere in the codebase — the literal 'agent walks into the office when it comes online' demo remains unreproducible. The live proof demonstrates the rendering truths via task.status_changed (what ClaudeCodeRuntime actually emits) and deliberately does NOT close this gap.
 - Phase 5 (05-08): an already-connected browser client never re-derives AgentStatus from task.status_changed / gsd.phase_observed / agent.handoff_completed — only a fresh snapshot reflects them. Phase 6's CEO dashboard has the identical need; proper fix is a live-projection-diff broadcast.
 - T-05-11-WR01 accepted: a worker credential can author state for any agent/company/visibility at POST /events. Acceptance expires the moment a non-INTERNAL consumer is pointed at the control plane (Phase 6/7 owns the fix).
-- Phase 5 (05-12): the restructured live proof (scripts/verify-pixel-office-live.mjs) has never been executed end to end — it recreates a Docker volume and starts two dev servers, so it is a deliberate human run. Truths 1-4 are structurally complete and node --check clean, but none has been observed passing on a real canvas. Running it twice in succession is human-verification item 1 for this phase.
 - Phase 5 (05-14): HANDOFF-01's production trigger has no owning ROADMAP phase (Phase 6 does not include multi-agent orchestration or a role-to-agent registry); a roadmap placement decision is needed before Phase 6 planning — see deferred-items.md.
+- [Phase 5 security] T-05-15-04/T-05-18-04: `claude-code-runtime.ts:189` strips only `ANTHROPIC_API_KEY`; `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY_HELPER`, `CLAUDE_CODE_USE_BEDROCK`/`_VERTEX` still reach the subprocess. Fix before Phase 6 (see 05-SECURITY.md).
+- [Phase 5 security] `BROWSER_ACCESS_TOKEN` travels as `?token=` and Fastify's default request log includes the query string — likely logged on every `/ws/browser` connect. Register/fix before the route leaves internal-only use.
+- [Phase 5 security] T-05-11-WR01's "externally reachable deployment" expiry may already be met by public staging `test.pixelfirm.dev` (pre-Phase-5 code). Operator decision.
+- [Phase 5 UI polish, non-blocking] handoff destination truncated (`live-proo…`); seated sink 10px hides faces (suggest 7-8); aisle sender/glyph overlaps desk front; banner red outside palette; 11px footer at every scale; no WebSocket reconnect after disconnect. See 05-UI-REVIEW.md, 05-UAT.md Deferred Follow-Ups.
+- [Phase 3] `apps/worker/src/poll-loop.test.ts` intermittently fails under parallel `pnpm -r test`; passes alone.
 
 ## Deferred Items
 
@@ -274,6 +277,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-23T10:45:08.737Z
-Stopped at: Completed 05-41-PLAN.md
+Last session: 2026-09-23
+Stopped at: Phase 05 complete, ready to plan Phase 6
 Resume file: None

@@ -15,16 +15,16 @@ The pixel office must accurately visualise a real Claude Code + GSD software pro
 - ✓ Worker connects from wherever Claude Code is authenticated and can point at any git repository/worktree the user chooses via `--repo`/`WORKER_REPO_PATH`, not hardcoded to one project — Phase 3 (proven live against the separate SyncSmith repo; read-only git + GSD state observation, no mutation). Process/build/test execution (running Claude Code sessions, GSD commands) remains Active below — Phase 3 built observation only.
 - ✓ GSD adapter mapping observed GSD workflow state onto company events, observed rather than guessed where possible — Phase 3 (explicit fallback to `unknown`/`unknown` when signals don't clearly support a category; never fabricates a pipeline stage/role)
 - ✓ ClaudeCodeRuntime implementing an AgentRuntime abstraction (startTask/pauseTask/resumeTask/cancelTask/getStatus/sendMessage/requestReview/requestHandoff) so other orchestrators (Maestro, Codex, etc.) can be added later without changing the company model — Phase 4 (zero `@anthropic-ai/` import anywhere in `orchestration-adapter`, structurally enforced; `ClaudeCodeRuntime` drives a real Claude Code session on subscription auth alone, no `ANTHROPIC_API_KEY` fallback, verified live against a real disposable-worktree demo and real pause/cancel subprocess termination — not just unit-tested against a mock)
+- ✓ Pixel Agents fork integrated as the office renderer/movement/character base (attribution and licence notices preserved) — Phase 5 (pinned fork `3537e140`, MetroCity sprites, credit-only footer, full ASSET-LICENSES audit; live proof TRUTH 0-7 on a real canvas)
+- ✓ Visual, physically-represented handoffs between agents using deterministic/canned dialogue templates, not LLM-generated chatter — Phase 5 (event-driven handoff FSM + static templates with a zero-network test). The production *trigger* (multi-agent orchestration / role-to-agent registry) still has no owning roadmap phase.
 
 ### Active
 
 - [ ] Company/event domain model: Company → Buildings → Floors → Teams → Agents → Projects, with typed event schema flowing Claude Code / Git / CI / GSD → Company Event Bus → Company State Engine → Pixel Office → Stream Overlay/Dashboard
-- [ ] Pixel Agents fork integrated as the office renderer/movement/character base (attribution and licence notices preserved)
 - [ ] Worker handles Claude Code process management, GSD command execution, and builds/tests (beyond Phase 3's read-only git/GSD observation)
 - [ ] Control plane (web app, API, Postgres, WebSocket/event gateway, stream overlay, auth, activity history) deployable via Docker to the user's existing Coolify server, with worker connecting to it without the control plane needing direct filesystem access to worker repos
 - [ ] Persistent agent/employee model (id, name, role, title, team, floor, sprite, personality, status, current project/task/session/worktree, availability, stats, history) with pixel animation reflecting standardised agent states (offline/idle/planning/researching/coding/reading/testing/reviewing/discussing/deploying/blocked/waiting_for_agent/waiting_for_ceo/failed/completed)
 - [ ] CEO office and approval workflow: agents needing human input physically walk to the CEO office and wait; CEO dashboard shows decision title, context, agent recommendation, relevant links/diffs, and Approve/Reject/Discuss/Request Changes/Request More Research actions. The system must never auto-approve a CEO-gated operation just because an agent requested it.
-- [ ] Visual, physically-represented handoffs between agents (walk to desk, hand off task icon, etc.) using deterministic/canned dialogue templates, not LLM-generated chatter
 - [ ] Git worktree model prepared for parallel agents (repository/branch/worktree/task/session per agent) — no unsafe automated merging in MVP
 - [ ] MVP end-to-end flow, demonstrated against a real GSD project (starting with SyncSmith as the first demo project, but the worker/company model must generalise to any project the user points it at): CEO creates project → PM receives it → planning → developer implements → hands off to reviewer → QA runs → CEO approves → DevOps marks deployment complete, all events real and visible in the office
 - [ ] Twitch integration via EventSub (message, follow, subscription, gifted sub, cheer/bits, raid, channel point redemption) against the user's already-live channel, normalized into a ViewerEvent schema, driving at least one harmless deterministic office interaction (e.g. coffee delivery, office lights, celebration animation) — rate-limited, moderation-aware, chat sanitised before any rendering
@@ -75,7 +75,7 @@ The pixel office must accurately visualise a real Claude Code + GSD software pro
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Fork/extend Pixel Agents rather than building the office renderer from scratch | Avoid rebuilding movement/character/office systems; brief explicitly directs reuse over rebuild | — Pending |
+| Fork/extend Pixel Agents rather than building the office renderer from scratch | Avoid rebuilding movement/character/office systems; brief explicitly directs reuse over rebuild | ✓ Phase 5 — forked engine pinned at `3537e140`, extended with event-driven status glyphs and handoff choreography |
 | SyncSmith is the first demo project, but worker/company model must generalise to any repo | User wants to point PixelFirm at multiple/any project over time, not just one fixed demo | — Pending |
 | PixelFirm's own repo is not the MVP demo target (no dogfooding on itself for the demo flow) | Avoids self-referential confusion; SyncSmith already has a real GSD roadmap ready to observe | — Pending |
 | Twitch integration targets real, already-live channel from the start (not placeholder auth) | User is already streaming; no need to stub auth before that phase | — Pending |
@@ -104,4 +104,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-09-21 after Phase 4*
+*Last updated: 2026-09-23 after Phase 5*

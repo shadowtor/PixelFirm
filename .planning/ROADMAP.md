@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Control Plane Skeleton** - Durable Postgres event log behind an authenticated WS gateway with a security baseline (completed 2026-09-19)
 - [x] **Phase 3: Worker, Git Adapter & GSD Adapter** - Worker observes a real repository's real git/GSD state and emits real events (completed 2026-09-20)
 - [x] **Phase 4: AgentRuntime & ClaudeCodeRuntime** - Generic runtime abstraction with Claude Code as the first real implementation (completed 2026-09-21)
-- [ ] **Phase 5: Pixel Office Renderer** - Forked Pixel Agents office renders real state, never a fabricated animation
+- [x] **Phase 5: Pixel Office Renderer** - Forked Pixel Agents office renders real state, never a fabricated animation (completed 2026-09-23)
 - [ ] **Phase 6: CEO Dashboard & Approval Workflow** - Human approval gate that nothing sensitive can bypass
 - [ ] **Phase 7: Stream-Safe Visibility & Overlay Route** - Server-side visibility filtering plus the public OBS overlay route
 - [ ] **Phase 8: Twitch EventSub Integration** - Real viewer activity safely drives real office reactions
@@ -168,7 +168,7 @@ Plans:
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
   5. The office floor is furnished — MetroCity floor and wall tiles, desks with monitors grouped in pods with walking lanes — agents sit at desk seats and never walk through furniture or another seated agent.
 
-**Plans:** 41/41 plans executed (UAT round 2 2026-09-22 diagnosed 6 polish gaps G-05-P1..P6 — 5 gap-closure plans 05-31..05-35 added; verification 2026-09-23 left 1 gap open — 2 gap-closure plans 05-36..05-37 added; UAT round 3 2026-09-23 accepted the implementation with 4 cosmetic polish gaps G-05-1a/1b/1c/2a — 3 gap-closure plans 05-38..05-40 added; re-verification 2026-09-23 found 2 gaps introduced by 05-40 — 1 gap-closure plan 05-41 added)
+**Plans:** 41/41 plans complete
 
 Plans:
 
@@ -389,7 +389,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 41/41 | In Progress|  |
+| 5. Pixel Office Renderer | 41/41 | Complete    | 2026-09-23 |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
