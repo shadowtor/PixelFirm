@@ -1,9 +1,10 @@
 ---
 phase: 05-pixel-office-renderer
 verified: 2026-09-23T11:05:29Z
-status: human_needed
+status: passed
 score: 25/26 must-haves verified
 covered_files:
+
   - ".planning/REQUIREMENTS.md"
   - ".planning/ROADMAP.md"
   - ".planning/phases/05-pixel-office-renderer/05-01-PLAN.md"
@@ -115,7 +116,8 @@ covered_files:
   - "packages/pixel-office/src/types.ts"
   - "references/ASSET-LICENSES.md"
   - "scripts/verify-pixel-office-live.mjs"
-covered_digest: "v1:sha256:c0d69a333bca5052df215c6355940e6c8a2c9a1fc63603a261a9eecb24ed2924"
+
+covered_digest: "v1:sha256:027acb7ae647351ce86565438aa11def25991d4195a7c5497ddb6bd262a8dbbc"
 behavior_unverified: 1
 overrides_applied: 0
 re_verification:
@@ -129,6 +131,7 @@ re_verification:
   gaps_remaining: []
   regressions: []
 advisory:
+
   - finding: "05-REVIEW (new) WR-01: a whitespace-only agent NAME paints an incomplete handoff sentence. `upsertCharacterFromAgent`'s `if (name) ch.name = name` (packages/pixel-office/src/index.ts:171) blocks `\"\"` but admits `\"   \"`, and both call sites use `toChar.name ?? record.toAgentId` (handoff-choreography.ts:280, :320). REPRODUCED by this verifier through the real choreography (temporary test, deleted): name `\"   \"` gives `hands Fix login to    ` / `    accepts Fix login`, and with no title `hands off to    ` / `    accepts the handoff`. Name `\"\"` correctly falls back to `agent-b`."
     category: other
     reason: "Real defect, classified ADVISORY (WARNING) rather than a gap, for two independent reasons. (1) SCOPE: every must_have it could touch is title-scoped. 05-41 truth 1 and 05-40 truth 1 say never present a task id or a blank string AS A TITLE; the receiver-name fallback to its agent id is a documented, deliberate design (handoff-choreography.ts:309-313 comment, test at :1633). No must_have in any of the 41 plans claims a blank NAME yields a complete sentence; 05-40 truth 2 (verb-led even when a value is TRUNCATED) still literally holds — `hands off to    ` is verb-led. Promoting it to a gap would require inventing a must_have, which the verifier may not do. (2) REACHABILITY: it is unreachable through the shipped pipeline. The review's claim that `POST /events accepts name: \"   \" from any worker credential` is factually wrong: `agent.online` is NOT in WORKER_ALLOWED_EVENT_TYPES (apps/api/src/routes/events.ts:18-26), that route is the only `insert(events)` in apps/api, and it 403s the type before schema parsing; no in-repo producer emits agent.online (the live harness's own header says so). It becomes live only when a future phase adds an agent.online producer. Recommendation: fix it before that, at the one write site (index.ts:171), and add `\"   \"` as a NAME to the everyLine sweep. Note the fix as the review writes it (`name?.trim()`) would break 05-41's acceptance gate `exactly one .trim() in pixel-office sources`; route it through a shared helper instead, e.g. reuse titleOrNull under a neutral name."
@@ -150,15 +153,18 @@ advisory:
     reason: "In each case the property the must_have claims is carried by a different, non-vacuous guard (see the prior report's reasoning, re-confirmed). No change since the prior verification."
     evidence_status: "carried; gap 3.25 re-measured in this verifier's live run"
 behavior_unverified_items:
+
   - truth: "A socket close or error surfaces a user-observable disconnect banner with role=\"status\" in apps/web/src/App.tsx (05-40 must_have, verification: backstop)"
     test: "Open the office against a running API, then kill the API process (or drop the network) and watch the top of the page."
     expected: "A banner with role=\"status\" appears and says the live feed is disconnected; the office does not freeze silently."
     why_human: "Declared `verification: backstop`, so presence and wiring are not evidence. Present and wired (App.tsx markDisconnected registered on both `close` and `error`, driving the role=\"status\" banner), but still no apps/web test exercises the transition (grep over App.test.tsx: no disconnect/close case) and the live harness never closes the socket."
 coincidental_reliance_items:
+
   - truth: "The live harness measures the raised head gap on real browser pixels and goes red when the rendered gap leaves the BUBBLE_ICON_GAP_PX..+1 window (05-38)"
     reason: undeclared-precondition
     harden: "Carried unchanged: the window holds at 3.25 because +1 glyph ink-tail row and -(scale-1)/scale rounding cancel, neither declared. Derive the ink-tail row count from the sprite JSON and compare like for like."
 unverified_prohibitions:
+
   - statement: "MUST NOT ship a state-signal overlay that is data-correct but practically illegible at stream scale"
     requirement_id: OFFICE-03
     verification: judgment
@@ -168,6 +174,7 @@ unverified_prohibitions:
     verification: judgment
     disposition: "Re-proved mechanically (live TRUTH 5: requested 6168 bubble + 1364 text px, accepted 7809 + 1879) and visually: the fresh frame shows `hands off to live-proo…` as one verb-led sentence on its own plate, clear of desks and monitors. Readability at viewing distance remains a judgment. unverified-prohibition — human confirmation recommended (human item 1)."
 human_verification:
+
   - test: "Open the frame captured by this verifier at HEAD (session scratchpad `verif-shots/handoff.png`, 1280x720), or run the office live at your OBS source size with a blocked agent, a waiting agent and a handoff mid-sequence. Glance for one second."
     expected: "The hourglass reads as an hourglass without relying on its blue; the blocked sign is separable from it at a glance; the handoff line reads as a sentence (`hands off to …`), not a debug banner; glyphs sit clear of their owners' heads; seated agents read as sitting while the aisle sender reads as standing."
     why_human: "Your UAT round 3 findings (tests 1 and 2, `severity: cosmetic`) are still recorded as `result: issue` in 05-UAT.md; only you can accept them closed. Automated inspection was done first: the live probe passed end to end in this process and the captured frame shows every requested change."
