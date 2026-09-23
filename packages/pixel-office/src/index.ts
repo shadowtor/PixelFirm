@@ -34,6 +34,10 @@ import { renderFrame } from "./engine/renderer.js";
 // for why importing getCharacter/getTileMap/getTaskTitle back from this
 // file (below) is a safe circular reference.
 export { handleHandoffEvent, checkHandoffArrivals } from "./handoff/handoff-choreography.js";
+// Where a handoff sender waits (05-34, G-05-P2): re-exported so a consumer can
+// assert against the layout's own slot rule instead of restating the aisle row
+// and offsets.
+export { interactionSlotsFor } from "./layout/officeLayout.js";
 import { _resetHandoffsForTests, applyBubble, checkHandoffArrivals } from "./handoff/handoff-choreography.js";
 import { FURNITURE, OFFICE_TILE_MAP, SEATS, STANDING_SPOTS } from "./layout/officeLayout.js";
 import { resolveStatusVisual } from "./status/status-mapping.js";

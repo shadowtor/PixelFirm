@@ -8,6 +8,7 @@ import {
   _resetForTests,
   getCharacter,
   handleHandoffEvent,
+  interactionSlotsFor,
   registerTaskTitle,
   upsertCharacterFromAgent,
 } from "pixel-office";
@@ -201,10 +202,13 @@ describe("live handoff path", () => {
     // that const object is not part of this package's public surface.
     expect(sender?.state).toBe("walk");
     expect(sender?.path.length).toBeGreaterThan(0);
-    // 05-27 (G-05-1d): the sender stops beside the receiver on its seat row, never on it.
+    // 05-34 (G-05-P2, superseding 05-27's seat-row tile): the sender stops on
+    // one of the receiver HOME's fixed aisle interaction slots, never on it.
     const end = sender!.path.at(-1)!;
-    expect(end.row).toBe(receiver?.seatRow);
-    expect(Math.abs(end.col - receiver!.seatCol)).toBe(1);
+    const slots = interactionSlotsFor({ col: receiver!.seatCol, row: receiver!.seatRow });
+    expect(slots.length).toBeGreaterThan(0);
+    expect(slots.some((s) => s.col === end.col && s.row === end.row), `sender ends at (${end.col},${end.row})`).toBe(true);
+    expect(end.row).not.toBe(receiver?.seatRow);
   });
 
   it("leaves the sender standing still when the choreography runs before the upserts — the ordering in App.tsx is load-bearing", () => {

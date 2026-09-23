@@ -80,6 +80,47 @@ export const SEATS = toTiles(layout.seats);
 /** Overflow standing spots, on the seat rows in the right strip. */
 export const STANDING_SPOTS = toTiles(layout.standing);
 
+interface InteractionData {
+  row: number;
+  colOffsets: number[];
+}
+const INTERACTION: InteractionData = (() => {
+  const raw = layout.interaction as InteractionData | undefined;
+  if (!raw || typeof raw.row !== "number" || !Array.isArray(raw.colOffsets) || raw.colOffsets.length === 0) {
+    throw new Error(`office-layout.json: interaction must be { row, colOffsets: [<at least one offset>] }`);
+  }
+  if (!Number.isInteger(raw.row) || raw.row < 0 || raw.row >= OFFICE_TILE_MAP.length) {
+    throw new Error(`office-layout.json: interaction.row ${raw.row} is outside the ${OFFICE_TILE_MAP.length}-row map`);
+  }
+  if (!OFFICE_TILE_MAP[raw.row]!.some((t, col) => t === TileType.FLOOR_1 && !blocked.has(`${col},${raw.row}`))) {
+    throw new Error(`office-layout.json: interaction.row ${raw.row} has no free floor tile`);
+  }
+  return raw;
+})();
+
+/**
+ * Where a handoff sender waits while handing off to the agent whose HOME is
+ * `home` (05-34, G-05-P2): the fixed slots on the central aisle row
+ * (`interaction.row`) at `interaction.colOffsets` from the home's column, in
+ * layout preference order, minus any that fall outside the floor, on furniture
+ * or on another home.
+ *
+ * The aisle row is the only interior row two tiles from every seat and standing
+ * spot, so no slot can ever be shoulder-to-shoulder with a seated or standing
+ * agent — which is exactly what 05-27's seat-row search could not promise.
+ */
+export function interactionSlotsFor(home: { col: number; row: number }): ReadonlyArray<{ col: number; row: number }> {
+  const row = INTERACTION.row;
+  const isHome = (col: number, r: number): boolean =>
+    SEATS.some((h) => h.col === col && h.row === r) || STANDING_SPOTS.some((h) => h.col === col && h.row === r);
+  return INTERACTION.colOffsets
+    .map((d) => ({ col: home.col + d, row }))
+    .filter(
+      (s) =>
+        OFFICE_TILE_MAP[s.row]?.[s.col] === TileType.FLOOR_1 && !blocked.has(`${s.col},${s.row}`) && !isHome(s.col, s.row),
+    );
+}
+
 /** True when the character stands on its own seat and that tile is a SEATS entry. */
 export function isOwnSeat(ch: Character): boolean {
   return (

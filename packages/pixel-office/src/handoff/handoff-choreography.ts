@@ -15,7 +15,7 @@
 import type { CompanyEvent } from "event-schema";
 import { setRestPose, walkCharacterTo } from "../engine/characters.js";
 import { getCharacter, getCharacters, getTaskTitle, getTileMap } from "../index.js";
-import { FURNITURE_BLOCKED_TILES } from "../layout/officeLayout.js";
+import { FURNITURE_BLOCKED_TILES, interactionSlotsFor } from "../layout/officeLayout.js";
 import { findPath, isWalkable } from "../layout/tileMap.js";
 import type { Character } from "../types.js";
 import { CharacterState, Direction } from "../types.js";
@@ -35,7 +35,8 @@ interface HandoffRecord {
   /** The sender Character this record walks, compared by identity (05-19,
    *  WR-03): a re-seated sender is a new object and never inherits it. */
   fromChar: Character;
-  /** The interaction tile the sender walks to and waits on (05-27, G-05-1d). */
+  /** The interaction slot the sender walks to and waits on (05-27, G-05-1d;
+   *  a fixed aisle slot since 05-34, G-05-P2). */
   target: Tile;
 }
 
@@ -62,38 +63,48 @@ export function blockedTilesFor(walker: Character, target: Tile): Set<string> {
 }
 
 /**
- * Where the sender stands at the receiver (05-27, G-05-1d): the nearest free,
- * reachable, non-furniture tile on the receiver's SEAT row, searched outward
- * from its seat (-1, +1, -2, +2, ...). Staying on the seat row keeps every
- * handoff speaker on a layout seat row (05-28's bubble band relies on it).
+ * Where the sender stands at the receiver (05-34, G-05-P2, superseding 05-27's
+ * seat-row search at the user's request): the FIXED slots of the receiver's
+ * HOME (`interactionSlotsFor`), taken in layout preference order. The seat-row
+ * search always returned the even column between two odd-column seats, so the
+ * sender, the receiver and the neighbouring seated agent read as one stacked
+ * group 16 px apart (UAT G-05-P2). Every aisle slot is two tiles from every
+ * seat and standing spot, and no slot IS a home, so a waiting sender can also
+ * never look like it is sitting at someone else's desk (closes review WR-05).
  *
- * ponytail: null when the row has no free tile — impossible on the shipped
- * layout (each seat row keeps 8+ non-seat floor tiles); the caller then shows
- * the icon where the sender stands instead of stacking it on someone.
+ * The receiver's HOME, not its current tile, so a receiver that is itself
+ * mid-walk still hands its own desk's slots out.
+ *
+ * A slot is taken when another present character's seat, its tile when it is
+ * not walking, or another live record's target lies within Chebyshev distance 1
+ * — including diagonals — so a second concurrent sender takes the NEXT fixed
+ * slot instead of standing beside the first.
+ *
+ * ponytail: null needs every slot of one receiver blocked, i.e. 5+ concurrent
+ * senders or loiterers in that stretch of aisle; the caller then shows the icon
+ * where the sender stands instead of stacking it on someone.
  */
 function interactionTileFor(toChar: Character, fromChar: Character): Tile | null {
   const tileMap = getTileMap();
-  const row = toChar.seatRow;
-  const taken = new Set<string>([tileKey(toChar.seatCol, toChar.seatRow)]);
+  const taken: Tile[] = [{ col: toChar.seatCol, row: toChar.seatRow }];
   for (const ch of getCharacters()) {
     if (ch === fromChar) continue;
-    taken.add(tileKey(ch.seatCol, ch.seatRow));
-    taken.add(tileKey(ch.tileCol, ch.tileRow));
+    taken.push({ col: ch.seatCol, row: ch.seatRow });
+    if (ch.state !== CharacterState.WALK) taken.push({ col: ch.tileCol, row: ch.tileRow });
   }
   for (const record of handoffs.values()) {
-    if (record.fromChar !== fromChar && record.phase !== "RETURNING_TO_DESK") {
-      taken.add(tileKey(record.target.col, record.target.row));
-    }
+    if (record.fromChar !== fromChar && record.phase !== "RETURNING_TO_DESK") taken.push(record.target);
   }
-  const width = tileMap[row]?.length ?? 0;
-  for (let d = 1; d < width; d++) {
-    for (const col of [toChar.seatCol - d, toChar.seatCol + d]) {
-      if (taken.has(tileKey(col, row)) || !isWalkable(col, row, tileMap, FURNITURE_BLOCKED_TILES as Set<string>)) continue;
-      const here = fromChar.tileCol === col && fromChar.tileRow === row;
-      const tile = { col, row };
-      if (here || findPath(fromChar.tileCol, fromChar.tileRow, col, row, tileMap, blockedTilesFor(fromChar, tile)).length > 0) {
-        return tile;
-      }
+  for (const slot of interactionSlotsFor({ col: toChar.seatCol, row: toChar.seatRow })) {
+    if (taken.some((t) => Math.max(Math.abs(t.col - slot.col), Math.abs(t.row - slot.row)) <= 1)) continue;
+    if (!isWalkable(slot.col, slot.row, tileMap, FURNITURE_BLOCKED_TILES as Set<string>)) continue;
+    const tile = { col: slot.col, row: slot.row };
+    const here = fromChar.tileCol === tile.col && fromChar.tileRow === tile.row;
+    if (
+      here ||
+      findPath(fromChar.tileCol, fromChar.tileRow, tile.col, tile.row, tileMap, blockedTilesFor(fromChar, tile)).length > 0
+    ) {
+      return tile;
     }
   }
   return null;
@@ -268,11 +279,14 @@ export function checkHandoffArrivals(): void {
       const taskTitle = getTaskTitle(record.taskId) ?? record.taskId;
       const toChar = getCharacter(record.toAgentId);
       const toAgentName = toChar?.name ?? record.toAgentId;
-      // 05-27: turn to the receiver before speaking.
+      // 05-27: turn to the receiver before speaking. 05-34 (G-05-P2): the
+      // sender now waits in the aisle two rows off the seat, so face along the
+      // DOMINANT axis — up across the desk to a row-4 receiver, down to a
+      // row-8 one; sideways only when the column gap is the bigger one.
       if (toChar) {
         const dc = toChar.tileCol - fromChar.tileCol;
         const dr = toChar.tileRow - fromChar.tileRow;
-        if (dc !== 0) fromChar.dir = dc > 0 ? Direction.RIGHT : Direction.LEFT;
+        if (Math.abs(dc) > Math.abs(dr)) fromChar.dir = dc > 0 ? Direction.RIGHT : Direction.LEFT;
         else if (dr !== 0) fromChar.dir = dr > 0 ? Direction.DOWN : Direction.UP;
       }
       record.requestedText = resolveHandoffDialogue("requested", taskTitle, toAgentName);
