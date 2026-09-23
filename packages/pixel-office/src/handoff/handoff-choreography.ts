@@ -106,10 +106,12 @@ function interactionTileFor(toChar: Character, fromChar: Character): Tile | null
     if (ch.state !== CharacterState.WALK) taken.push({ col: ch.tileCol, row: ch.tileRow });
   }
   for (const record of handoffs.values()) {
-    // Reserved for the record's whole lifetime, which ends at retireHandoff and
-    // nowhere else (review WR-08). The sender may still stand on the tile its
-    // own record reserved.
-    if (record.fromChar !== fromChar) taken.push(record.target);
+    // A current sender's target is reserved until retireHandoff, departure
+    // included (review WR-08). A record whose sender vanished or was re-seated
+    // is dead and releases its slot at once, instead of at the next
+    // checkHandoffArrivals tick (review IN-02). The sender may still stand on
+    // the tile its own record reserved.
+    if (record.fromChar !== fromChar && senderIsCurrent(record)) taken.push(record.target);
   }
   for (const slot of interactionSlotsFor({ col: toChar.seatCol, row: toChar.seatRow })) {
     if (taken.some((t) => Math.max(Math.abs(t.col - slot.col), Math.abs(t.row - slot.row)) <= 1)) continue;

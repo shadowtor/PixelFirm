@@ -81,7 +81,10 @@ export function App() {
           upsertCharacterFromAgent(upsert.agentId, upsert.status, upsert.name);
         }
 
-        if (event.type === "task.created" && event.taskId) {
+        // Same guard as the snapshot path; the renderer already treats a blank
+        // title as absent via titleOrNull, this only keeps the two entry points
+        // agreeing (05-41, CR-01).
+        if (event.type === "task.created" && event.taskId && event.payload.title) {
           registerTaskTitle(event.taskId, event.payload.title);
         }
         // 05-04 (HANDOFF-01): every relayed handoff event also reaches the

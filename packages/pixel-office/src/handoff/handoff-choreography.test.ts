@@ -1477,8 +1477,7 @@ describe("host read path (05-35, G-05-P4)", () => {
     // whose titles cap to byte-identical lines. While the frame record keyed on
     // the drawn TEXT, the second record was silently handed the first's rect.
     it("a superseding record with a byte-identical line gets its own rect, never the previous record's (review WR-01)", () => {
-      const { a, b } = twoSendersOneReceiver();
-      const toName = b.name ?? "agent-b";
+      const { a } = twoSendersOneReceiver();
       const drawn = renderFrameBoxFills();
       expect(drawn.length, "both senders' lines were drawn this frame").toBe(2);
       expect(stampOf(a)).toBe("task-x");
@@ -1486,11 +1485,9 @@ describe("host read path (05-35, G-05-P4)", () => {
       expect(beforeBox, "the first record's own rect").not.toBeNull();
 
       // The SAME title, so the superseding record's line is byte-identical to
-      // the one the last frame painted — asserted, never assumed.
+      // the one the last frame painted — asserted, never assumed, by the
+      // lineBefore comparison once the new record is speaking.
       registerTaskTitle("task-z", TITLE_X);
-      expect(resolveHandoffDialogue("requested", TITLE_X, toName)).toBe(
-        resolveHandoffDialogue("requested", TITLE_X, toName),
-      );
       const lineBefore = a.bubbleText;
       handleHandoffEvent(requestedEvent("task-z", "agent-a", "agent-b", REQ_Z));
       run(10);
