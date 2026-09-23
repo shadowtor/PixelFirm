@@ -3,11 +3,11 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-36-PLAN.md
-last_updated: "2026-09-23T03:51:44.838Z"
+stopped_at: Completed 05-37-PLAN.md
+last_updated: "2026-09-23T04:08:03.275Z"
 last_activity: 2026-09-23
 last_activity_desc: Phase 05 execution started
-state_head: 703ccdb51ad339d4f04e3e0716045e87d0557bc7
+state_head: 06b462b041948cff3ceb16f05ff4d66d9fbc2abd
 progress:
   total_phases: 8
   completed_phases: 4
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 2 of 37
+Plan: 3 of 37
 Status: Ready to execute
 Last activity: 2026-09-23 — Phase 05 execution started
 
@@ -111,6 +111,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P34 | 26 min | 3 tasks | 8 files |
 | Phase 05 P35 | 10 min | 2 tasks | 5 files |
 | Phase 05 P36 | 7 min | 3 tasks | 4 files |
+| Phase 05 P37 | 18 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -233,6 +234,9 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-35: speakerId is derived from a live bubbleText === requestedText/acceptedText comparison plus 05-19's senderIsCurrent, not from the phase alone - a cleared or superseded line reports no speaker and no box
 - [Phase 05]: Footer backdrop is WALL_COLOR, the same constant the surround uses — One constant, two consumers, so the footer and the surround cannot drift and G-05-P6's no-black-frame property stays structurally intact
 - [Phase 05]: Verification guards assert the property by equality, never the absence of a bad value — WR-02's root cause was a not.toContain guard that passed for 'no backdrop at all' — an absence check pins the regression instead of catching it
+- [Phase 05]: 05-37: interactionTileFor reserves a handoff target for the record's whole lifetime, RETURNING_TO_DESK included - the record flips phase and the character to WALK on the same tick, so a phase-exempted target is still physically occupied (WR-08)
+- [Phase 05]: 05-37: Character.bubbleTextTaskId stamps line ownership; showsLineOf is the single identity predicate for both the read path and all three clear paths, so colliding capped titles can never make two records claim one bubble (WR-07)
+- [Phase 05]: 05-37: speakerText and the getDialogueBox lookup are left as-is - that comparison is CR-01's frame-freshness guard, a different property from speaker identity
 
 ### Pending Todos
 
@@ -261,6 +265,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-23T03:51:31.752Z
-Stopped at: Completed 05-36-PLAN.md
+Last session: 2026-09-23T04:07:25.666Z
+Stopped at: Completed 05-37-PLAN.md
 Resume file: None

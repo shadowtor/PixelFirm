@@ -322,7 +322,7 @@ Plans:
 
 **Wave 26**
 
-- [ ] 05-36-PLAN.md — Unconditional footer backdrop + overflow-viewport coverage (WR-02)
+- [x] 05-36-PLAN.md — Unconditional footer backdrop + overflow-viewport coverage (WR-02)
 
 **Wave 27** *(blocked on 05-36)*
 
