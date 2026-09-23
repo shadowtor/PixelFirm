@@ -1,10 +1,10 @@
 import type { CompanyEvent } from "event-schema";
 import { AgentStatus } from "event-schema";
-import type { ProjectionState } from "./projections";
-import { emptyState } from "./projections";
-import { deriveAgentStatus } from "./agent-status-derivation";
+import type { ProjectionState } from "./projections.js";
+import { emptyState } from "./projections.js";
+import { deriveAgentStatus } from "./agent-status-derivation.js";
 
-export { emptyState } from "./projections";
+export { emptyState } from "./projections.js";
 
 // Dispatch table keyed by event.type. Handlers never call Date.now(), crypto.randomUUID(),
 // Math.random(), or read module-level mutable state — every value a handler needs must

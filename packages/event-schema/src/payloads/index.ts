@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BaseEnvelope } from "../envelope";
+import { BaseEnvelope } from "../envelope.js";
 
 const CompanyStartedPayload = z.object({ name: z.string() });
 const FloorCreatedPayload = z.object({ name: z.string() });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { CompanyEventSchema } from "./index";
+import { CompanyEventSchema } from "./index.js";
 
 function baseEnvelope() {
   return {

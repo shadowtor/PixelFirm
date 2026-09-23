@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { AgentStatus } from "event-schema";
 import type { AgentTaskStatus } from "orchestration-adapter";
-import { deriveAgentStatus } from "./agent-status-derivation";
+import { deriveAgentStatus } from "./agent-status-derivation.js";
 
 describe("deriveAgentStatus — no active task", () => {
   it("returns IDLE when taskStatus is undefined", () => {

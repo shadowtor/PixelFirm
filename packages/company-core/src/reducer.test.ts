@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import type { CompanyEvent } from "event-schema";
 import { AgentStatus } from "event-schema";
-import { fold, reduce, emptyState } from "./reducer";
-import { stubEventSequence } from "./fixtures/stub-events";
+import { fold, reduce, emptyState } from "./reducer.js";
+import { stubEventSequence } from "./fixtures/stub-events.js";
 
 function companyStartedEvent(): CompanyEvent {
   return {

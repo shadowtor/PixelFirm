@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { AgentStatus } from "./agent-status";
+import { AgentStatus } from "./agent-status.js";
 
 // RESEARCH.md Pitfall 1: the phase's target state count is 15, not the 14
 // CONTEXT.md's D-01 inherited. This test is the structural guard against
