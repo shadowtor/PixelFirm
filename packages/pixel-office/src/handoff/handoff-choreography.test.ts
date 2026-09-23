@@ -1175,7 +1175,7 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
 // 05-33/05-10 precedent).
 type ActiveHandoffLike = {
   taskId: string;
-  fullTitle: string;
+  fullTitle: string | null;
   fromAgentId: string;
   toAgentId: string;
   phase: string;
@@ -1188,7 +1188,7 @@ const choreographyModule = (await import("./handoff-choreography")) as {
 const activeHandoffs = (): ActiveHandoffLike[] => choreographyModule.getActiveHandoffs?.() ?? [];
 
 describe("host read path (05-35, G-05-P4)", () => {
-  /** 30 code points — well past the bubble's 12-code-point cap. */
+  /** 30 code points — well past the bubble's MAX_DIALOGUE_TITLE_CHARS cap. */
   const LONG_TITLE = "Refactor the projection reduce";
 
   function run(seconds: number): void {
@@ -1343,10 +1343,17 @@ describe("host read path (05-35, G-05-P4)", () => {
     ]);
   });
 
-  it("falls back to the taskId when no title was registered", () => {
+  it("reports fullTitle as null, never the task id, when no title was registered (05-41, WR-01)", () => {
     toIconVisible(null);
     renderFrameBoxFills();
-    expect(activeHandoffs()[0]?.fullTitle).toBe("task-1");
+    expect(activeHandoffs()[0]?.fullTitle).toBeNull();
+  });
+
+  it("reports fullTitle as null when the registered title is whitespace (05-41, WR-01)", () => {
+    toIconVisible("   ");
+    renderFrameBoxFills();
+    expect(activeHandoffs()).toHaveLength(1);
+    expect(activeHandoffs()[0].fullTitle).toBeNull();
   });
 
   // review WR-07: speaker attribution used to be a string comparison, so two
