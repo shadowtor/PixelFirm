@@ -1,7 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { CompanyEvent } from "event-schema";
 import { AgentStatus } from "event-schema";
-import { upsertCharacterFromAgent, getCharacter, getCharacters, getTileMap, stepOffice, _resetForTests } from "../index";
+import {
+  upsertCharacterFromAgent,
+  getCharacter,
+  getCharacters,
+  getTileMap,
+  registerTaskTitle,
+  stepOffice,
+  _resetForTests,
+} from "../index";
+import { DIALOGUE_BOX_COLOR } from "../constants";
 import { CharacterState, Direction } from "../types";
 import type { Character } from "../types";
 import { findPath } from "../layout/tileMap";
@@ -1064,5 +1073,168 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
         expect(tightest).toBeGreaterThanOrEqual(MIN_INK_GAP_PX);
       });
     });
+  });
+});
+
+// 05-35 (G-05-P4): the host read path. Reached through a dynamic import so a
+// RED run fails on assertions rather than crashing at ESM link time (05-34/
+// 05-33/05-10 precedent).
+type ActiveHandoffLike = {
+  taskId: string;
+  fullTitle: string;
+  fromAgentId: string;
+  toAgentId: string;
+  phase: string;
+  speakerId: string | null;
+  box: { x: number; y: number; w: number; h: number } | null;
+};
+const choreographyModule = (await import("./handoff-choreography")) as {
+  getActiveHandoffs?: () => ActiveHandoffLike[];
+};
+const activeHandoffs = (): ActiveHandoffLike[] => choreographyModule.getActiveHandoffs?.() ?? [];
+
+describe("host read path (05-35, G-05-P4)", () => {
+  /** 30 code points — well past the bubble's 12-code-point cap. */
+  const LONG_TITLE = "Refactor the projection reduce";
+
+  function run(seconds: number): void {
+    for (let i = 0; i < Math.ceil(seconds * 60); i++) stepOffice(1 / 60);
+  }
+
+  /** Every DIALOGUE_BOX_COLOR fill rect of one real rendered frame, in draw
+   *  order. That colour is achromatic and absent from every sprite, glyph,
+   *  floor and wall palette (05-13, guarded by renderer.test.ts), so each rect
+   *  is exactly one bubble's box fill — the rect a host would hit-test. */
+  function renderFrameBoxFills(): Array<{ x: number; y: number; w: number; h: number }> {
+    const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const ctx = {
+      fillStyle: "",
+      font: "",
+      textBaseline: "alphabetic",
+      fillRect(this: { fillStyle: string }, x: number, y: number, w: number, h: number) {
+        if (String(this.fillStyle) === DIALOGUE_BOX_COLOR) rects.push({ x, y, w, h });
+      },
+      fillText() {},
+      measureText: (t: string) => ({ width: t.length * 6 }),
+      drawImage() {},
+    } as unknown as CanvasRenderingContext2D;
+    renderScene(ctx, [...getCharacters()], 0, 0, 1, FURNITURE);
+    return rects;
+  }
+
+  /** a at (1,4) and b at (9,4) with fillers between, driven to ICON_VISIBLE. */
+  function toIconVisible(title: string | null = LONG_TITLE): { a: Character; b: Character } {
+    for (const id of ["agent-a", "filler-1", "filler-2", "filler-3", "agent-b"]) {
+      upsertCharacterFromAgent(id, AgentStatus.IDLE);
+    }
+    if (title !== null) registerTaskTitle("task-1", title);
+    const a = getCharacter("agent-a")!;
+    const b = getCharacter("agent-b")!;
+    handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+    run(10);
+    expect(a.bubbleType).toBe("handoff-task");
+    return { a, b };
+  }
+
+  it("exports getActiveHandoffs", () => {
+    expect(typeof choreographyModule.getActiveHandoffs, "handoff-choreography must export getActiveHandoffs").toBe(
+      "function",
+    );
+  });
+
+  it("returns the full title while the bubble shows the cut one, with the drawn box rect", () => {
+    const { a } = toIconVisible();
+
+    const fills = renderFrameBoxFills();
+    expect(fills.length, "exactly one bubble was drawn this frame").toBe(1);
+
+    expect(activeHandoffs()).toEqual([
+      {
+        taskId: "task-1",
+        fullTitle: LONG_TITLE,
+        fromAgentId: "agent-a",
+        toAgentId: "agent-b",
+        phase: "ICON_VISIBLE",
+        speakerId: "agent-a",
+        box: fills[0],
+      },
+    ]);
+
+    // The bubble itself is unchanged: still the 12-code-point cut label.
+    expect(a.bubbleText).toContain("Refactor th…");
+    expect(Array.from("Refactor th…").length).toBe(12);
+    expect(a.bubbleText).not.toContain(LONG_TITLE);
+  });
+
+  it("follows the sequence: the receiver becomes the speaker, then the record is gone", () => {
+    const { a } = toIconVisible();
+    renderFrameBoxFills();
+
+    handleHandoffEvent(completedEvent("task-1", "agent-b"));
+    const fills = renderFrameBoxFills();
+    expect(fills.length, "the accepted line is the only bubble drawn").toBe(1);
+    expect(activeHandoffs()).toEqual([
+      {
+        taskId: "task-1",
+        fullTitle: LONG_TITLE,
+        fromAgentId: "agent-a",
+        toAgentId: "agent-b",
+        phase: "RETURNING_TO_DESK",
+        speakerId: "agent-b",
+        box: fills[0],
+      },
+    ]);
+
+    run(10);
+    expect(a.tileCol).toBe(a.seatCol);
+    expect(activeHandoffs()).toEqual([]);
+  });
+
+  it("while the sender is still walking there is no speaker and no box", () => {
+    for (const id of ["agent-a", "filler-1", "filler-2", "filler-3", "agent-b"]) {
+      upsertCharacterFromAgent(id, AgentStatus.IDLE);
+    }
+    registerTaskTitle("task-1", LONG_TITLE);
+    handleHandoffEvent(requestedEvent("task-1", "agent-a", "agent-b"));
+    renderFrameBoxFills();
+
+    expect(activeHandoffs()).toEqual([
+      {
+        taskId: "task-1",
+        fullTitle: LONG_TITLE,
+        fromAgentId: "agent-a",
+        toAgentId: "agent-b",
+        phase: "WALKING_TO_RECEIVER",
+        speakerId: null,
+        box: null,
+      },
+    ]);
+  });
+
+  it("falls back to the taskId when no title was registered", () => {
+    toIconVisible(null);
+    renderFrameBoxFills();
+    expect(activeHandoffs()[0]?.fullTitle).toBe("task-1");
+  });
+
+  it("is read-only: mutating a returned entry changes neither the next call nor the FSM", () => {
+    const { a } = toIconVisible();
+    renderFrameBoxFills();
+
+    const before = activeHandoffs();
+    const bubbleTextBefore = a.bubbleText;
+    before[0]!.phase = "RETURNING_TO_DESK";
+    before[0]!.fullTitle = "tampered";
+    before[0]!.speakerId = "agent-b";
+    before[0]!.box!.x = -999;
+
+    const after = activeHandoffs();
+    expect(after[0]!.phase).toBe("ICON_VISIBLE");
+    expect(after[0]!.fullTitle).toBe(LONG_TITLE);
+    expect(after[0]!.speakerId).toBe("agent-a");
+    expect(after[0]!.box).toEqual(renderFrameBoxFills()[0]);
+    // The FSM is untouched: the sender is still waiting with its own line.
+    expect(isWaitingHandoffSender(a)).toBe(true);
+    expect(a.bubbleText).toBe(bubbleTextBefore);
   });
 });
