@@ -168,7 +168,7 @@ Plans:
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
   5. The office floor is furnished — MetroCity floor and wall tiles, desks with monitors grouped in pods with walking lanes — agents sit at desk seats and never walk through furniture or another seated agent.
 
-**Plans:** 35/37 plans executed (UAT round 2 2026-09-22 diagnosed 6 polish gaps G-05-P1..P6 — 5 gap-closure plans 05-31..05-35 added; verification 2026-09-23 left 1 gap open — 2 gap-closure plans 05-36..05-37 added)
+**Plans:** 36/37 plans executed (UAT round 2 2026-09-22 diagnosed 6 polish gaps G-05-P1..P6 — 5 gap-closure plans 05-31..05-35 added; verification 2026-09-23 left 1 gap open — 2 gap-closure plans 05-36..05-37 added)
 
 Plans:
 
@@ -207,7 +207,7 @@ Plans:
 - [x] 05-33-PLAN.md — UAT polish: speech bubble picks the safest of four candidates (never over a glyph or off the floor, desks only when unavoidable), tail to the speaker, live TRUTH 5 (G-05-P1)
 - [x] 05-34-PLAN.md — UAT polish: fixed handoff interaction slots on the central aisle from layout data, no shoulder-to-shoulder, ink-separation sweep (G-05-P2)
 - [x] 05-35-PLAN.md — UAT polish: getActiveHandoffs() host read path (full title, participants, phase, bubble rect), 12-char cap kept (G-05-P4)
-- [ ] 05-36-PLAN.md — Gap closure: unconditional WALL_COLOR backdrop on the attribution footer, equality assertion replacing the substring guard, below-minimum viewport covered in the suite and the live probe (WR-02 / G-05-P6)
+- [x] 05-36-PLAN.md — Gap closure: unconditional WALL_COLOR backdrop on the attribution footer, equality assertion replacing the substring guard, below-minimum viewport covered in the suite and the live probe (WR-02 / G-05-P6)
 - [ ] 05-37-PLAN.md — Gap closure: handoff slot reserved through the walk home (WR-08) and speaker attribution by record identity instead of dialogue text (WR-07)
 
 **Wave 1**
@@ -385,7 +385,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 35/35 | In Progress|  |
+| 5. Pixel Office Renderer | 36/37 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |

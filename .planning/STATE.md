@@ -1,18 +1,18 @@
 ---
 gsd_state_version: "1.0"
 current_phase: 05
-current_phase_name: pixel-office-renderer
+current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-35-PLAN.md
-last_updated: "2026-09-23T02:38:42.376Z"
+stopped_at: Completed 05-36-PLAN.md
+last_updated: "2026-09-23T03:51:44.838Z"
 last_activity: 2026-09-23
 last_activity_desc: Phase 05 execution started
-state_head: 8a0a21535cde56bd07b9b9f0e5444546aafdccee
+state_head: 703ccdb51ad339d4f04e3e0716045e87d0557bc7
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 52
-  completed_plans: 50
+  completed_plans: 51
   percent: 50
 ---
 
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 
 ## Current Position
 
-Phase: 05 (pixel-office-renderer) — READY TO EXECUTE
-Plan: 6 of 35
+Phase: 05 (Pixel Office Renderer) — EXECUTING
+Plan: 2 of 37
 Status: Ready to execute
 Last activity: 2026-09-23 — Phase 05 execution started
 
@@ -110,6 +110,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P33 | 33 min | 3 tasks | 5 files |
 | Phase 05 P34 | 26 min | 3 tasks | 8 files |
 | Phase 05 P35 | 10 min | 2 tasks | 5 files |
+| Phase 05 P36 | 7 min | 3 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -230,6 +231,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-35: getActiveHandoffs() is the host read path for G-05-P4 - untruncated title, both agents, phase, speaker and the drawn bubble canvas rect; the 12-code-point bubble cap is unchanged and no hover/click/dashboard UI ships in Phase 5
 - [Phase 05]: 05-35: getDialogueBox reads 05-33's existing per-frame placement record instead of the plan's second box map (checker advisory) - one source, so a host can never hit-test a rect the renderer did not draw
 - [Phase 05]: 05-35: speakerId is derived from a live bubbleText === requestedText/acceptedText comparison plus 05-19's senderIsCurrent, not from the phase alone - a cleared or superseded line reports no speaker and no box
+- [Phase 05]: Footer backdrop is WALL_COLOR, the same constant the surround uses — One constant, two consumers, so the footer and the surround cannot drift and G-05-P6's no-black-frame property stays structurally intact
+- [Phase 05]: Verification guards assert the property by equality, never the absence of a bad value — WR-02's root cause was a not.toContain guard that passed for 'no backdrop at all' — an absence check pins the regression instead of catching it
 
 ### Pending Todos
 
@@ -258,6 +261,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-23T00:45:17.890Z
-Stopped at: Completed 05-35-PLAN.md
+Last session: 2026-09-23T03:51:31.752Z
+Stopped at: Completed 05-36-PLAN.md
 Resume file: None
