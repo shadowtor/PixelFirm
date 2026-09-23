@@ -267,7 +267,10 @@ const coveredArea = (box: DialogueRect, rects: readonly DialogueRect[]): number 
  * winner has the least desk overlap, then the least furniture overlap (all
  * office furniture, desks included), then the least character overlap, then the
  * earlier index. So a desk-covering box is never chosen while a valid
- * desk-free one exists — the UAT's own ranking for G-05-P1.
+ * desk-free one exists — the UAT's own ranking for G-05-P1. Validity is just
+ * the first key of that same ranking, so when NOTHING is valid the least-bad
+ * candidate still wins, and the returned box is clamped into the floor
+ * interior either way (review WR-01).
  *
  * The tail always binds the box to its speaker: a `zoom`-wide ink rect from
  * the box to the foot line (below) or head top (above), or a `zoom`-tall one
@@ -299,36 +302,69 @@ export function resolveDialogueBox(
   const aboveY = speaker.headTop - (GLYPH_ROWS + BUBBLE_ICON_GAP_PX) * zoom - gap - h;
   const sideY = speaker.headTop + Math.floor(DIALOGUE_BOX_HEIGHT_PX / 2) * zoom;
   const leftX = speaker.left - gap - w;
-  const boxes: Array<Omit<DialogueCandidate, "valid" | "deskArea" | "furnitureArea" | "characterArea">> = [
-    { kind: "below", x: pairX, y: speaker.footY + gap, w, h, tail: { x: tailX, y: speaker.footY, w: zoom, h: gap } },
-    { kind: "above", x: pairX, y: aboveY, w, h, tail: { x: tailX, y: aboveY + h, w: zoom, h: speaker.headTop - aboveY - h } },
-    { kind: "right", x: speaker.right + gap, y: speaker.headTop, w, h, tail: { x: speaker.right, y: sideY, w: gap, h: zoom } },
-    { kind: "left", x: leftX, y: speaker.headTop, w, h, tail: { x: leftX + w, y: sideY, w: gap, h: zoom } },
+  /** The ink stub binding a box AT (x, y) to its speaker. One function and one
+   *  call per box, so a candidate's tail and the returned winner's tail can
+   *  never disagree about where the box ended up (review WR-01: the winner is
+   *  clamped, and the tail has to follow it). */
+  const tailFor = (kind: DialogueCandidateKind, x: number, y: number): DialogueRect => {
+    switch (kind) {
+      case "below":
+        return { x: tailX, y: speaker.footY, w: zoom, h: Math.max(0, y - speaker.footY) };
+      case "above":
+        return { x: tailX, y: y + h, w: zoom, h: Math.max(0, speaker.headTop - (y + h)) };
+      case "right":
+        return { x: speaker.right, y: sideY, w: Math.max(0, x - speaker.right), h: zoom };
+      case "left":
+        return { x: x + w, y: sideY, w: Math.max(0, speaker.left - (x + w)), h: zoom };
+    }
+  };
+  const boxes: Array<Pick<DialogueCandidate, "kind" | "x" | "y">> = [
+    { kind: "below", x: pairX, y: speaker.footY + gap },
+    { kind: "above", x: pairX, y: aboveY },
+    { kind: "right", x: speaker.right + gap, y: speaker.headTop },
+    { kind: "left", x: leftX, y: speaker.headTop },
   ];
-  const candidates: DialogueCandidate[] = boxes.map((c) => ({
-    ...c,
-    valid:
-      c.x >= floor.left &&
-      c.x + c.w <= floor.right &&
-      c.y >= floor.top &&
-      c.y + c.h <= floor.bottom &&
-      !obstacles.glyphs.some((g) => intersectArea(c, g) > 0),
-    deskArea: coveredArea(c, obstacles.desks),
-    furnitureArea: coveredArea(c, obstacles.furniture),
-    characterArea: coveredArea(c, obstacles.characters),
-  }));
+  const candidates: DialogueCandidate[] = boxes.map(({ kind, x, y }) => {
+    const box = { x, y, w, h };
+    return {
+      kind,
+      ...box,
+      tail: tailFor(kind, x, y),
+      valid:
+        x >= floor.left &&
+        x + w <= floor.right &&
+        y >= floor.top &&
+        y + h <= floor.bottom &&
+        !obstacles.glyphs.some((g) => intersectArea(box, g) > 0),
+      deskArea: coveredArea(box, obstacles.desks),
+      furnitureArea: coveredArea(box, obstacles.furniture),
+      characterArea: coveredArea(box, obstacles.characters),
+    };
+  });
+  // Valid first, then the soft keys, then the earlier index. Invalid candidates
+  // are ranked against each other too (review WR-01): when nothing is valid the
+  // fallback is the LEAST BAD box, not whichever happens to be first — "below"
+  // collides with every row-8 glyph for an aisle speaker, so index order is the
+  // worst possible tie-break there.
   const beats = (a: DialogueCandidate, b: DialogueCandidate): boolean =>
-    a.deskArea !== b.deskArea
-      ? a.deskArea < b.deskArea
-      : a.furnitureArea !== b.furnitureArea
-        ? a.furnitureArea < b.furnitureArea
-        : a.characterArea < b.characterArea;
+    a.valid !== b.valid
+      ? a.valid
+      : a.deskArea !== b.deskArea
+        ? a.deskArea < b.deskArea
+        : a.furnitureArea !== b.furnitureArea
+          ? a.furnitureArea < b.furnitureArea
+          : a.characterArea < b.characterArea;
+  let best = candidates[0];
+  for (const c of candidates) if (beats(c, best)) best = c;
   // ponytail: the no-valid-candidate fallback is unreachable on the shipped
   // layout — renderer.test.ts's "every home, full office" sweep asserts the
-  // chosen candidate is valid in all 40 scenes. Upgrade path: more candidates.
-  let best = candidates.find((c) => c.valid) ?? candidates[0];
-  for (const c of candidates) if (c.valid && beats(c, best)) best = c;
-  return { kind: best.kind, x: best.x, y: best.y, w: best.w, h: best.h, tail: best.tail, candidates };
+  // chosen candidate is valid in all 40 scenes, at the widest line the caps
+  // allow. Upgrade path: more candidates. It is still clamped into the floor
+  // unconditionally (a no-op whenever best.valid), so an unreachable branch
+  // going live is at worst a mis-ranked box, never one across the canvas edge.
+  const x = Math.max(floor.left, Math.min(best.x, floor.right - w));
+  const y = Math.max(floor.top, Math.min(best.y, floor.bottom - h));
+  return { kind: best.kind, x, y, w, h, tail: tailFor(best.kind, x, y), candidates };
 }
 
 /** Where pass 3 paints this character's state glyph, or null when it has none.

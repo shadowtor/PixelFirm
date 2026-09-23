@@ -400,11 +400,13 @@ function handoffRequested(id: string, taskId: string, fromAgentId: string, toAge
 }
 
 /** Seats n agents through the REAL layout; positions/hues are read back from
- *  the returned Characters, never hardcoded (05-13 coupling_note with 05-14). */
-function seatReal(n: number): Character[] {
+ *  the returned Characters, never hardcoded (05-13 coupling_note with 05-14).
+ *  `name` gives every agent the same display name — the sweep uses it to drive
+ *  the WIDEST line the caps allow (review WR-01). */
+function seatReal(n: number, name?: string): Character[] {
   const out: Character[] = [];
   for (let i = 1; i <= n; i++) {
-    upsertCharacterFromAgent(`agent-${i}`, AgentStatus.IDLE);
+    upsertCharacterFromAgent(`agent-${i}`, AgentStatus.IDLE, name);
     out.push(getCharacter(`agent-${i}`)!);
   }
   return out;
@@ -493,8 +495,8 @@ async function renderBubbleFrame(chars: Character[]) {
 }
 
 /** Requests from -> to through the public API and steps the real loop until the sender waits. */
-function requestAndWait(from: Character, to: Character): void {
-  registerTaskTitle("task-1", "Fix login bug");
+function requestAndWait(from: Character, to: Character, title = "Fix login bug"): void {
+  registerTaskTitle("task-1", title);
   handleHandoffEvent(handoffRequested("7fa85f64-5717-4562-b3fc-2c963f66afa6", "task-1", from.id, to.id));
   for (let i = 0; i < 3600 && !from.bubbleText; i++) stepOffice(1 / 60);
   expect(from.bubbleText, `${from.id} never started talking`).toBeTruthy();
@@ -533,6 +535,13 @@ describe("handoff speech bubble (05-28, G-05-4 / G-05-1b)", () => {
 
   it("every home, full office: in the floor, off every glyph, tail on the speaker, desk-free whenever a valid candidate is", async () => {
     const { lastDialoguePlacements } = await import("./renderer.js");
+    const { MAX_DIALOGUE_NAME_CHARS, MAX_DIALOGUE_TITLE_CHARS } = await import("../handoff/dialogue-templates.js");
+    // The WIDEST line the caps can produce, so the sweep scores the worst case
+    // rather than one ~6 px short of it (review WR-01): the accepted template is
+    // `${name} accepts ${title}`, both operands at their cap.
+    const WIDE_NAME = "N".repeat(MAX_DIALOGUE_NAME_CHARS);
+    const WIDE_TITLE = "T".repeat(MAX_DIALOGUE_TITLE_CHARS);
+    const WIDEST_LINE_CHARS = MAX_DIALOGUE_NAME_CHARS + " accepts ".length + MAX_DIALOGUE_TITLE_CHARS;
     const positions = [...SEATS, ...STANDING_SPOTS];
     expect(positions).toHaveLength(20);
     let deskAvoided = 0;
@@ -579,15 +588,18 @@ describe("handoff speech bubble (05-28, G-05-4 / G-05-1b)", () => {
 
     for (const p of positions) {
       _resetForTests();
-      const chars = seatReal(20);
+      const chars = seatReal(20, WIDE_NAME);
       const receiver = chars.find((c) => c.seatCol === p.col && c.seatRow === p.row)!;
       const sender = chars.find((c) => c.seatRow !== p.row)!;
       for (const c of chars) if (c !== sender && c !== receiver) upsertCharacterFromAgent(c.id, AgentStatus.BLOCKED);
-      requestAndWait(sender, receiver);
+      requestAndWait(sender, receiver, WIDE_TITLE);
       await check(chars, `requested -> (${p.col},${p.row})`, sender);
 
       handleHandoffEvent(handoffCompleted("8fa85f64-5717-4562-b3fc-2c963f66afa6", "task-1", receiver.id));
       expect(receiver.bubbleText, `accepted -> (${p.col},${p.row})`).toContain("accepts");
+      // Non-vacuity: this really is the widest line the caps allow, so the
+      // scored boxes are the worst case (review WR-01).
+      expect(Array.from(receiver.bubbleText!).length, `accepted -> (${p.col},${p.row})`).toBe(WIDEST_LINE_CHARS);
       await check(chars, `accepted -> (${p.col},${p.row})`, receiver);
     }
 
@@ -783,6 +795,44 @@ describe("resolveDialogueBox candidate scoring (05-33, G-05-P1)", () => {
     const best = p.candidates.filter((c) => c.valid).sort(cmp)[0];
     expect(best.kind).toBe("left");
     expect({ x: p.x, y: p.y, w: p.w, h: p.h }).toEqual({ x: best.x, y: best.y, w: best.w, h: best.h });
+  });
+
+  it("with no valid candidate it still ranks: the least-bad invalid box wins, not the first one (review WR-01)", async () => {
+    // A glyph on all four candidates, so none is valid; "below" covers a desk
+    // and "above" covers nothing, so the ranking — not the index — must decide.
+    const desk = { x: 103, y: BELOW_Y, w: 20, h: 9 };
+    const glyphs = [
+      { x: 110, y: BELOW_Y + 2, w: 10, h: 6 },
+      { x: 110, y: ABOVE_Y + 2, w: 10, h: 6 },
+      { x: 150, y: SIDE_Y + 2, w: 10, h: 6 },
+      { x: 80, y: SIDE_Y + 2, w: 10, h: 6 },
+    ];
+    const p = await resolve({ glyphs, desks: [desk], furniture: [desk] });
+    expect(p.candidates.map((c) => c.valid), "the fallback branch was not reached").toEqual([false, false, false, false]);
+    expect(p.candidates[0].deskArea).toBeGreaterThan(0);
+    expect(p.candidates[1].deskArea).toBe(0);
+    expect(p.kind, "chose the first invalid candidate rather than the least-bad one").toBe("above");
+    expect({ x: p.x, y: p.y }).toEqual({ x: p.candidates[1].x, y: p.candidates[1].y });
+  });
+
+  it("the fallback box is clamped into the floor interior (review WR-01)", async () => {
+    // A floor whose bottom edge cuts through 'below', with a glyph on each of
+    // the other three: nothing is valid, and the winner is a box that would
+    // otherwise be painted across the floor edge.
+    const floor = { ...FLOOR, bottom: 80 };
+    const glyphs = [
+      { x: 110, y: ABOVE_Y + 2, w: 10, h: 6 },
+      { x: 150, y: SIDE_Y + 2, w: 10, h: 6 },
+      { x: 80, y: SIDE_Y + 2, w: 10, h: 6 },
+    ];
+    const p = await resolve({ glyphs }, floor);
+    expect(p.candidates.map((c) => c.valid), "the fallback branch was not reached").toEqual([false, false, false, false]);
+    expect(p.kind).toBe("below");
+    expect(p.candidates[0].y + p.candidates[0].h, "the unclamped candidate already fit").toBeGreaterThan(floor.bottom);
+    expect(p.y + p.h, "fallback box painted across the floor edge").toBeLessThanOrEqual(floor.bottom);
+    expect(p.y).toBeGreaterThanOrEqual(floor.top);
+    expect(p.x).toBeGreaterThanOrEqual(floor.left);
+    expect(p.x + p.w).toBeLessThanOrEqual(floor.right);
   });
 
   it("each candidate's tail is 1 px across, shares an edge with its box, and reaches the speaker", async () => {
