@@ -168,7 +168,7 @@ Plans:
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
   5. The office floor is furnished — MetroCity floor and wall tiles, desks with monitors grouped in pods with walking lanes — agents sit at desk seats and never walk through furniture or another seated agent.
 
-**Plans:** 40/40 plans executed (UAT round 2 2026-09-22 diagnosed 6 polish gaps G-05-P1..P6 — 5 gap-closure plans 05-31..05-35 added; verification 2026-09-23 left 1 gap open — 2 gap-closure plans 05-36..05-37 added; UAT round 3 2026-09-23 accepted the implementation with 4 cosmetic polish gaps G-05-1a/1b/1c/2a — 3 gap-closure plans 05-38..05-40 added)
+**Plans:** 40/41 plans executed (UAT round 2 2026-09-22 diagnosed 6 polish gaps G-05-P1..P6 — 5 gap-closure plans 05-31..05-35 added; verification 2026-09-23 left 1 gap open — 2 gap-closure plans 05-36..05-37 added; UAT round 3 2026-09-23 accepted the implementation with 4 cosmetic polish gaps G-05-1a/1b/1c/2a — 3 gap-closure plans 05-38..05-40 added; re-verification 2026-09-23 found 2 gaps introduced by 05-40 — 1 gap-closure plan 05-41 added)
 
 Plans:
 
@@ -212,6 +212,7 @@ Plans:
 - [x] 05-38-PLAN.md — Gap closure: glyph head gap raised to 3 px and seated agents sunk further behind their desks, with two-sided guards in the suite and live TRUTH 4/5 (G-05-1c, G-05-2a)
 - [x] 05-39-PLAN.md — Gap closure: waiting glyph repainted so frame/glass/sand separate by luminance, plus a grayscale band test — identifiable without its blue (G-05-1a)
 - [x] 05-40-PLAN.md — Gap closure: verb-led handoff lines with a nullable title so a task id is never painted as one, plus rect attribution by record identity (G-05-1b, WR-01)
+- [ ] 05-41-PLAN.md — Gap closure: a blank title counts as no title via one `titleOrNull` rule at the resolver, nullable `getActiveHandoffs().fullTitle`, App.tsx live-title guard, dead record frees its aisle slot at once (CR-01, WR-01, IN-02)
 
 **Wave 1**
 
