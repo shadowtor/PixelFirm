@@ -409,6 +409,21 @@ export function lastDialoguePlacements(): ReadonlyArray<DialoguePlacement & { sp
   return framePlacements;
 }
 
+/**
+ * The box of the bubble drawn for `agentId` in the LAST rendered frame — its
+ * fill rect, in canvas backing-store px — or undefined when that agent spoke no
+ * line. The CSS box equals the backing store (05-21), so a host can hit-test
+ * pointer offsets against this directly (05-35, G-05-P4).
+ *
+ * A fresh copy off the same per-frame record `lastDialoguePlacements` exposes,
+ * never a second source: a rect a scorer did not actually draw is exactly the
+ * class of bug 05-33's single-source rule exists to make unrepresentable.
+ */
+export function getDialogueBox(agentId: string): DialogueRect | undefined {
+  const p = framePlacements.find((f) => f.speakerId === agentId);
+  return p ? { x: p.x, y: p.y, w: p.w, h: p.h } : undefined;
+}
+
 /** @internal */
 export function renderScene(
   ctx: CanvasRenderingContext2D,

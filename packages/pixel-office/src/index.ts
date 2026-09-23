@@ -34,6 +34,12 @@ import { renderFrame } from "./engine/renderer.js";
 // for why importing getCharacter/getTileMap/getTaskTitle back from this
 // file (below) is a safe circular reference.
 export { handleHandoffEvent, checkHandoffArrivals } from "./handoff/handoff-choreography.js";
+// The host read path (05-35, G-05-P4): the bubble keeps its 12-code-point
+// label, while a host can look up the full task title, the two agents, the
+// phase and the drawn bubble's canvas rect for every live handoff. No hover,
+// click or dashboard UI is built on it in this phase.
+export { getActiveHandoffs } from "./handoff/handoff-choreography.js";
+export type { ActiveHandoff } from "./handoff/handoff-choreography.js";
 // Where a handoff sender waits (05-34, G-05-P2): re-exported so a consumer can
 // assert against the layout's own slot rule instead of restating the aisle row
 // and offsets.

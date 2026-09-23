@@ -14,6 +14,7 @@
 // which module finishes evaluating first.
 import type { CompanyEvent } from "event-schema";
 import { setRestPose, walkCharacterTo } from "../engine/characters.js";
+import { getDialogueBox } from "../engine/renderer.js";
 import { getCharacter, getCharacters, getTaskTitle, getTileMap } from "../index.js";
 import { FURNITURE_BLOCKED_TILES, interactionSlotsFor } from "../layout/officeLayout.js";
 import { findPath, isWalkable } from "../layout/tileMap.js";
@@ -330,6 +331,68 @@ export function isWaitingHandoffSender(ch: Character): boolean {
  */
 export function applyBubble(ch: Character): void {
   ch.bubbleType = isWaitingHandoffSender(ch) && !ch.frozen ? "handoff-task" : ch.statusBubble;
+}
+
+/**
+ * One live handoff as a host sees it (05-35, G-05-P4).
+ *
+ * `fullTitle` is the UNTRUNCATED title — the exact value the bubble
+ * interpolates before `dialogue-templates.ts` caps it at 12 code points, so a
+ * later hover, click or dashboard can show the whole thing while the on-canvas
+ * label stays short. `box` is where the speaking bubble was drawn in the last
+ * rendered frame, for hit-testing; `speakerId` names whose bubble that is.
+ */
+export interface ActiveHandoff {
+  taskId: string;
+  fullTitle: string;
+  fromAgentId: string;
+  toAgentId: string;
+  phase: HandoffPhase;
+  /** The agent whose bubble currently shows this handoff's line, else null. */
+  speakerId: string | null;
+  /** That bubble's rect in canvas backing-store px, else null. */
+  box: { x: number; y: number; w: number; h: number } | null;
+}
+
+/**
+ * Every live handoff, read-only (05-35, closes G-05-P4). Fresh plain objects
+ * every call, so a host mutating a result changes neither the FSM nor the next
+ * call. A retired handoff is simply absent.
+ *
+ * Read-only by construction, not by convention: nothing here writes, and the
+ * only state it reads is the record map, the title registry and the renderer's
+ * own per-frame placement record. No UI is built on it in this phase — hover,
+ * click and dashboard surfacing are later work.
+ */
+export function getActiveHandoffs(): ActiveHandoff[] {
+  const out: ActiveHandoff[] = [];
+  for (const record of handoffs.values()) {
+    // Whose bubble is showing this handoff's line right now. A line the FSM has
+    // already cleared, or one a newer record overwrote, has no speaker — the
+    // text comparison is what makes that observable rather than assumed.
+    let speakerId: string | null = null;
+    if (
+      record.phase === "ICON_VISIBLE" &&
+      senderIsCurrent(record) &&
+      record.requestedText !== null &&
+      record.fromChar.bubbleText === record.requestedText
+    ) {
+      speakerId = record.fromAgentId;
+    } else if (record.phase === "RETURNING_TO_DESK" && record.acceptedText !== null) {
+      const toChar = getCharacter(record.toAgentId);
+      if (toChar && toChar.bubbleText === record.acceptedText) speakerId = record.toAgentId;
+    }
+    out.push({
+      taskId: record.taskId,
+      fullTitle: getTaskTitle(record.taskId) ?? record.taskId,
+      fromAgentId: record.fromAgentId,
+      toAgentId: record.toAgentId,
+      phase: record.phase,
+      speakerId,
+      box: (speakerId === null ? undefined : getDialogueBox(speakerId)) ?? null,
+    });
+  }
+  return out;
 }
 
 /** Test-only reset — mirrors index.ts's _resetForTests. */
