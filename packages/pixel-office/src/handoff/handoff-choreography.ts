@@ -77,9 +77,13 @@ export function blockedTilesFor(walker: Character, target: Tile): Set<string> {
  * mid-walk still hands its own desk's slots out.
  *
  * A slot is taken when another present character's seat, its tile when it is
- * not walking, or another live record's target lies within Chebyshev distance 1
- * — including diagonals — so a second concurrent sender takes the NEXT fixed
- * slot instead of standing beside the first.
+ * not walking, or another live record's target — in ANY phase, departure
+ * included — lies within Chebyshev distance 1, including diagonals, so a second
+ * concurrent sender takes the NEXT fixed slot instead of standing beside the
+ * first. The phase carries no exemption because a completion flips the record to
+ * RETURNING_TO_DESK and the character to WALK on the same tick, so a
+ * phase-exempted target is a tile that is still physically occupied on screen
+ * (review WR-08).
  *
  * ponytail: null needs every SURVIVING slot of one receiver blocked, which is
  * far cheaper than "5+ occupants" (review WR-03). The wall/off-map filter leaves
@@ -89,7 +93,9 @@ export function blockedTilesFor(walker: Character, target: Tile): Set<string> {
  * home, four an interior one. With the previous 4 offsets a corner home kept
  * just 2 slots and a SINGLE loiterer nulled it. The caller then falls back to
  * the sender's own tile, so the icon shows where the sender stands instead of
- * stacking it on someone — which reads as "the sender didn't go anywhere".
+ * stacking it on someone — which reads as "the sender didn't go anywhere". A
+ * departing sender now holds its slot until it is home (WR-08), which shortens
+ * slot availability by the length of one walk home.
  */
 function interactionTileFor(toChar: Character, fromChar: Character): Tile | null {
   const tileMap = getTileMap();
@@ -100,7 +106,10 @@ function interactionTileFor(toChar: Character, fromChar: Character): Tile | null
     if (ch.state !== CharacterState.WALK) taken.push({ col: ch.tileCol, row: ch.tileRow });
   }
   for (const record of handoffs.values()) {
-    if (record.fromChar !== fromChar && record.phase !== "RETURNING_TO_DESK") taken.push(record.target);
+    // Reserved for the record's whole lifetime, which ends at retireHandoff and
+    // nowhere else (review WR-08). The sender may still stand on the tile its
+    // own record reserved.
+    if (record.fromChar !== fromChar) taken.push(record.target);
   }
   for (const slot of interactionSlotsFor({ col: toChar.seatCol, row: toChar.seatRow })) {
     if (taken.some((t) => Math.max(Math.abs(t.col - slot.col), Math.abs(t.row - slot.row)) <= 1)) continue;
