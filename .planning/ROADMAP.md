@@ -168,7 +168,7 @@ Plans:
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
   5. The office floor is furnished — MetroCity floor and wall tiles, desks with monitors grouped in pods with walking lanes — agents sit at desk seats and never walk through furniture or another seated agent.
 
-**Plans:** 35/35 plans executed (UAT round 2 2026-09-22 diagnosed 6 polish gaps G-05-P1..P6 — 5 gap-closure plans 05-31..05-35 added)
+**Plans:** 35/37 plans executed (UAT round 2 2026-09-22 diagnosed 6 polish gaps G-05-P1..P6 — 5 gap-closure plans 05-31..05-35 added; verification 2026-09-23 left 1 gap open — 2 gap-closure plans 05-36..05-37 added)
 
 Plans:
 
@@ -207,6 +207,8 @@ Plans:
 - [x] 05-33-PLAN.md — UAT polish: speech bubble picks the safest of four candidates (never over a glyph or off the floor, desks only when unavoidable), tail to the speaker, live TRUTH 5 (G-05-P1)
 - [x] 05-34-PLAN.md — UAT polish: fixed handoff interaction slots on the central aisle from layout data, no shoulder-to-shoulder, ink-separation sweep (G-05-P2)
 - [x] 05-35-PLAN.md — UAT polish: getActiveHandoffs() host read path (full title, participants, phase, bubble rect), 12-char cap kept (G-05-P4)
+- [ ] 05-36-PLAN.md — Gap closure: unconditional WALL_COLOR backdrop on the attribution footer, equality assertion replacing the substring guard, below-minimum viewport covered in the suite and the live probe (WR-02 / G-05-P6)
+- [ ] 05-37-PLAN.md — Gap closure: handoff slot reserved through the walk home (WR-08) and speaker attribution by record identity instead of dialogue text (WR-07)
 
 **Wave 1**
 
@@ -317,6 +319,14 @@ Plans:
 **Wave 25** *(blocked on 05-33 and 05-34)*
 
 - [x] 05-35-PLAN.md — Host read path for full handoff titles (G-05-P4)
+
+**Wave 26**
+
+- [ ] 05-36-PLAN.md — Unconditional footer backdrop + overflow-viewport coverage (WR-02)
+
+**Wave 27** *(blocked on 05-36)*
+
+- [ ] 05-37-PLAN.md — Slot held through the walk home + identity-based speaker attribution (WR-08, WR-07)
 
 **UI hint**: yes
 
