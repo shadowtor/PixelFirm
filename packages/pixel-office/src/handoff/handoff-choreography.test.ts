@@ -1598,6 +1598,18 @@ describe("a task id is never painted as a title (05-40, G-05-1b)", () => {
     expect(b.bubbleText).toBe("agent-b accepts Fix login");
   });
 
+  it.each(["", "   "])(
+    "a registered blank title %j yields both participants' complete no-title sentences (05-41, CR-01)",
+    (blank) => {
+      registerTaskTitle(LONG_TASK_ID, blank);
+      const { a, b } = fullPair();
+
+      expect(a.bubbleText).toBe("hands off to agent-b");
+      handleHandoffEvent(completedEvent(LONG_TASK_ID, "agent-b", COMP_ID));
+      expect(b.bubbleText).toBe("agent-b accepts the handoff");
+    },
+  );
+
   it("an unnamed receiver still yields a readable line — its capped agent id, and the verb", () => {
     const LONG_AGENT_ID = "receiver-agent-00000001";
     const { a } = fullPair(LONG_AGENT_ID);

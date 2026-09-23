@@ -32,10 +32,11 @@ describe("resolveHandoffDialogue", () => {
 
 describe("resolveHandoffDialogue — verb-led templates and caps (05-40, G-05-1b)", () => {
   const KINDS = ["requested", "accepted"] as const;
-  /** Every kind against every null/present title — the full output space of a
-   *  two-entry map whose entries branch on one nullable value. */
+  /** Every kind against a present, a null and a blank title — the full output
+   *  space of a two-entry map whose entries branch on one title that may be
+   *  absent, and blank counts as absent (05-41, CR-01). */
   const everyLine = (title: string | null = "t".repeat(50), name = "n".repeat(50)): string[] =>
-    KINDS.flatMap((kind) => [resolveHandoffDialogue(kind, title, name), resolveHandoffDialogue(kind, null, name)]);
+    KINDS.flatMap((kind) => [title, null, "", "   "].map((t) => resolveHandoffDialogue(kind, t, name)));
 
   it("renders the exact requested line when the title is known", () => {
     expect(resolveHandoffDialogue("requested", "Fix login", "Ada")).toBe("hands Fix login to Ada");
@@ -51,6 +52,18 @@ describe("resolveHandoffDialogue — verb-led templates and caps (05-40, G-05-1b
 
   it("renders a complete accepted sentence when no title is known", () => {
     expect(resolveHandoffDialogue("accepted", null, "Ada")).toBe("Ada accepts the handoff");
+  });
+
+  it.each(["", "   "])("renders the complete requested no-title sentence for a blank title %j (05-41, CR-01)", (blank) => {
+    expect(resolveHandoffDialogue("requested", blank, "Ada")).toBe("hands off to Ada");
+  });
+
+  it.each(["", "   "])("renders the complete accepted no-title sentence for a blank title %j (05-41, CR-01)", (blank) => {
+    expect(resolveHandoffDialogue("accepted", blank, "Ada")).toBe("Ada accepts the handoff");
+  });
+
+  it("interpolates a padded title trimmed, never leaving a doubled space (05-41, CR-01)", () => {
+    expect(resolveHandoffDialogue("requested", "  Fix login  ", "Ada")).toBe("hands Fix login to Ada");
   });
 
   it("never joins two values with a bare arrow (U+2192) — the debug-banner shape the UAT round rejected", () => {
