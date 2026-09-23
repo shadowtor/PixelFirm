@@ -23,8 +23,11 @@ export const TYPE_FRAME_DURATION_SEC = 0.3;
 // ── Rendering ────────────────────────────────────────────────
 export const CHARACTER_SITTING_OFFSET_PX = 6;
 /** Visible air (unzoomed px) between a glyph's lowest ink row and its owner's
- *  first opaque sprite row, per frame (05-30, G-05-1c) — no longer the frame box. */
-export const BUBBLE_ICON_GAP_PX = 1;
+ *  first opaque sprite row, per frame (05-30, G-05-1c) — no longer the frame box.
+ *  Raised 1 -> 3 by 05-38 (G-05-1c): at 1 px the glyph touched the head and read
+ *  as part of the sprite at stream scale. Unzoomed engine px, like every other
+ *  spacing value here, so at display scale 4 the on-screen air is 12 device px. */
+export const BUBBLE_ICON_GAP_PX = 3;
 export const CHARACTER_Z_SORT_OFFSET = 0.5;
 export const FALLBACK_FLOOR_COLOR = "#808080";
 export const WALL_COLOR = "#3A3A5C";

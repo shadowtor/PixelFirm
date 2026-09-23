@@ -207,6 +207,8 @@ async function shot(page, name) {
 }
 const WALK_SPEED_PX_PER_SEC = readNumberConst(constantsSrc, "constants.ts", "WALK_SPEED_PX_PER_SEC");
 const CHARACTER_SITTING_OFFSET_PX = readNumberConst(constantsSrc, "constants.ts", "CHARACTER_SITTING_OFFSET_PX");
+const BUBBLE_ICON_GAP_PX = readNumberConst(constantsSrc, "constants.ts", "BUBBLE_ICON_GAP_PX");
+const DIALOGUE_TAIL_PX = readNumberConst(constantsSrc, "constants.ts", "DIALOGUE_TAIL_PX");
 const MAP_W = DEFAULT_COLS * TILE_SIZE;
 const MAP_H = DEFAULT_ROWS * TILE_SIZE;
 
@@ -1105,9 +1107,11 @@ async function main() {
     // tail paint over the fill), so non-fill px inside it are the text, and the
     // box itself is one px larger on every side.
     /** Longest any 05-33 candidate's tail can be: the "above" candidate clears
-     *  the whole glyph band (GLYPH_ROWS 13 + BUBBLE_ICON_GAP_PX 1) plus the
-     *  DIALOGUE_TAIL_PX gap, then 2 px of slack for the interior inset. */
-    const TAIL_REACH_PX = 18;
+     *  the whole glyph band (GLYPH_ROWS 13 + BUBBLE_ICON_GAP_PX) plus the
+     *  DIALOGUE_TAIL_PX gap, then 2 px of slack for the interior inset. Derived
+     *  from the engine's own constants (05-38), not a literal that silently
+     *  goes stale when the glyph gap moves. */
+    const TAIL_REACH_PX = 13 + BUBBLE_ICON_GAP_PX + DIALOGUE_TAIL_PX + 2;
     /** A character's sprite box on a tile, un-offset (a seated agent sits
      *  CHARACTER_SITTING_OFFSET_PX lower, so this is the looser of the two). */
     const spriteBoxAt = (tile) => ({
@@ -1294,9 +1298,14 @@ async function main() {
         `sprite at (${firstDesk.col},${firstDesk.row}) ends at y ${firstRowSpriteBottom} — the glyph must sit strictly below it (CR-02)`,
     );
     assert(
-      bandScan.blockedMaxY < headTop && headGap <= 2,
+      // Two-sided (05-38, G-05-1c): the old one-sided `headGap <= 2` stayed
+      // green when the gap shrank back to touching the head, which is exactly
+      // the regression the raised gap exists to prevent. The lower bound is the
+      // engine's own constant; the +1 ceiling is the device-pixel rounding slack.
+      bandScan.blockedMaxY < headTop && headGap >= BUBBLE_ICON_GAP_PX && headGap <= BUBBLE_ICON_GAP_PX + 1,
       `the blocked glyph is not attached to its owner's head: measured y ${bandScan.blockedMinY}..${bandScan.blockedMaxY} ` +
-        `in col ${targetDesk.col}, head top ${headTop}, gap ${headGap} (need 0..2, G-05-1c)`,
+        `in col ${targetDesk.col}, head top ${headTop}, gap ${headGap} ` +
+        `(need ${BUBBLE_ICON_GAP_PX}..${BUBBLE_ICON_GAP_PX + 1}, G-05-1c)`,
     );
     assert(
       bandScan.blockedMinY >= TILE_SIZE,

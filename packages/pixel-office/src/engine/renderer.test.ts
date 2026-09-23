@@ -204,12 +204,12 @@ function spriteBox(ch: Character): { left: number; right: number; top: number; b
 }
 
 describe("resolveBubbleY — owner-bound glyph placement (CR-02, head-anchored 05-30)", () => {
-  it("puts the glyph's lowest ink row 1 px above the owner's first opaque row when there is headroom", () => {
+  it("puts the glyph's lowest ink row BUBBLE_ICON_GAP_PX (3) above the owner's first opaque row when there is headroom", () => {
     // Seat row 4 IDLE: drawY 40, head ink from frame row 3, blocked ink rows 0..11.
-    // Head at y 43, glyph bottom edge at 42, glyph top at 42 - 12 = 30.
-    expect(resolveBubbleY(40, 3, 11, 1)).toBe(30);
-    // Same at zoom 3: every term scales.
-    expect(resolveBubbleY(120, 3, 11, 3)).toBe(90);
+    // Head at y 43, 3 px of air, glyph bottom edge at 40, glyph top at 40 - 12 = 28.
+    expect(resolveBubbleY(40, 3, 11, 1)).toBe(28);
+    // Same at zoom 3: every term scales (120 + 9 - 9 - 36 = 84).
+    expect(resolveBubbleY(120, 3, 11, 3)).toBe(84);
   });
 
   it("attaches the glyph to the owner's own sprite top — never a canvas row a neighbour owns — when there is no headroom", () => {
@@ -259,7 +259,7 @@ describe("glyph sits on its owner's head (05-30, G-05-1c)", () => {
 
   it("leaves exactly BUBBLE_ICON_GAP_PX of air between every glyph's ink and the head, in every pose, at zoom 1 and 3", async () => {
     const { BUBBLE_ICON_GAP_PX } = await import("../constants.js");
-    expect(BUBBLE_ICON_GAP_PX).toBe(1);
+    expect(BUBBLE_ICON_GAP_PX).toBe(3);
     for (const zoom of [1, 3]) {
       for (const [pose, make] of poses) {
         for (const glyph of ALL_GLYPHS) {
@@ -361,12 +361,12 @@ describe("renderScene over the real desk layout — CR-02 two-character composit
     // only TYPE sank and these boxes were y 40..72 and y 104..136.
     // Seat rows 4 and 8 => foot y 72 and 136 => sprite boxes y 46..78 and
     // y 110..142. agent-9's IDLE head ink starts at frame row 3 (y 113); the
-    // blocked glyph (ink rows 0..11, 12 rows) ends 1 px above it, y 100..112 —
-    // strictly below agent-1's box (05-30).
+    // blocked glyph (ink rows 0..11, 12 rows) ends 3 px above it, y 98..110 —
+    // strictly below agent-1's box (05-30, gap raised by 05-38 / G-05-1c).
     expect(firstBox).toMatchObject({ top: 46, bottom: 78 });
     expect(laterBox.top).toBe(110);
-    expect(Math.min(...glyphRects.map((r) => r.y))).toBe(100);
-    expect(Math.max(...glyphRects.map((r) => r.y + r.h))).toBe(112);
+    expect(Math.min(...glyphRects.map((r) => r.y))).toBe(98);
+    expect(Math.max(...glyphRects.map((r) => r.y + r.h))).toBe(110);
     expect(Math.min(...glyphRects.map((r) => r.y))).toBeGreaterThan(firstBox.bottom);
   });
 
@@ -707,7 +707,7 @@ describe("resolveDialogueBox candidate scoring (05-33, G-05-P1)", () => {
   const SP = speakerAt(136, 72, 1); // headTop 43, left 128, right 144
   const TEXT = 60;
   const BELOW_Y = 74;
-  const ABOVE_Y = 18; // 43 - (13 + 1) - 2 - 9
+  const ABOVE_Y = 16; // 43 - (GLYPH_ROWS 13 + BUBBLE_ICON_GAP_PX 3) - 2 - 9
   const SIDE_Y = 43;
   const resolve = async (obstacles: Partial<typeof NO_OBSTACLES>, floor = FLOOR, speaker = SP) => {
     const { resolveDialogueBox } = await import("./renderer.js");
@@ -754,7 +754,7 @@ describe("resolveDialogueBox candidate scoring (05-33, G-05-P1)", () => {
   });
 
   it("an 'above' candidate that would start above the floor top is never returned", async () => {
-    const high = speakerAt(136, 45, 1); // headTop 16 => above y -9
+    const high = speakerAt(136, 45, 1); // headTop 16 => above y -14
     const p = await resolve({}, FLOOR, high);
     expect(p.candidates[1].y).toBeLessThan(FLOOR_TOP);
     expect(p.candidates[1].valid).toBe(false);
