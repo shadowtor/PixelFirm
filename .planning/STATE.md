@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-37-PLAN.md
-last_updated: "2026-09-23T04:08:03.275Z"
+stopped_at: Completed 05-38-PLAN.md
+last_updated: "2026-09-23T07:14:06.200Z"
 last_activity: 2026-09-23
 last_activity_desc: Phase 05 execution started
-state_head: 06b462b041948cff3ceb16f05ff4d66d9fbc2abd
+state_head: 30607af68ef37257a0002c8a94d34e1ad360cc1e
 progress:
   total_phases: 8
   completed_phases: 4
-  total_plans: 52
-  completed_plans: 51
+  total_plans: 55
+  completed_plans: 53
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 3 of 37
+Plan: 2 of 40
 Status: Ready to execute
 Last activity: 2026-09-23 — Phase 05 execution started
 
@@ -112,6 +112,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P35 | 10 min | 2 tasks | 5 files |
 | Phase 05 P36 | 7 min | 3 tasks | 4 files |
 | Phase 05 P37 | 18 min | 2 tasks | 4 files |
+| Phase 05 P38 | 13 min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -237,6 +238,8 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-37: interactionTileFor reserves a handoff target for the record's whole lifetime, RETURNING_TO_DESK included - the record flips phase and the character to WALK on the same tick, so a phase-exempted target is still physically occupied (WR-08)
 - [Phase 05]: 05-37: Character.bubbleTextTaskId stamps line ownership; showsLineOf is the single identity predicate for both the read path and all three clear paths, so colliding capped titles can never make two records claim one bubble (WR-07)
 - [Phase 05]: 05-37: speakerText and the getDialogueBox lookup are left as-is - that comparison is CR-01's frame-freshness guard, a different property from speaker identity
+- [Phase 05]: 05-38: the live TRUTH 4 gap bound guards renderer-vs-constant drift, not a constant revert - the harness reads the same constant the renderer compiles from, so both sides move together; the unit literal pins are the revert guards
+- [Phase 05]: 05-38: every widening ships with the bound that catches its over-correction - the raised glyph gap got a two-sided live bound, and the deeper seated sink got a head-visibility floor (seatedRows >= 10, measured 13)
 
 ### Pending Todos
 
@@ -265,6 +268,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-23T04:07:25.666Z
-Stopped at: Completed 05-37-PLAN.md
+Last session: 2026-09-23T07:13:42.595Z
+Stopped at: Completed 05-38-PLAN.md
 Resume file: None

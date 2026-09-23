@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 8
+open_count: 9
 waived_count: 0
 fixed_count: 0
-total_count: 8
-last_updated: 2026-09-21T10:21:12.655Z
+total_count: 9
+last_updated: 2026-09-23T07:14:07.702Z
 ---
 
 # Broken Windows Ledger
@@ -23,6 +23,7 @@ last_updated: 2026-09-21T10:21:12.655Z
 | 6 | 05 | deviation | apps/api/src/routes/ws-browser.test.ts |  | Route-level CR-03 case is a timing race that passed against the unfixed code; browser-connections.test.ts Test 2 is the deterministic regression detector. Needs a gated db.select spy to be reliable. | open |  | 2026-09-21T09:55:30.785Z |  |
 | 7 | 05 | unrun-verify | scripts/verify-pixel-office-live.mjs |  | 05-12: the live proof's own end-to-end run (node scripts/verify-pixel-office-live.mjs, twice in succession) was never executed — it recreates a Docker volume and starts two dev servers, so it is a deliberate human run. All four truths are structurally complete and node --check clean, but no truth has been observed passing on a real canvas since the restructure. | open |  | 2026-09-21T10:21:10.862Z |  |
 | 8 | 05 | unmet-truth | references/ASSET-LICENSES.md |  | 05-12: MetroCity provenance link 2 is open — the PACK is CC0 at the publisher's cited itch.io listing, but that the shipped file (the fork's char_0.png, decoded) IS that pack's art rests on the fork's README credit alone. Closes on 05-VERIFICATION.md human-verification item 4 (visual comparison against the upstream art). | open |  | 2026-09-21T10:21:12.655Z |  |
+| 9 | 05 | deviation | scripts/verify-pixel-office-live.mjs |  | 05-38 plan specified PIXEL_OFFICE_SHOTS=.gsd/uat-shots-05-38, which the harness refuses by design (in-repo, 05-21 T-05-21-02); frames written to the session scratchpad instead | open |  | 2026-09-23T07:14:07.702Z |  |
 
 ````json
 [
@@ -127,6 +128,19 @@ last_updated: 2026-09-21T10:21:12.655Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-09-21T10:21:12.655Z",
+    "resolved_at": null,
+    "milestone": null
+  },
+  {
+    "id": 9,
+    "kind": "deviation",
+    "phase": "05",
+    "file": "scripts/verify-pixel-office-live.mjs",
+    "line": null,
+    "description": "05-38 plan specified PIXEL_OFFICE_SHOTS=.gsd/uat-shots-05-38, which the harness refuses by design (in-repo, 05-21 T-05-21-02); frames written to the session scratchpad instead",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-09-23T07:14:07.702Z",
     "resolved_at": null,
     "milestone": null
   }
