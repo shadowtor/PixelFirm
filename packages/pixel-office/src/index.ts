@@ -27,7 +27,7 @@ export function displayScaleFor(viewportWidth: number, viewportHeight: number): 
 }
 import { createCharacter, setRestPose, updateCharacter } from "./engine/characters.js";
 import { startGameLoop as startForkGameLoop } from "./engine/gameLoop.js";
-import { renderFrame } from "./engine/renderer.js";
+import { _resetFrameForTests, renderFrame } from "./engine/renderer.js";
 // Re-exported (05-04, HANDOFF-01/02) so apps/web's App.tsx can wire real
 // agent.handoff_requested/agent.handoff_completed events without importing
 // a second package entry point. See handoff-choreography.ts's own header
@@ -212,4 +212,8 @@ export function _resetForTests(): void {
   characters.clear();
   taskTitles.clear();
   _resetHandoffsForTests();
+  // The renderer's per-frame placement record is module state too: agent ids
+  // are reused across tests, so a leftover rect would answer getDialogueBox
+  // for a fresh character that has not been drawn yet (review CR-01).
+  _resetFrameForTests();
 }

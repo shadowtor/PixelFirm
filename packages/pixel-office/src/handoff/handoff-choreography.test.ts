@@ -1166,6 +1166,41 @@ describe("host read path (05-35, G-05-P4)", () => {
     expect(a.bubbleText).not.toContain(LONG_TITLE);
   });
 
+  it("has no box before any frame has been drawn — a previous frame's rect never answers for a fresh character (review CR-01)", () => {
+    // Deliberately NO renderFrameBoxFills() call: the only frames drawn so far
+    // belong to earlier tests, whose agent ids ("agent-a") are reused here.
+    // _resetForTests must clear the renderer's per-frame record too, or that
+    // leftover rect is served as this handoff's box.
+    const { a } = toIconVisible();
+    expect(a.bubbleType).toBe("handoff-task");
+    const [live] = activeHandoffs();
+    expect(live!.speakerId, "the sender is speaking, so the box lookup is genuinely reached").toBe("agent-a");
+    expect(live!.box, "a box appeared without any frame being rendered").toBeNull();
+  });
+
+  it("has no box once the drawn line is no longer the line it claims — no arbitrarily old rect (review CR-01)", () => {
+    toIconVisible();
+    const fills = renderFrameBoxFills();
+    expect(fills.length).toBe(1);
+    expect(activeHandoffs()[0]!.box).toEqual(fills[0]);
+
+    // A second handoff from the same sender supersedes the first and moves it:
+    // the FSM advances on events, which reach this module off the host's WS
+    // handler, not off the render loop, so state can move with no repaint.
+    upsertCharacterFromAgent("agent-c", AgentStatus.IDLE);
+    registerTaskTitle("task-2", "A different title entirely");
+    handleHandoffEvent(requestedEvent("task-2", "agent-a", "agent-c", "5fa85f64-5717-4562-b3fc-2c963f66afa6"));
+    run(10);
+
+    const [live] = activeHandoffs();
+    expect(live!.taskId).toBe("task-2");
+    expect(live!.speakerId).toBe("agent-a");
+    expect(live!.box, "served the rect of a line the last frame never drew").toBeNull();
+    // ...and it comes back as soon as a frame paints the new line.
+    const repainted = renderFrameBoxFills();
+    expect(activeHandoffs()[0]!.box).toEqual(repainted[0]);
+  });
+
   it("follows the sequence: the receiver becomes the speaker, then the record is gone", () => {
     const { a } = toIconVisible();
     renderFrameBoxFills();

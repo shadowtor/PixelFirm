@@ -339,8 +339,11 @@ export function applyBubble(ch: Character): void {
  * `fullTitle` is the UNTRUNCATED title — the exact value the bubble
  * interpolates before `dialogue-templates.ts` caps it at 12 code points, so a
  * later hover, click or dashboard can show the whole thing while the on-canvas
- * label stays short. `box` is where the speaking bubble was drawn in the last
- * rendered frame, for hit-testing; `speakerId` names whose bubble that is.
+ * label stays short. `box` is where the last rendered frame drew THIS handoff's
+ * line, for hit-testing; `speakerId` names whose bubble that is. A frame that
+ * painted some other line for that speaker — the FSM advances on events, which
+ * arrive off the host's WS handler rather than off the render loop — yields
+ * `null` rather than a rect from an older frame (review CR-01).
  */
 export interface ActiveHandoff {
   taskId: string;
@@ -350,7 +353,8 @@ export interface ActiveHandoff {
   phase: HandoffPhase;
   /** The agent whose bubble currently shows this handoff's line, else null. */
   speakerId: string | null;
-  /** That bubble's rect in canvas backing-store px, else null. */
+  /** That bubble's rect in canvas backing-store px, else null — null also when
+   *  no rendered frame has drawn this line yet, or drew a different one. */
   box: { x: number; y: number; w: number; h: number } | null;
 }
 
@@ -371,6 +375,9 @@ export function getActiveHandoffs(): ActiveHandoff[] {
     // already cleared, or one a newer record overwrote, has no speaker — the
     // text comparison is what makes that observable rather than assumed.
     let speakerId: string | null = null;
+    // The line that speaker is showing, carried alongside so the box lookup can
+    // be matched against what the last frame actually painted (review CR-01).
+    let speakerText: string | null = null;
     if (
       record.phase === "ICON_VISIBLE" &&
       senderIsCurrent(record) &&
@@ -378,9 +385,13 @@ export function getActiveHandoffs(): ActiveHandoff[] {
       record.fromChar.bubbleText === record.requestedText
     ) {
       speakerId = record.fromAgentId;
+      speakerText = record.requestedText;
     } else if (record.phase === "RETURNING_TO_DESK" && record.acceptedText !== null) {
       const toChar = getCharacter(record.toAgentId);
-      if (toChar && toChar.bubbleText === record.acceptedText) speakerId = record.toAgentId;
+      if (toChar && toChar.bubbleText === record.acceptedText) {
+        speakerId = record.toAgentId;
+        speakerText = record.acceptedText;
+      }
     }
     out.push({
       taskId: record.taskId,
@@ -389,7 +400,7 @@ export function getActiveHandoffs(): ActiveHandoff[] {
       toAgentId: record.toAgentId,
       phase: record.phase,
       speakerId,
-      box: (speakerId === null ? undefined : getDialogueBox(speakerId)) ?? null,
+      box: (speakerId === null || speakerText === null ? undefined : getDialogueBox(speakerId, speakerText)) ?? null,
     });
   }
   return out;
