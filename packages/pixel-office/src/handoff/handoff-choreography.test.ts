@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { CompanyEvent } from "event-schema";
 import { AgentStatus } from "event-schema";
-import { upsertCharacterFromAgent, getCharacter, getTileMap, stepOffice, _resetForTests } from "../index";
+import { upsertCharacterFromAgent, getCharacter, getCharacters, getTileMap, stepOffice, _resetForTests } from "../index";
 import { CharacterState, Direction } from "../types";
 import type { Character } from "../types";
 import { findPath } from "../layout/tileMap";
-import { FURNITURE_BLOCKED_TILES, SEATS, STANDING_SPOTS } from "../layout/officeLayout";
+import { FURNITURE, FURNITURE_BLOCKED_TILES, SEATS, STANDING_SPOTS } from "../layout/officeLayout";
 import { TileType } from "../types";
 import { renderScene } from "../engine/renderer";
 import { handleHandoffEvent, checkHandoffArrivals, isWaitingHandoffSender, blockedTilesFor } from "./handoff-choreography";
@@ -933,6 +933,136 @@ describe("handoff robustness under interruption (05-17, WR-02): real update loop
       run(WALK_SECONDS + 4);
       expect(a.bubbleType).toBe("handoff-task");
       expect(atInteractionSlot(a, b)).toBe(true);
+    });
+
+    // ── 05-34 (G-05-P2) missing item 3: prove it for EVERY receiver position
+    // in a full 20-agent office, not just for agent-b. Both sweeps go red on a
+    // seat-row search (see the SUMMARY's recorded RED evidence).
+    describe("spacing over every receiver position (05-34, G-05-P2)", () => {
+      const homes = [...SEATS, ...STANDING_SPOTS];
+      /** Minimum clear air between the waiting sender's visible ink and a
+       *  neighbour's, on at least one axis. The shoulder-to-shoulder seat-row
+       *  layout this supersedes measured 2 px. */
+      const MIN_INK_GAP_PX = 3;
+      type Box = { minX: number; minY: number; maxX: number; maxY: number };
+
+      /** Seats one agent per home, then drives a handoff from the other pod row
+       *  into `homes[r]` until the sender is waiting. Returns both characters. */
+      function senderWaitingAt(r: number): { sender: Character; receiver: Character } {
+        _resetForTests();
+        for (let i = 0; i < homes.length; i++) upsertCharacterFromAgent(`agent-${i}`, AgentStatus.IDLE);
+        const receiver = getCharacter(`agent-${r}`)!;
+        const sender = getCharacter(`agent-${homes.findIndex((h) => h.row !== receiver.seatRow)}`)!;
+        expect(sender.seatRow, `receiver ${r}`).not.toBe(receiver.seatRow);
+        handleHandoffEvent(requestedEvent(`task-${r}`, sender.id, receiver.id));
+        run(WALK_SECONDS + 6);
+        expect(sender.bubbleType, `receiver ${r}: the sender never reached its slot`).toBe("handoff-task");
+        return { sender, receiver };
+      }
+
+      /** Cells ("x,y" -> colour) painted by `chars` over the real FURNITURE,
+       *  with bubbles and lines off (05-27's "both stay visible" replay). */
+      function cells(chars: Character[]): Map<string, string> {
+        const out = new Map<string, string>();
+        const ctx = {
+          fillStyle: "",
+          font: "",
+          textBaseline: "alphabetic",
+          fillRect(this: { fillStyle: string }, x: number, y: number) {
+            out.set(key(x, y), String(this.fillStyle));
+          },
+          fillText() {},
+          measureText: (t: string) => ({ width: t.length * 6 }),
+          drawImage() {},
+        } as unknown as CanvasRenderingContext2D;
+        renderScene(
+          ctx,
+          chars.map((ch) => ({ ...ch, bubbleType: null, bubbleText: null })),
+          0,
+          0,
+          1,
+          FURNITURE,
+        );
+        return out;
+      }
+
+      /** Bounding box of the ink of `ch` a viewer actually SEES: its own solo
+       *  cells that survive the full composite, minus anything the furniture
+       *  pass already owned — so a seated agent's desk-hidden lower body is not
+       *  counted as visible ink. */
+      function visibleInk(
+        ch: Character,
+        composite: Map<string, string>,
+        furnitureOnly: Map<string, string>,
+      ): Box | null {
+        let box: Box | null = null;
+        for (const [k, colour] of cells([ch])) {
+          if (composite.get(k) !== colour || furnitureOnly.get(k) === colour) continue;
+          const [x, y] = k.split(",").map(Number) as [number, number];
+          box = box
+            ? {
+                minX: Math.min(box.minX, x),
+                minY: Math.min(box.minY, y),
+                maxX: Math.max(box.maxX, x),
+                maxY: Math.max(box.maxY, y),
+              }
+            : { minX: x, minY: y, maxX: x, maxY: y };
+        }
+        return box;
+      }
+
+      it("never shoulder-to-shoulder: no other character's seat or resting tile touches the waiting sender", () => {
+        for (let r = 0; r < homes.length; r++) {
+          const { sender } = senderWaitingAt(r);
+          const at = `(${sender.tileCol},${sender.tileRow})`;
+          for (const other of [...getCharacters()]) {
+            if (other === sender) continue;
+            const tiles = [{ col: other.seatCol, row: other.seatRow }];
+            if (other.state !== CharacterState.WALK) tiles.push({ col: other.tileCol, row: other.tileRow });
+            for (const t of tiles) {
+              const chebyshev = Math.max(Math.abs(t.col - sender.tileCol), Math.abs(t.row - sender.tileRow));
+              expect(
+                chebyshev,
+                `receiver ${r}: ${other.id} at (${t.col},${t.row}) is ${chebyshev} tile(s) from the sender at ${at}`,
+              ).toBeGreaterThan(1);
+            }
+          }
+        }
+      });
+
+      it("clear ink separation: the sender's visible ink stays clear of every character within 2 tiles", () => {
+        const furnitureOnly = cells([]);
+        let pairs = 0;
+        let tightest = Number.POSITIVE_INFINITY;
+        for (let r = 0; r < homes.length; r++) {
+          const { sender } = senderWaitingAt(r);
+          const all = [...getCharacters()];
+          const composite = cells(all);
+          const senderBox = visibleInk(sender, composite, furnitureOnly);
+          expect(senderBox, `receiver ${r}: the waiting sender paints no visible ink at all`).not.toBeNull();
+          for (const other of all) {
+            if (other === sender) continue;
+            const tileGap = Math.max(Math.abs(other.tileCol - sender.tileCol), Math.abs(other.tileRow - sender.tileRow));
+            if (tileGap > 2) continue;
+            const otherBox = visibleInk(other, composite, furnitureOnly);
+            if (!otherBox) continue;
+            pairs++;
+            const gapX = Math.max(0, otherBox.minX - senderBox!.maxX - 1, senderBox!.minX - otherBox.maxX - 1);
+            const gapY = Math.max(0, otherBox.minY - senderBox!.maxY - 1, senderBox!.minY - otherBox.maxY - 1);
+            const gap = Math.max(gapX, gapY);
+            tightest = Math.min(tightest, gap);
+            expect(
+              gap,
+              `receiver ${r}: sender (${sender.tileCol},${sender.tileRow}) ink ${JSON.stringify(senderBox)} vs ` +
+                `${other.id} (${other.tileCol},${other.tileRow}) ink ${JSON.stringify(otherBox)} — ` +
+                `${gapX} px across, ${gapY} px apart`,
+            ).toBeGreaterThanOrEqual(MIN_INK_GAP_PX);
+          }
+        }
+        // Non-vacuity: a sweep that never found a neighbour would prove nothing.
+        expect(pairs, "no character was within 2 tiles of the sender in any scene").toBeGreaterThan(0);
+        expect(tightest).toBeGreaterThanOrEqual(MIN_INK_GAP_PX);
+      });
     });
   });
 });
