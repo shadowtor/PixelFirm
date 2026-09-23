@@ -56,8 +56,9 @@ const characters = new Map<string, Character>();
 
 // Task titles known so far (from snapshot's ProjectionState.tasks or live
 // task.created events) — 05-04's handoff dialogue interpolates a real
-// TaskState.title, never taskId/prompt/diff content. Missing entries fall
-// back to the raw taskId at the call site (dialogue-templates.ts's callers).
+// TaskState.title, never taskId/prompt/diff content. A missing or blank entry
+// means no title is known: the handoff line takes its no-title branch and
+// getActiveHandoffs reports fullTitle: null (05-40 G-05-1b, 05-41).
 const taskTitles = new Map<string, string>();
 
 /** Registers a real task title for later handoff-dialogue interpolation (05-04). */

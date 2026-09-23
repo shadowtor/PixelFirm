@@ -20,7 +20,7 @@ import { FURNITURE_BLOCKED_TILES, interactionSlotsFor } from "../layout/officeLa
 import { findPath, isWalkable } from "../layout/tileMap.js";
 import type { Character } from "../types.js";
 import { CharacterState, Direction } from "../types.js";
-import { resolveHandoffDialogue } from "./dialogue-templates.js";
+import { resolveHandoffDialogue, titleOrNull } from "./dialogue-templates.js";
 
 type HandoffPhase = "WALKING_TO_RECEIVER" | "ICON_VISIBLE" | "RETURNING_TO_DESK";
 
@@ -147,7 +147,7 @@ function senderIsCurrent(record: HandoffRecord): boolean {
 /**
  * Whether `ch`'s bubble is currently carrying THIS record's line, by the stamp
  * its writer left rather than by comparing the text (review WR-07). Two records
- * to one receiver whose titles cap to the same 12 code points produce
+ * to one receiver whose titles cap to the same MAX_DIALOGUE_TITLE_CHARS produce
  * byte-identical lines, so equality names the wrong record roughly half the
  * time — and does so identically on the read path and the clear paths, which is
  * why both route through this one predicate.
@@ -376,10 +376,11 @@ export function applyBubble(ch: Character): void {
 /**
  * One live handoff as a host sees it (05-35, G-05-P4).
  *
- * `fullTitle` is the UNTRUNCATED title — the exact value the bubble
- * interpolates before `dialogue-templates.ts` caps it at 12 code points, so a
- * later hover, click or dashboard can show the whole thing while the on-canvas
- * label stays short. `box` is where the last rendered frame drew THIS handoff's
+ * `fullTitle` is the UNTRUNCATED title under the same blank-is-absent rule the
+ * bubble uses (`titleOrNull`), before `resolveHandoffDialogue` caps it at
+ * `MAX_DIALOGUE_TITLE_CHARS`, so a later hover, click or dashboard can show the
+ * whole thing while the on-canvas label stays short. It is null when no title
+ * is known, so a host shows its own no-title text rather than an id. `box` is where the last rendered frame drew THIS handoff's
  * line, for hit-testing; `speakerId` names whose bubble that is. A frame that
  * painted some other line for that speaker — the FSM advances on events, which
  * arrive off the host's WS handler rather than off the render loop — yields
@@ -387,7 +388,10 @@ export function applyBubble(ch: Character): void {
  */
 export interface ActiveHandoff {
   taskId: string;
-  fullTitle: string;
+  /** The untruncated registered title, trimmed, or null when none is known or
+   *  the registered one is blank. Never the task id, which is not a title
+   *  (05-40 G-05-1b, 05-41 WR-01). */
+  fullTitle: string | null;
   fromAgentId: string;
   toAgentId: string;
   phase: HandoffPhase;
@@ -431,7 +435,7 @@ export function getActiveHandoffs(): ActiveHandoff[] {
     }
     out.push({
       taskId: record.taskId,
-      fullTitle: getTaskTitle(record.taskId) ?? record.taskId,
+      fullTitle: titleOrNull(getTaskTitle(record.taskId)),
       fromAgentId: record.fromAgentId,
       toAgentId: record.toAgentId,
       phase: record.phase,
