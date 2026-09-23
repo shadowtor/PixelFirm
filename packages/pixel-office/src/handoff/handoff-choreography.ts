@@ -274,7 +274,9 @@ export function handleHandoffEvent(event: CompanyEvent): void {
       // setRestPose: a receiver mid-walk on its own handoff keeps walking and
       // types when its walk ends (05-19, gap item 2). Still only here (05-04).
       setRestPose(toChar, CharacterState.TYPE);
-      const taskTitle = getTaskTitle(taskId) ?? taskId;
+      // null, never the id: a task id is not a title, and interpolating one is
+      // what made the live bubble read as a debug banner (05-40, G-05-1b).
+      const taskTitle = getTaskTitle(taskId) ?? null;
       const toAgentName = toChar.name ?? record.toAgentId;
       record.acceptedText = resolveHandoffDialogue("accepted", taskTitle, toAgentName);
       toChar.bubbleText = record.acceptedText;
@@ -309,7 +311,12 @@ export function checkHandoffArrivals(): void {
     if (record.phase === "WALKING_TO_RECEIVER") {
       if (!hasArrived(fromChar)) continue;
 
-      const taskTitle = getTaskTitle(record.taskId) ?? record.taskId;
+      // null, never the id (05-40, G-05-1b): the sender's line says what is
+      // happening instead of inventing a title out of an identifier. The
+      // receiver's NAME still falls back to its agent id — an unnamed agent
+      // genuinely has its id as its display identity, and it now sits inside a
+      // verb-led sentence rather than beside a bare symbol.
+      const taskTitle = getTaskTitle(record.taskId) ?? null;
       const toChar = getCharacter(record.toAgentId);
       const toAgentName = toChar?.name ?? record.toAgentId;
       // 05-27: turn to the receiver before speaking. 05-34 (G-05-P2): the
