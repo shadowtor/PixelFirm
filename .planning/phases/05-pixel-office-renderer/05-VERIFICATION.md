@@ -117,7 +117,7 @@ covered_files:
   - "references/ASSET-LICENSES.md"
   - "scripts/verify-pixel-office-live.mjs"
 
-covered_digest: "v1:sha256:027acb7ae647351ce86565438aa11def25991d4195a7c5497ddb6bd262a8dbbc"
+covered_digest: "v1:sha256:d78cb4a0d8202fffc91c9ff6278afac79eb00ff2de22337d915e318e72103157"
 behavior_unverified: 1
 overrides_applied: 0
 re_verification:
