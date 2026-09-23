@@ -242,3 +242,60 @@ describe("1x hourglass silhouette (G-05-P5)", () => {
     expect(below, `sand ${sand}: ${below} below vs ${above} above`).toBeGreaterThan(above);
   });
 });
+
+// ── G-05-1a (05-39): the silhouette above is correct, but at stream resolution
+// the glyph still read as a blue bowtie, because the upper bulb was painted in
+// the same blue as the sand. The empty/full split — the one thing that makes an
+// hourglass an hourglass — was invisible, so identification leaned on the colour
+// again. These cases assert the LUMINANCE structure (dark plate, light bulb,
+// pinch, dark bulb, dark plate), so the read survives desaturation and heavily
+// compressed stream video. Both fills are derived by luminance order, never by
+// hex literal, so the assertions stay honest if the palette is retuned.
+
+describe("reads as an hourglass in grayscale (05-39, G-05-1a)", () => {
+  const sprite = resolveBubbleSprite("waiting");
+  const CAP_ROWS = 3;
+  const widths = sprite.map((row) => row.filter(Boolean).length);
+  const outline = edgeAndInterior(sprite).edge[0]!.toLowerCase();
+  /** Same waist derivation as the silhouette describe: narrowest row between the caps. */
+  const between = widths.slice(CAP_ROWS, sprite.length - CAP_ROWS);
+  const waistRow = CAP_ROWS + between.indexOf(Math.min(...between));
+  /** The two non-outline fills, darker first: sand before glass. */
+  const [sand, glass] = [...new Set(sprite.flat().filter(Boolean).map((c) => c.toLowerCase()))]
+    .filter((c) => c !== outline)
+    .sort((a, b) => relLum(a) - relLum(b)) as [string, string];
+  /** Cells of one inclusive row band. Rows 0 and the last are plates, not bulb content. */
+  const countIn = (from: number, to: number, color: string) =>
+    sprite
+      .slice(from, to + 1)
+      .flat()
+      .filter((c) => c.toLowerCase() === color).length;
+  const lastRow = sprite.length - 1;
+
+  it("keeps the upper bulb visibly empty: light fill outnumbers sand at least 3 to 1 above the waist", () => {
+    const light = countIn(1, waistRow - 1, glass);
+    const dark = countIn(1, waistRow - 1, sand);
+    expect(light, "upper bulb has no light fill").toBeGreaterThan(0);
+    expect(light, `upper bulb: ${light} light (${glass}) vs ${dark} sand (${sand})`).toBeGreaterThanOrEqual(3 * dark);
+  });
+
+  it("separates glass from sand by luminance alone (>= 3:1, survives desaturation)", () => {
+    expect(contrast(glass, sand), `${glass} vs ${sand}`).toBeGreaterThanOrEqual(3);
+  });
+
+  it("fills the lower bulb: sand outnumbers light fill below the waist", () => {
+    const dark = countIn(waistRow + 1, lastRow - 1, sand);
+    const light = countIn(waistRow + 1, lastRow - 1, glass);
+    expect(dark, `lower bulb: ${dark} sand (${sand}) vs ${light} light (${glass})`).toBeGreaterThan(light);
+  });
+
+  it("caps the profile with solid plates: first and last rows are entirely the darkest colour", () => {
+    for (const r of [0, lastRow]) {
+      expect(
+        sprite[r]!.every((c) => c.toLowerCase() === outline),
+        `row ${r} is not solid ${outline}`,
+      ).toBe(true);
+    }
+    expect(relLum(outline), `${outline} must be darker than both fills`).toBeLessThan(relLum(sand));
+  });
+});
