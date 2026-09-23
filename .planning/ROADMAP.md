@@ -168,7 +168,7 @@ Plans:
   4. Pixel Agents attribution and licence notices remain visible and preserved in the fork.
   5. The office floor is furnished — MetroCity floor and wall tiles, desks with monitors grouped in pods with walking lanes — agents sit at desk seats and never walk through furniture or another seated agent.
 
-**Plans:** 34/35 plans executed (UAT round 2 2026-09-22 diagnosed 6 polish gaps G-05-P1..P6 — 5 gap-closure plans 05-31..05-35 added)
+**Plans:** 35/35 plans executed (UAT round 2 2026-09-22 diagnosed 6 polish gaps G-05-P1..P6 — 5 gap-closure plans 05-31..05-35 added)
 
 Plans:
 
@@ -206,7 +206,7 @@ Plans:
 - [x] 05-32-PLAN.md — UAT polish: every agent resting on its own seat drawn seated, only off-seat agents stand; true-hourglass waiting glyph with 1x silhouette test (G-05-P3, G-05-P5)
 - [x] 05-33-PLAN.md — UAT polish: speech bubble picks the safest of four candidates (never over a glyph or off the floor, desks only when unavoidable), tail to the speaker, live TRUTH 5 (G-05-P1)
 - [x] 05-34-PLAN.md — UAT polish: fixed handoff interaction slots on the central aisle from layout data, no shoulder-to-shoulder, ink-separation sweep (G-05-P2)
-- [ ] 05-35-PLAN.md — UAT polish: getActiveHandoffs() host read path (full title, participants, phase, bubble rect), 12-char cap kept (G-05-P4)
+- [x] 05-35-PLAN.md — UAT polish: getActiveHandoffs() host read path (full title, participants, phase, bubble rect), 12-char cap kept (G-05-P4)
 
 **Wave 1**
 
@@ -312,11 +312,11 @@ Plans:
 
 **Wave 24** *(blocked on 05-33)*
 
-- [ ] 05-34-PLAN.md — Fixed aisle interaction slots (G-05-P2)
+- [x] 05-34-PLAN.md — Fixed aisle interaction slots (G-05-P2)
 
 **Wave 25** *(blocked on 05-33 and 05-34)*
 
-- [ ] 05-35-PLAN.md — Host read path for full handoff titles (G-05-P4)
+- [x] 05-35-PLAN.md — Host read path for full handoff titles (G-05-P4)
 
 **UI hint**: yes
 
@@ -375,7 +375,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 2. Control Plane Skeleton | 4/4 | Complete    | 2026-09-19 |
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
-| 5. Pixel Office Renderer | 34/35 | In Progress|  |
+| 5. Pixel Office Renderer | 35/35 | In Progress|  |
 | 6. CEO Dashboard & Approval Workflow | 0/TBD | Not started | - |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |

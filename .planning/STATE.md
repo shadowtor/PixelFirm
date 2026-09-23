@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 05
 current_phase_name: Pixel Office Renderer
 status: executing
-stopped_at: Completed 05-34-PLAN.md
-last_updated: "2026-09-23T00:28:49.527Z"
+stopped_at: Completed 05-35-PLAN.md
+last_updated: "2026-09-23T00:45:37.371Z"
 last_activity: 2026-09-23
 last_activity_desc: Phase 05 execution started
-state_head: 01e361cb479c63d69b6e608e03507219902d4519
+state_head: 07d369c944355b2a4f905a61e77befbecfe54fb7
 progress:
   total_phases: 8
   completed_phases: 4
   total_plans: 50
-  completed_plans: 49
+  completed_plans: 50
   percent: 50
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-21)
 ## Current Position
 
 Phase: 05 (Pixel Office Renderer) — EXECUTING
-Plan: 5 of 35
+Plan: 6 of 35
 Status: Ready to execute
 Last activity: 2026-09-23 — Phase 05 execution started
 
@@ -109,6 +109,7 @@ Progress: [█████░░░░░] 50%
 | Phase 05 P32 | 12 min | 3 tasks | 6 files |
 | Phase 05 P33 | 33 min | 3 tasks | 5 files |
 | Phase 05 P34 | 26 min | 3 tasks | 8 files |
+| Phase 05 P35 | 10 min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -226,6 +227,9 @@ Recent decisions affecting current work:
 - [Phase 05]: 05-34: handoff senders wait on fixed aisle slots from layout data (office-layout.json interaction row 6, offsets +1/-1/+3/-3 from the receiver's home), superseding 05-27's seat-row search; slot occupancy is Chebyshev 1 so a second sender never stands beside the first
 - [Phase 05]: 05-34: row 6 is the only interior row two tiles from every seat and standing spot, so slot clearance is a property of the ROW, not the offsets; a layout-data guard test proves it without running a scene
 - [Phase 05]: 05-34: the waiting sender is faced on the DOMINANT axis (UP across the desk to a row-4 receiver, DOWN to a row-8 one); measured visible-ink separation 4 px over 86 neighbour pairs, against 2 px for the seat-row layout
+- [Phase 05]: 05-35: getActiveHandoffs() is the host read path for G-05-P4 - untruncated title, both agents, phase, speaker and the drawn bubble canvas rect; the 12-code-point bubble cap is unchanged and no hover/click/dashboard UI ships in Phase 5
+- [Phase 05]: 05-35: getDialogueBox reads 05-33's existing per-frame placement record instead of the plan's second box map (checker advisory) - one source, so a host can never hit-test a rect the renderer did not draw
+- [Phase 05]: 05-35: speakerId is derived from a live bubbleText === requestedText/acceptedText comparison plus 05-19's senderIsCurrent, not from the phase alone - a cleared or superseded line reports no speaker and no box
 
 ### Pending Todos
 
@@ -254,6 +258,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-23T00:28:08.128Z
-Stopped at: Completed 05-34-PLAN.md
+Last session: 2026-09-23T00:45:17.890Z
+Stopped at: Completed 05-35-PLAN.md
 Resume file: None
