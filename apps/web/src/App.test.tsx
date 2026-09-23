@@ -39,6 +39,18 @@ const wrapperMarkup = markup.slice(0, markup.indexOf("<canvas"));
 const ATTRIBUTION =
   "Pixel office renderer forked from pixel-agents-hq/pixel-agents (MIT) · character and office sprites: MetroCity packs by JIK-A-4 · full audit: references/ASSET-LICENSES.md";
 
+// 05-36 (WR-02): read the element's background declarations OUT of the rendered
+// markup so the assertion is an equality on what actually ships. The substring
+// guard this replaces passed for "no backdrop at all", which is exactly the
+// regression it was supposed to catch.
+function backgroundDeclarations(html: string, tag: string): string[] {
+  const style = new RegExp(`<${tag}\\b[^>]*\\sstyle="([^"]*)"`).exec(html)?.[1] ?? "";
+  return style
+    .split(";")
+    .map((declaration) => declaration.replace(/\s+/g, "").toLowerCase())
+    .filter((declaration) => /^background(-color)?:/.test(declaration));
+}
+
 describe("App attribution", () => {
   it("renders the complete attribution sentence, so a silent truncation goes red", () => {
     expect(markup).toContain(ATTRIBUTION);
@@ -92,8 +104,13 @@ describe("App viewport fill", () => {
     expect(indexHtml.toLowerCase()).toContain(`background:${WALL_COLOR.toLowerCase()}`);
   });
 
-  it("overlays the attribution with no black strip behind it", () => {
-    expect(footerMarkup).not.toContain("rgba(0, 0, 0");
-    expect(footerMarkup).not.toContain("#000");
+  // 05-36 (WR-02): an EQUALITY, not an absence check. #cccccc on WALL_COLOR is
+  // 6.74:1; on the two MetroCity floor planks it is 4.40:1 and 3.21:1, both
+  // below WCAG AA. The footer is position:fixed and the canvas is floored at
+  // MIN_DISPLAY_SCALE, so on a small viewport the floor IS what sits behind it
+  // — the backdrop has to be the footer's own, and this goes red for a missing
+  // one as loudly as for a black one.
+  it("backs the attribution with the office border colour, so its contrast never depends on what is underneath", () => {
+    expect(backgroundDeclarations(markup, "footer")).toEqual([`background:${WALL_COLOR.toLowerCase()}`]);
   });
 });
