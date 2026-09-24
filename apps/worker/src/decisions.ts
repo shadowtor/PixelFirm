@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type DecisionAction, WorkerDownlinkSchema } from "event-schema";
+import { type DecisionAction, WorkerDownlinkSchema, type WorkerUplink } from "event-schema";
 
 // Structurally claude-adapter's CeoDecision; typed from event-schema because
 // apps/worker does not depend on claude-adapter until 06-04.
@@ -19,8 +19,16 @@ export interface BrokerDecision {
 export function createDecisionBroker() {
   const pending = new Map<string, { resolve: (d: BrokerDecision) => void; reject: (err: Error) => void }>();
 
+  const bootId = randomUUID();
+
   return {
-    bootId: randomUUID(),
+    bootId,
+
+    // Sent on every (re)connect so the control plane can tell a restart
+    // (new bootId: expire) from a reconnect (same bootId: redeliver).
+    helloMessage(): WorkerUplink {
+      return { type: "hello", bootId };
+    },
 
     awaitDecision(decisionId: string, signal: AbortSignal): Promise<BrokerDecision> {
       if (signal.aborted) return Promise.reject(new Error(`Decision ${decisionId} aborted before it was parked`));

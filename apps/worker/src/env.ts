@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { isGitWorktree } from "git-adapter";
 
@@ -13,13 +14,27 @@ const EnvSchema = z.object({
   // session on Windows via Get-CimInstance Win32_Process), but its env is not.
   WORKER_TOKEN: z.string().min(1),
   WORKER_COMPANY_ID: z.string().min(1),
+  // 06-04 (SEC-03): the only way a task starts is the local operator's env,
+  // never argv (T-03-10) and never the network.
+  WORKER_TASK_PROMPT: z.string().min(1).optional(),
+  WORKER_AGENT_ID: z.string().min(1).optional(),
+  WORKER_TASK_ID: z.string().min(1).optional(),
+  WORKER_TASK_TITLE: z.string().min(1).optional(),
 });
+
+export interface WorkerTask {
+  taskId: string;
+  prompt: string;
+  agentId: string;
+  title?: string;
+}
 
 export interface WorkerEnv {
   controlPlaneUrl: string;
   token: string;
   companyId: string;
   repoPath: string;
+  task?: WorkerTask;
 }
 
 const REPO_ARG_PREFIX = "--repo=";
@@ -45,6 +60,9 @@ function resolveRepoPathArg(): string {
  */
 export async function loadEnv(): Promise<WorkerEnv> {
   const parsed = EnvSchema.parse(process.env);
+  if (parsed.WORKER_TASK_PROMPT && !parsed.WORKER_AGENT_ID) {
+    throw new Error("WORKER_TASK_PROMPT requires WORKER_AGENT_ID (the agent that owns the task)");
+  }
   const repoPath = resolveRepoPathArg();
 
   const isWorktree = await isGitWorktree(repoPath);
@@ -57,5 +75,15 @@ export async function loadEnv(): Promise<WorkerEnv> {
     token: parsed.WORKER_TOKEN,
     companyId: parsed.WORKER_COMPANY_ID,
     repoPath,
+    ...(parsed.WORKER_TASK_PROMPT && parsed.WORKER_AGENT_ID
+      ? {
+          task: {
+            taskId: parsed.WORKER_TASK_ID ?? randomUUID(),
+            prompt: parsed.WORKER_TASK_PROMPT,
+            agentId: parsed.WORKER_AGENT_ID,
+            ...(parsed.WORKER_TASK_TITLE ? { title: parsed.WORKER_TASK_TITLE } : {}),
+          },
+        }
+      : {}),
   };
 }

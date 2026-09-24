@@ -10,6 +10,7 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
+    "claude-adapter": "workspace:*",
     "event-schema": "workspace:*",
     "git-adapter": "workspace:*",
     "gsd-adapter": "workspace:*",

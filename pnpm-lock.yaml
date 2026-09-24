@@ -294,6 +294,9 @@ importers:
 
   apps/worker:
     dependencies:
+      claude-adapter:
+        specifier: workspace:*
+        version: link:../../packages/claude-adapter
       event-schema:
         specifier: workspace:*
         version: link:../../packages/event-schema
