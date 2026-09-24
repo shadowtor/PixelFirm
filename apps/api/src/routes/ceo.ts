@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
-import { CompanyEventSchema, DecisionActionSchema } from "event-schema";
+import { CompanyEventSchema, DecisionActionSchema, WorkerDownlinkSchema } from "event-schema";
 import { db } from "../db/client.js";
 import { events } from "../db/schema.js";
 import { requireCeo } from "../auth/ceo-auth.js";
@@ -219,7 +219,14 @@ export async function registerCeoRoute(fastify: FastifyInstance) {
       const { sessionId, worktreePath, workerId } = stored;
       const agentId = latest.sourceAgentId;
       if (!sessionId || !worktreePath || !agentId) return reply.code(409).send({ error: "not resumable" });
+      // 06-REVIEW WR-12: validate before anything is recorded (sourceAgentId is
+      // uncapped in the envelope, the downlink is not).
+      const message = WorkerDownlinkSchema.safeParse({ type: "task.resume", taskId, sessionId, worktreePath, agentId });
+      if (!message.success) return reply.code(409).send({ error: "not resumable" });
       if (!workerId || !isWorkerConnected(workerId)) return reply.code(503).send({ error: "worker offline" });
+      // Send before recording: a resume the worker never received must stay
+      // retryable, not turn into a permanent "already resumed".
+      if (!sendToWorker(workerId, message.data)) return reply.code(503).send({ error: "worker offline" });
 
       const event = CompanyEventSchema.parse({
         id: randomUUID(),
@@ -242,7 +249,6 @@ export async function registerCeoRoute(fastify: FastifyInstance) {
         payload: event.payload,
       });
 
-      sendToWorker(workerId, { type: "task.resume", taskId, sessionId, worktreePath, agentId });
       broadcastToBrowsers({ type: "event", event });
 
       return reply.code(202).send({ accepted: true, taskId });

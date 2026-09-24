@@ -474,6 +474,41 @@ describe("POST /ceo/api/tasks/:taskId/resume (D-02, 06-04)", () => {
     expect(await resumeRows(taskId)).toHaveLength(0);
   });
 
+  // WR-12 (06-REVIEW): a resume the worker can never receive is not recorded,
+  // so the CEO is not locked out by "already resumed".
+  it("409 not resumable and no row when the stored ids do not fit the downlink", async () => {
+    const ws = await fakeWorker();
+    const taskId = `task-${randomUUID()}`;
+    const decisionId = randomUUID();
+    const res = await postEvent({
+      id: randomUUID(),
+      type: "ceo.approval_requested",
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      companyId: "company-1",
+      taskId,
+      sourceAgentId: `agent-${"x".repeat(300)}`,
+      visibility: "PRIVATE",
+      payload: {
+        taskId,
+        reason: "needs CEO approval",
+        decisionId,
+        kind: "ceo_gated_tool",
+        sessionId: "session-1",
+        worktreePath: "F:/repos/demo",
+        workerBootId: randomUUID(),
+      },
+    });
+    expect(res.statusCode).toBe(202);
+    hello(ws, randomUUID());
+    await waitFor("expiry", async () => (await rowsOfType("ceo.approval_expired", decisionId)).length > 0);
+
+    const resume = await postResume(taskId);
+    expect(resume.statusCode).toBe(409);
+    expect(resume.json()).toEqual({ error: "not resumable" });
+    expect(await resumeRows(taskId)).toHaveLength(0);
+  });
+
   it("404 for a task with no decision request", async () => {
     const res = await postResume(`task-${randomUUID()}`);
     expect(res.statusCode).toBe(404);
