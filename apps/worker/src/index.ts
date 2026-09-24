@@ -4,6 +4,7 @@ import { createClaudeCodeRuntime } from "claude-adapter";
 import { listWorktrees } from "git-adapter";
 import { createDecisionBroker, handleResume } from "./decisions.js";
 import { loadEnv } from "./env.js";
+import { claimTaskStart } from "./started-tasks.js";
 import { startHeartbeat, startReconnectingConnection } from "./ws-client.js";
 import { startPollLoop } from "./poll-loop.js";
 
@@ -15,6 +16,9 @@ import { startPollLoop } from "./poll-loop.js";
  */
 export async function startWorker(): Promise<{ stop(): void }> {
   const env = await loadEnv();
+  // 06-REVIEW WR-11: claimed before anything starts, so an unreadable record
+  // fails the boot instead of leaving timers running.
+  const startEnvTask = env.task ? await claimTaskStart(env.stateDir, env.task.taskId) : false;
 
   // 06-04 (D-01): the runtime parks every CEO-gated call on the broker, and
   // the broker is resolved only by decision frames on this worker's own socket.
@@ -52,8 +56,11 @@ export async function startWorker(): Promise<{ stop(): void }> {
     token: env.token,
   });
 
-  // SEC-03: the only task this worker starts is the one its own env names.
-  if (env.task) {
+  // SEC-03: the only task this worker starts is the one its own env names,
+  // and only once (WR-11): after a restart it continues via a CEO resume.
+  if (env.task && !startEnvTask) {
+    console.error(`Worker task ${env.task.taskId} was started by an earlier run; not starting it again (resume it from /ceo).`);
+  } else if (env.task) {
     const { taskId, prompt, agentId, title } = env.task;
     runtime
       .startTask({ taskId, repoPath: env.repoPath, worktreePath: env.repoPath, prompt, agentId, ...(title ? { title } : {}) })

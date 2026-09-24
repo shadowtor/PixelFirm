@@ -230,6 +230,9 @@ async function waitForEvents(predicate, label, timeoutMs) {
 // ── main ─────────────────────────────────────────────────────────────────────
 
 let tempRepo = null;
+// The worker's started-task record (06-REVIEW WR-11): per run, outside the repo,
+// so this harness never writes to the developer's ~/.pixelfirm.
+let tempWorkerState = null;
 
 async function main() {
   const taken = [];
@@ -267,6 +270,7 @@ async function main() {
 
   // T-06-11-01: the agent only ever works in a disposable repo outside this one.
   tempRepo = mkdtempSync(path.join(os.tmpdir(), "pixelfirm-ceo-live-"));
+  tempWorkerState = mkdtempSync(path.join(os.tmpdir(), "pixelfirm-ceo-live-state-"));
   mkdirSync(path.join(tempRepo, ".claude"));
   writeFileSync(
     path.join(tempRepo, ".claude", "settings.local.json"),
@@ -320,6 +324,7 @@ async function main() {
         WORKER_TOKEN: token,
         WORKER_COMPANY_ID: COMPANY_ID,
         WORKER_REPO_PATH: tempRepo,
+        WORKER_STATE_DIR: tempWorkerState,
         WORKER_AGENT_ID: AGENT_ID,
         WORKER_TASK_ID: TASK_ID,
         WORKER_TASK_TITLE: TASK_TITLE,
@@ -526,5 +531,6 @@ main()
     killChildren();
     await sleep(2000);
     if (tempRepo) rmSync(tempRepo, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+    if (tempWorkerState) rmSync(tempWorkerState, { recursive: true, force: true });
     process.exit(process.exitCode ?? 0);
   });

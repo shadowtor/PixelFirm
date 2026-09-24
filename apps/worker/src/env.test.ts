@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { execa } from "execa";
 import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadEnv } from "./env.js";
 
@@ -15,7 +15,7 @@ async function makeTempGitRepo(): Promise<string> {
 // acceptance_criteria explicitly require "a direct unit test of the
 // precedence logic" and a worktree-rejection test — Rule 2 (missing critical
 // test coverage) addition.
-const TASK_KEYS = ["WORKER_TASK_PROMPT", "WORKER_AGENT_ID", "WORKER_TASK_ID", "WORKER_TASK_TITLE"] as const;
+const TASK_KEYS = ["WORKER_TASK_PROMPT", "WORKER_AGENT_ID", "WORKER_TASK_ID", "WORKER_TASK_TITLE", "WORKER_STATE_DIR"] as const;
 
 describe("loadEnv", () => {
   const originalArgv = [...process.argv];
@@ -78,11 +78,12 @@ describe("loadEnv", () => {
       await expect(loadEnv()).rejects.toThrow("WORKER_AGENT_ID");
     });
 
-    it("returns the task with a generated uuid taskId when WORKER_TASK_ID is absent", async () => {
+    // 06-REVIEW WR-11 (iteration 2): a generated id would be new on every
+    // restart, so the started-task record could never recognise the task.
+    it("throws naming WORKER_TASK_ID when the prompt is set without it", async () => {
       process.env.WORKER_TASK_PROMPT = "fix the bug";
       process.env.WORKER_AGENT_ID = "agent-1";
-      const env = await loadEnv();
-      expect(env.task).toEqual({ taskId: expect.stringMatching(/^[0-9a-f-]{36}$/), prompt: "fix the bug", agentId: "agent-1" });
+      await expect(loadEnv()).rejects.toThrow("WORKER_TASK_ID");
     });
 
     it("uses WORKER_TASK_ID and WORKER_TASK_TITLE when set", async () => {
@@ -92,6 +93,28 @@ describe("loadEnv", () => {
       process.env.WORKER_TASK_TITLE = "Fix the bug";
       const env = await loadEnv();
       expect(env.task).toEqual({ taskId: "task-7", prompt: "fix the bug", agentId: "agent-1", title: "Fix the bug" });
+    });
+  });
+
+  describe("stateDir (06-REVIEW WR-11: the started-task record lives outside the repo)", () => {
+    beforeEach(() => {
+      process.env.WORKER_REPO_PATH = repoPath;
+    });
+
+    it("defaults to ~/.pixelfirm/worker", async () => {
+      const env = await loadEnv();
+      expect(env.stateDir).toBe(join(homedir(), ".pixelfirm", "worker"));
+    });
+
+    it("uses WORKER_STATE_DIR when set", async () => {
+      process.env.WORKER_STATE_DIR = nonRepoPath;
+      const env = await loadEnv();
+      expect(env.stateDir).toBe(nonRepoPath);
+    });
+
+    it("rejects a WORKER_STATE_DIR inside the repo the agent works in", async () => {
+      process.env.WORKER_STATE_DIR = join(repoPath, ".worker-state");
+      await expect(loadEnv()).rejects.toThrow("WORKER_STATE_DIR");
     });
   });
 });

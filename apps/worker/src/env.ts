@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { homedir } from "node:os";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { isGitWorktree } from "git-adapter";
 
@@ -20,6 +21,8 @@ const EnvSchema = z.object({
   WORKER_AGENT_ID: z.string().min(1).optional(),
   WORKER_TASK_ID: z.string().min(1).optional(),
   WORKER_TASK_TITLE: z.string().min(1).optional(),
+  // 06-REVIEW WR-11: where the started-task record lives (started-tasks.ts).
+  WORKER_STATE_DIR: z.string().min(1).optional(),
 });
 
 export interface WorkerTask {
@@ -34,6 +37,7 @@ export interface WorkerEnv {
   token: string;
   companyId: string;
   repoPath: string;
+  stateDir: string;
   task?: WorkerTask;
 }
 
@@ -63,6 +67,10 @@ export async function loadEnv(): Promise<WorkerEnv> {
   if (parsed.WORKER_TASK_PROMPT && !parsed.WORKER_AGENT_ID) {
     throw new Error("WORKER_TASK_PROMPT requires WORKER_AGENT_ID (the agent that owns the task)");
   }
+  // 06-REVIEW WR-11: a stable id is what lets a restart recognise the task.
+  if (parsed.WORKER_TASK_PROMPT && !parsed.WORKER_TASK_ID) {
+    throw new Error("WORKER_TASK_PROMPT requires WORKER_TASK_ID (a stable id, so a restart never starts the task twice)");
+  }
   const repoPath = resolveRepoPathArg();
 
   const isWorktree = await isGitWorktree(repoPath);
@@ -70,15 +78,23 @@ export async function loadEnv(): Promise<WorkerEnv> {
     throw new Error(`Worker repo path is not a valid git worktree: ${repoPath}`);
   }
 
+  // The agent can edit anything in its repo, including a record kept there.
+  const stateDir = parsed.WORKER_STATE_DIR ?? join(homedir(), ".pixelfirm", "worker");
+  const fromRepo = relative(resolve(repoPath), resolve(stateDir));
+  if (!fromRepo.startsWith("..") && !isAbsolute(fromRepo)) {
+    throw new Error(`WORKER_STATE_DIR must be outside the worker repo (${repoPath}), got ${stateDir}`);
+  }
+
   return {
     controlPlaneUrl: parsed.CONTROL_PLANE_URL,
     token: parsed.WORKER_TOKEN,
     companyId: parsed.WORKER_COMPANY_ID,
     repoPath,
-    ...(parsed.WORKER_TASK_PROMPT && parsed.WORKER_AGENT_ID
+    stateDir,
+    ...(parsed.WORKER_TASK_PROMPT && parsed.WORKER_AGENT_ID && parsed.WORKER_TASK_ID
       ? {
           task: {
-            taskId: parsed.WORKER_TASK_ID ?? randomUUID(),
+            taskId: parsed.WORKER_TASK_ID,
             prompt: parsed.WORKER_TASK_PROMPT,
             agentId: parsed.WORKER_AGENT_ID,
             ...(parsed.WORKER_TASK_TITLE ? { title: parsed.WORKER_TASK_TITLE } : {}),
