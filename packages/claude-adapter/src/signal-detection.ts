@@ -13,8 +13,9 @@
 // destructive word in the name, and production changes made by editing
 // deployment config, writing it from the shell, or fetching a deploy hook.
 // Signed-off residual (NOT gated, by that decision): a deploy through a
-// feature-branch push; an MCP tool whose name has none of the destructive
-// words; a script or binary that deploys under an innocuous name (for
+// feature-branch push; an MCP tool whose name and `action` argument have none
+// of the destructive words (except coolify's service/application/env_vars,
+// gated on every non-read action — 06-REVIEW IN-01); a script or binary that deploys under an innocuous name (for
 // example `node scripts/release.mjs`); indirect writes (for example a
 // `node -e` script editing a config file); and a deploy endpoint whose URL
 // contains none of deploy, webhook or /hook(s)/.
@@ -51,6 +52,12 @@ const PRODUCTION_CONFIG_PATH = new RegExp(`(?:^|/)${CONFIG_FILE}$`, "i");
 
 const DEPLOY_HOOK_URL = /deploy|webhook|\/hooks?(?:[/?#]|$)/i;
 const DESTRUCTIVE_MCP_NAME = /deploy|delete|destroy|drop|remove|restart|stop|publish|push|merge/i;
+// 06-REVIEW IN-01 (iteration 2, user decision "Gate them"): coolify-mcp tools
+// whose every action but these reads changes production (checked against
+// @masonator/coolify-mcp 3.5.1's action enums). An unknown or missing action
+// is gated.
+const COOLIFY_ACTION_TOOL = /^mcp__.*coolify.*__(?:service|application|env_vars)$/i;
+const COOLIFY_READ_ACTIONS = new Set(["list", "get", "list_containers"]);
 
 // `git` plus any global options (-C <dir>, -c <k=v>, --no-pager, ...) up to
 // the subcommand (06-REVIEW WR-01: `git -C dir reset --hard` spelling).
@@ -140,7 +147,13 @@ const FILE_TOOLS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Monitor"]);
 
 export function classifySignal(toolName: string, input: unknown): ClassifiedSignal | null {
-  const fields = (input ?? {}) as { command?: unknown; file_path?: unknown; notebook_path?: unknown; url?: unknown };
+  const fields = (input ?? {}) as {
+    command?: unknown;
+    file_path?: unknown;
+    notebook_path?: unknown;
+    url?: unknown;
+    action?: unknown;
+  };
 
   if (toolName === "AskUserQuestion") {
     return { kind: "clarifying_question", reason: "Claude asked a clarifying question via AskUserQuestion" };
@@ -168,8 +181,15 @@ export function classifySignal(toolName: string, input: unknown): ClassifiedSign
     return null;
   }
 
-  if (toolName.startsWith("mcp__") && DESTRUCTIVE_MCP_NAME.test(toolName)) {
-    return { kind: "ceo_gated_tool", reason: `MCP tool: ${toolName}` };
+  if (toolName.startsWith("mcp__")) {
+    if (DESTRUCTIVE_MCP_NAME.test(toolName)) return { kind: "ceo_gated_tool", reason: `MCP tool: ${toolName}` };
+    const action = typeof fields.action === "string" ? fields.action : undefined;
+    if (
+      (action !== undefined && DESTRUCTIVE_MCP_NAME.test(action)) ||
+      (COOLIFY_ACTION_TOOL.test(toolName) && !COOLIFY_READ_ACTIONS.has(action ?? ""))
+    ) {
+      return { kind: "ceo_gated_tool", reason: `MCP tool: ${toolName} (action: ${String(action)})` };
+    }
   }
 
   return null;

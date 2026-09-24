@@ -123,6 +123,43 @@ describe("classifySignal — CEO-04 narrow command/MCP set", () => {
     expect(gated("mcp__svc__restart", {})).toBe("ceo_gated_tool");
     expect(classifySignal("mcp__plugin_context7_context7__query-docs", {})).toBeNull();
   });
+
+  // 06-REVIEW IN-01 (iteration 2, user decision "Gate them"): coolify-mcp puts
+  // many operations behind one tool with an `action` argument.
+  it.each([
+    ["mcp__coolify__service", "restart_application"],
+    ["mcp__coolify__service", "stop_application"],
+    ["mcp__coolify__service", "start_application"],
+    ["mcp__coolify__service", "delete"],
+    ["mcp__coolify__service", "update"],
+    ["mcp__coolify__service", "create"],
+    ["mcp__coolify__application", "update"],
+    ["mcp__coolify__application", "delete"],
+    ["mcp__coolify__application", "create_dockerfile"],
+    ["mcp__coolify__env_vars", "create"],
+    ["mcp__coolify__env_vars", "update"],
+    ["mcp__coolify__env_vars", "delete"],
+    ["mcp__coolify__env_vars", "bulk_update"],
+    ["mcp__coolify__env_vars", "some_future_action"],
+    ["mcp__coolify__env_vars", undefined],
+    // Any MCP tool: a destructive word in the action (the review's IN-01 rule).
+    ["mcp__coolify__control", "restart"],
+    ["mcp__coolify__database", "delete"],
+  ])("%s with action %s is gated", (tool, action) => {
+    expect(classifySignal(tool, action === undefined ? {} : { action })).toEqual({
+      kind: "ceo_gated_tool",
+      reason: `MCP tool: ${tool} (action: ${String(action)})`,
+    });
+  });
+
+  it.each([
+    ["mcp__coolify__service", "list_containers"],
+    ["mcp__coolify__env_vars", "list"],
+    ["mcp__coolify__list_applications", undefined],
+    ["mcp__coolify__projects", "get"],
+  ])("%s with read-only action %s is not gated", (tool, action) => {
+    expect(classifySignal(tool, action === undefined ? {} : { action })).toBeNull();
+  });
 });
 
 describe("classifySignal — CEO-04 gate-paths production-change set", () => {
