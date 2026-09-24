@@ -452,3 +452,114 @@ test("a 600-character single-line tool input never scrolls the page sideways", a
   });
   expect(widths).toEqual({ pre: true, detail: true, page: true, maxHeight: "240px" });
 });
+
+// ---- 06-09 Task 2: answering an AskUserQuestion (CEO-02) --------------------------------------
+
+// Longer than the schema's 2000 cap on purpose: snapshots are not re-validated, and the UI must
+// still show every character (no clamp) whatever length reaches it.
+const LONG_DESCRIPTION = "Keeps everything in one file on disk, which is simple to back up. ".repeat(60).slice(0, 3000);
+const PREVIEW = "CREATE TABLE decisions (\n  id uuid PRIMARY KEY\n);";
+
+const question = (n: number, at = minutesAgo(8)) =>
+  requested(
+    n,
+    { agent: "cy", title: `Pick the stack ${n}`, reason: "question", kind: "clarifying_question", at },
+    {
+      toolName: "AskUserQuestion",
+      questions: [
+        {
+          question: "Which DB?",
+          header: "Database",
+          multiSelect: false,
+          options: [
+            { label: "Postgres", description: "Relational, already in the stack", preview: PREVIEW },
+            { label: "SQLite", description: LONG_DESCRIPTION },
+          ],
+        },
+        {
+          question: "Which features?",
+          header: "Scope",
+          multiSelect: true,
+          options: [
+            { label: "Auth", description: "Sign in with Access" },
+            { label: "Billing", description: "Stripe checkout" },
+          ],
+        },
+      ],
+    },
+  );
+
+const OTHER = "Other (write your own answer)";
+
+test("a question renders a Choicebox and a checkbox-card group with labels and descriptions", async ({ page }) => {
+  await showSnapshot(page, [question(1)]);
+  const qs = sectionOf(page, "Questions");
+  await expect(qs.getByText("Database", { exact: true })).toBeVisible();
+  await expect(qs.getByText("Which DB?", { exact: true })).toBeVisible();
+  const single = qs.getByRole("radiogroup");
+  await expect(single).toHaveCount(1);
+  await expect(single.getByRole("radio")).toHaveCount(3);
+  await expect(single.getByText("Postgres", { exact: true })).toBeVisible();
+  await expect(single.getByText("Relational, already in the stack", { exact: true })).toBeVisible();
+  await expect(single.getByText(OTHER, { exact: true })).toBeVisible();
+
+  await expect(qs.getByText("Scope", { exact: true })).toBeVisible();
+  const boxes = qs.getByRole("checkbox");
+  await expect(boxes).toHaveCount(3);
+  await qs.getByText("Billing", { exact: true }).click();
+  await qs.getByText("Auth", { exact: true }).click();
+  await expect(qs.getByRole("checkbox", { name: /Auth/ })).toBeChecked();
+  await expect(qs.getByRole("checkbox", { name: /Billing/ })).toBeChecked();
+});
+
+test("choosing Other reveals a textarea", async ({ page }) => {
+  await showSnapshot(page, [question(1)]);
+  const qs = sectionOf(page, "Questions");
+  const single = qs.getByRole("radiogroup");
+  await expect(qs.locator("textarea")).toHaveCount(0);
+  await single.getByText(OTHER, { exact: true }).click();
+  await expect(qs.locator("textarea")).toHaveCount(1);
+  await expect(qs.locator("textarea")).toBeVisible();
+  await single.getByText("Postgres", { exact: true }).click();
+  await expect(qs.locator("textarea")).toHaveCount(0);
+});
+
+test("an option preview shows in a pre only while that option is selected", async ({ page }) => {
+  await showSnapshot(page, [question(1)]);
+  const qs = sectionOf(page, "Questions");
+  const preview = qs.locator("pre").filter({ hasText: "CREATE TABLE decisions" });
+  await expect(preview).toHaveCount(0);
+  await qs.getByText("Postgres", { exact: true }).click();
+  await expect(preview).toBeVisible();
+  expect(await preview.textContent()).toBe(PREVIEW);
+  await qs.getByText("SQLite", { exact: true }).click();
+  await expect(preview).toHaveCount(0);
+});
+
+test("a 3000-character option description is shown in full, never clamped", async ({ page }) => {
+  await showSnapshot(page, [question(1)]);
+  const desc = sectionOf(page, "Questions").getByText(LONG_DESCRIPTION.slice(0, 40));
+  await expect(desc).toBeVisible();
+  const shown = await desc.evaluate((el) => ({
+    text: el.textContent,
+    clipped: el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1,
+  }));
+  expect(shown).toEqual({ text: LONG_DESCRIPTION, clipped: false });
+});
+
+test("selections are kept per decision when switching queue items", async ({ page }) => {
+  await showSnapshot(page, [question(1, minutesAgo(9)), question(2, minutesAgo(4))]);
+  const items = queue(page).getByRole("button");
+  const qs = sectionOf(page, "Questions");
+  await qs.getByText("SQLite", { exact: true }).click();
+  await qs.getByText("Billing", { exact: true }).click();
+
+  await items.nth(1).click();
+  await expect(detailOf(page).getByRole("heading", { level: 2 })).toHaveText("Pick the stack 2");
+  await expect(qs.getByRole("radio", { name: /SQLite/ })).not.toBeChecked();
+
+  await items.nth(0).click();
+  await expect(detailOf(page).getByRole("heading", { level: 2 })).toHaveText("Pick the stack 1");
+  await expect(qs.getByRole("radio", { name: /SQLite/ })).toBeChecked();
+  await expect(qs.getByRole("checkbox", { name: /Billing/ })).toBeChecked();
+});

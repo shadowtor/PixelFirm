@@ -106,3 +106,16 @@ export function actionLabel(action: DecisionAction): string {
   return ACTION_LABELS[action];
 }
 
+// ---- RED stubs (06-09 Task 2) ----
+export type Question = NonNullable<DecisionRequestView["questions"]>[number];
+/** Per question text: the picked option labels, and `other` when "Other" is chosen. */
+export type Selections = Record<string, { labels: string[]; other?: string }>;
+
+export function buildAnswers(_questions: Question[], _selections: Selections): Record<string, string> {
+  return { stub: "" };
+}
+
+export function allAnswered(_questions: Question[], _selections: Selections): boolean {
+  return true;
+}
+

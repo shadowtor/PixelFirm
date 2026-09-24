@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   actionLabel,
+  allAnswered,
+  buildAnswers,
   diffLineKind,
   documentTitle,
   isLongWait,
@@ -157,5 +159,47 @@ describe("actionLabel", () => {
     expect(actionLabel("request_changes")).toBe("Changes requested");
     expect(actionLabel("more_research")).toBe("More research");
     expect(actionLabel("discuss")).toBe("Discuss");
+  });
+});
+
+const QUESTIONS = [
+  {
+    question: "Which DB?",
+    header: "Database",
+    multiSelect: false,
+    options: [
+      { label: "Postgres", description: "Relational" },
+      { label: "SQLite", description: "A file" },
+    ],
+  },
+  {
+    question: "Which features?",
+    header: "Scope",
+    multiSelect: true,
+    options: [
+      { label: "Auth", description: "Sign in" },
+      { label: "Billing", description: "Stripe" },
+      { label: "Search", description: "Full text" },
+    ],
+  },
+];
+
+describe("buildAnswers", () => {
+  it("keys answers by exact question text, joining multi-select labels in option order", () => {
+    const selections = { "Which DB?": { labels: ["Postgres"] }, "Which features?": { labels: ["Billing", "Auth"] } };
+    expect(buildAnswers(QUESTIONS, selections)).toEqual({ "Which DB?": "Postgres", "Which features?": "Auth, Billing" });
+    expect(allAnswered(QUESTIONS, selections)).toBe(true);
+  });
+
+  it("uses the trimmed Other text as the answer", () => {
+    const selections = { "Which DB?": { labels: [], other: "  DuckDB  " }, "Which features?": { labels: ["Search"] } };
+    expect(buildAnswers(QUESTIONS, selections)).toEqual({ "Which DB?": "DuckDB", "Which features?": "Search" });
+  });
+
+  it("is not all answered while a question has no answer or only a whitespace Other", () => {
+    expect(allAnswered(QUESTIONS, { "Which DB?": { labels: ["SQLite"] } })).toBe(false);
+    expect(allAnswered(QUESTIONS, { "Which DB?": { labels: [], other: "   " }, "Which features?": { labels: ["Auth"] } })).toBe(false);
+    expect(buildAnswers(QUESTIONS, { "Which DB?": { labels: [], other: "   " } })).toEqual({});
+    expect(allAnswered(QUESTIONS, {})).toBe(false);
   });
 });
