@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { BaseEnvelope } from "../envelope.js";
+import { DecisionActionSchema } from "../downlink.js";
+
+const s = (max: number) => z.string().max(max);
 
 const CompanyStartedPayload = z.object({ name: z.string() });
 const FloorCreatedPayload = z.object({ name: z.string() });
@@ -16,7 +19,74 @@ const AgentHandoffRequestedPayload = z.object({
 // once the receiving agent has actually accepted and started the task.
 const AgentHandoffCompletedPayload = z.object({ taskId: z.string(), toAgentId: z.string() });
 const ReviewStartedPayload = z.object({ taskId: z.string() });
-const CeoApprovalRequestedPayload = z.object({ taskId: z.string(), reason: z.string() });
+// Phase 6 (D-04): additive only. Stored Phase 4 rows carry just { taskId,
+// reason } and are re-validated on every snapshot, so every new field is
+// optional. Caps apply at the trust boundary.
+const CeoApprovalRequestedPayload = z.object({
+  taskId: z.string(),
+  reason: z.string(),
+  decisionId: z.string().uuid().optional(),
+  threadId: z.string().uuid().optional(),
+  // = ClassifiedSignal["kind"] (packages/claude-adapter/src/signal-detection.ts)
+  kind: z.enum(["clarifying_question", "ceo_gated_tool"]).optional(),
+  toolName: s(200).optional(),
+  // JSON.stringify of the exact parked input, display only. The runtime
+  // refuses to park anything larger, so nothing is approvable unseen.
+  toolInput: s(16_000).optional(),
+  questions: z
+    .array(
+      z.object({
+        question: s(2000),
+        header: s(64),
+        multiSelect: z.boolean(),
+        options: z
+          .array(z.object({ label: s(500), description: s(2000), preview: s(16_000).optional() }))
+          .max(4),
+      }),
+    )
+    .max(4)
+    .optional(),
+  title: s(300).optional(),
+  context: s(8000).optional(),
+  recommendation: s(4000).optional(),
+  links: z.array(s(2000)).max(10).optional(),
+  diff: z
+    .object({
+      files: z.array(z.object({ path: s(1000), added: z.number().int(), removed: z.number().int() })).max(500),
+      unified: s(65_536),
+      truncated: z.boolean(),
+      totalAdded: z.number().int(),
+      totalRemoved: z.number().int(),
+    })
+    .optional(),
+  sessionId: s(200).optional(),
+  worktreePath: s(1000).optional(),
+  workerBootId: z.string().uuid().optional(),
+  // Stamped server-side from the authenticated connection, never trusted from a body.
+  workerId: s(200).optional(),
+  taskTitle: s(300).optional(),
+});
+// Phase 6 (D-04): the append-only ceo.* events are the audit log.
+const CeoDecisionMadePayload = z.object({
+  decisionId: z.string().uuid(),
+  taskId: z.string(),
+  action: DecisionActionSchema,
+  note: s(4000).optional(),
+  answers: z.record(s(2000), s(2000)).optional(),
+  decidedBy: z.string().email(),
+});
+const CeoDecisionAppliedPayload = z.object({
+  decisionId: z.string().uuid(),
+  taskId: z.string(),
+  action: DecisionActionSchema,
+  outcome: z.enum(["allowed", "denied"]),
+});
+const CeoApprovalExpiredPayload = z.object({
+  decisionId: z.string().uuid(),
+  taskId: z.string(),
+  reason: z.enum(["worker_restarted", "aborted", "superseded"]),
+});
+const CeoTaskResumeRequestedPayload = z.object({ taskId: z.string(), decidedBy: z.string().email() });
 const GitCommitCreatedPayload = z.object({ sha: z.string(), message: z.string() });
 const DeploymentStartedPayload = z.object({ environment: z.string() });
 const ViewerEventPayload = z.object({ viewerName: z.string() });
@@ -104,6 +174,16 @@ export const CompanyEventSchema = z.discriminatedUnion("type", [
   z.object({ ...BaseEnvelope.shape, type: z.literal("task.status_changed"), payload: TaskStatusChangedPayload }),
   // Phase 5 addition — union grows from 16 to 17.
   z.object({ ...BaseEnvelope.shape, type: z.literal("agent.handoff_completed"), payload: AgentHandoffCompletedPayload }),
+  // Phase 6 additions — union grows from 17 to 21, appended after the prior
+  // 17, never reordered (see comment above).
+  z.object({ ...BaseEnvelope.shape, type: z.literal("ceo.decision_made"), payload: CeoDecisionMadePayload }),
+  z.object({ ...BaseEnvelope.shape, type: z.literal("ceo.decision_applied"), payload: CeoDecisionAppliedPayload }),
+  z.object({ ...BaseEnvelope.shape, type: z.literal("ceo.approval_expired"), payload: CeoApprovalExpiredPayload }),
+  z.object({
+    ...BaseEnvelope.shape,
+    type: z.literal("ceo.task_resume_requested"),
+    payload: CeoTaskResumeRequestedPayload,
+  }),
 ]);
 
 export type CompanyEvent = z.infer<typeof CompanyEventSchema>;

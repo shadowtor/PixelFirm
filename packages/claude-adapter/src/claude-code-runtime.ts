@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
 import { observeGsdState } from "gsd-adapter";
 import type { AgentRuntime, AgentTaskStatus, StartTaskInput } from "orchestration-adapter";
+import { type CeoDecision, type ParkedCall, toPermissionResult } from "./decision-mapping.js";
 import { buildEnvelope, postEvent } from "./event-emitter.js";
 import { classifySignal } from "./signal-detection.js";
 import { createWatchdog, DEFAULT_WATCHDOG_TIMEOUT_MS } from "./watchdog.js";
@@ -42,6 +44,10 @@ interface TaskRecord {
   currentRun?: object;
 }
 
+// The runtime refuses to park a tool call whose JSON input the CEO could not
+// see in full: ceo.approval_requested.toolInput is capped at this length.
+const MAX_TOOL_INPUT_CHARS = 16_000;
+
 // CR-02: once a task reaches one of these, its controller/handle are stale
 // leftovers from the last (already-settled) invocation — pauseTask/
 // cancelTask must refuse to act on them rather than silently flipping an
@@ -76,6 +82,10 @@ export function createClaudeCodeRuntime(options: {
   companyId: string;
   controlPlaneUrl: string;
   token: string;
+  // Phase 6 (D-01): the host's decision source. canUseTool parks on it for
+  // every classified call; the worker's broker resolves it from the
+  // control-plane WebSocket. Absent: the Phase 4 detect-and-deny path.
+  awaitDecision?: (decisionId: string, signal: AbortSignal) => Promise<CeoDecision>;
 }): AgentRuntime {
   const tasks = new Map<string, TaskRecord>();
 
@@ -100,7 +110,18 @@ export function createClaudeCodeRuntime(options: {
     await postEvent(
       options.controlPlaneUrl,
       options.token,
-      buildEnvelope(options.companyId, "ceo.approval_requested", { taskId, reason }, taskId),
+      // Every ceo.* event is PRIVATE (Phase 6).
+      buildEnvelope(options.companyId, "ceo.approval_requested", { taskId, reason }, taskId, "PRIVATE"),
+    );
+  }
+
+  // Posts a PRIVATE ceo.* event attributed to the task's agent.
+  async function postPrivate(taskId: string, type: string, payload: unknown): Promise<void> {
+    const sourceAgentId = tasks.get(taskId)?.agentId;
+    await postEvent(
+      options.controlPlaneUrl,
+      options.token,
+      buildEnvelope(options.companyId, type, payload, taskId, "PRIVATE", sourceAgentId),
     );
   }
 
@@ -188,22 +209,68 @@ export function createClaudeCodeRuntime(options: {
         // (PATH, HOME, etc.) but actively stripping the key.
         env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "ANTHROPIC_API_KEY")),
         // D-08 signal #1: fires for AskUserQuestion and any Bash command
-        // matching classifySignal's CEO-gated allowlist. Always returns
-        // "deny" for a classified signal — never auto-approve (ARCHITECTURE.md
-        // Anti-Pattern 2) — the actual human-approval mechanism is Phase 6's
-        // job; Phase 4 only guarantees the signal fires and is surfaced.
-        canUseTool: async (toolName, input) => {
+        // matching classifySignal's CEO-gated allowlist. Never auto-approves a
+        // classified call (ARCHITECTURE.md Anti-Pattern 2). With a decision
+        // source (Phase 6, D-01) the call parks until the CEO decides; without
+        // one, the Phase 4 detect-and-deny path runs unchanged.
+        canUseTool: async (toolName, input, { signal }) => {
           // Superseded: deny everything, never auto-approve (TaskRecord.currentRun).
           if (!isCurrent()) {
             return { behavior: "deny", message: `Invocation superseded for task ${taskId} — tool call refused.` };
           }
-          const signal = classifySignal(toolName, input);
-          if (!signal) return { behavior: "allow", updatedInput: input };
-          await requestReview(taskId, signal.reason);
-          return {
-            behavior: "deny",
-            message: `Escalated to CEO for review (taskId=${taskId}) — no Phase 6 dashboard exists yet to grant approval; see the ceo.approval_requested event.`,
-          };
+          const cls = classifySignal(toolName, input);
+          if (!cls) return { behavior: "allow", updatedInput: input };
+          if (!options.awaitDecision) {
+            await requestReview(taskId, cls.reason);
+            return {
+              behavior: "deny",
+              message: `Escalated to CEO for review (taskId=${taskId}) — no Phase 6 dashboard exists yet to grant approval; see the ceo.approval_requested event.`,
+            };
+          }
+          // Fail closed: nothing is approvable that the CEO could not see in full.
+          const toolInput = JSON.stringify(input);
+          if (toolInput.length > MAX_TOOL_INPUT_CHARS) {
+            return {
+              behavior: "deny",
+              message:
+                "Tool input is too large to show the CEO in full (over 16000 characters); split the operation into smaller steps.",
+            };
+          }
+          const parked: ParkedCall = { decisionId: randomUUID(), toolName, input, kind: cls.kind };
+          record.status = "waiting_for_review";
+          await emitStatus(taskId, "waiting_for_review");
+          await postPrivate(taskId, "ceo.approval_requested", {
+            taskId,
+            reason: cls.reason,
+            decisionId: parked.decisionId,
+            threadId: parked.decisionId,
+            kind: cls.kind,
+            toolName,
+            toolInput,
+            ...(toolName === "AskUserQuestion" ? { questions: input.questions } : {}),
+          });
+          let decision: CeoDecision;
+          try {
+            decision = await options.awaitDecision(parked.decisionId, signal);
+          } catch {
+            return { behavior: "deny", message: "No CEO decision was received; the tool call was not run." };
+          }
+          if (!isCurrent()) {
+            return { behavior: "deny", message: `Invocation superseded for task ${taskId} — tool call refused.` };
+          }
+          // Pure mapping: approve returns parked.input by reference, never
+          // anything from the decision object.
+          const result = toPermissionResult(decision, parked);
+          // Pitfall 3: this is what walks the office agent out of the CEO room.
+          record.status = "running";
+          await emitStatus(taskId, "running");
+          await postPrivate(taskId, "ceo.decision_applied", {
+            decisionId: parked.decisionId,
+            taskId,
+            action: decision.action,
+            outcome: result.behavior === "allow" ? "allowed" : "denied",
+          });
+          return result;
         },
         // D-08 signal #2: independent secondary signal — fires ~6s after an
         // unanswered canUseTool wait, per 04-RESEARCH.md Pattern 4 (2). Rarely
