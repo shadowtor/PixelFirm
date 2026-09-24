@@ -48,6 +48,26 @@ interface TaskRecord {
 // see in full: ceo.approval_requested.toolInput is capped at this length.
 const MAX_TOOL_INPUT_CHARS = 16_000;
 
+// Never forwarded to the Claude subprocess (CR-01, research Pitfall 11):
+// - provider credentials/endpoints (API key, auth token, base URL, key
+//   helper) would silently override CLI subscription auth (RUNTIME-02's
+//   never-forward guarantee) or reroute traffic;
+// - Bedrock/Vertex switches would move the session off the subscription;
+// - CLAUDE_CODE_USER_DIALOG_TIMEOUT_MS would put a timer on a parked CEO
+//   decision (D-01: the call waits as long as the CEO needs);
+// - WORKER_TOKEN is the worker's control-plane credential; the agent must
+//   never be able to read it and post events as the worker.
+const STRIPPED_ENV_KEYS = new Set([
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "ANTHROPIC_BASE_URL",
+  "ANTHROPIC_API_KEY_HELPER",
+  "CLAUDE_CODE_USE_BEDROCK",
+  "CLAUDE_CODE_USE_VERTEX",
+  "CLAUDE_CODE_USER_DIALOG_TIMEOUT_MS",
+  "WORKER_TOKEN",
+]);
+
 // CR-02: once a task reaches one of these, its controller/handle are stale
 // leftovers from the last (already-settled) invocation — pauseTask/
 // cancelTask must refuse to act on them rather than silently flipping an
@@ -201,13 +221,10 @@ export function createClaudeCodeRuntime(options: {
         abortController: controller,
         // CR-01: the SDK's own env option REPLACES (not merges with)
         // process.env when set, and inherits the full process.env when
-        // omitted (sdk.d.ts QueryOptions.env). A stray ANTHROPIC_API_KEY in
-        // this process's own environment must never leak into the
-        // subprocess and silently override CLI subscription auth (this
-        // package's documented never-forward guarantee) — so env is always
-        // explicitly set here, spreading process.env for everything else
-        // (PATH, HOME, etc.) but actively stripping the key.
-        env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "ANTHROPIC_API_KEY")),
+        // omitted (sdk.d.ts QueryOptions.env). So env is always explicitly
+        // set here, spreading process.env for everything else (PATH, HOME,
+        // etc.) but actively stripping STRIPPED_ENV_KEYS (see there).
+        env: Object.fromEntries(Object.entries(process.env).filter(([key]) => !STRIPPED_ENV_KEYS.has(key))),
         // D-05/D-06: with a decision source, tell the agent what each typed
         // [CEO:...] denial means. This also moves the worker-hosted mode onto
         // Claude Code's own system prompt (the preset), which the 06-11 live
@@ -215,8 +232,8 @@ export function createClaudeCodeRuntime(options: {
         ...(options.awaitDecision
           ? { systemPrompt: { type: "preset" as const, preset: "claude_code" as const, append: CEO_PROTOCOL_APPEND } }
           : {}),
-        // D-08 signal #1: fires for AskUserQuestion and any Bash command
-        // matching classifySignal's CEO-gated allowlist. Never auto-approves a
+        // D-08 signal #1: fires for every call classifySignal classifies
+        // (reached even under a settings allow rule via PreToolUse). Never auto-approves a
         // classified call (ARCHITECTURE.md Anti-Pattern 2). With a decision
         // source (Phase 6, D-01) the call parks until the CEO decides; without
         // one, the Phase 4 detect-and-deny path runs unchanged.
@@ -286,6 +303,30 @@ export function createClaudeCodeRuntime(options: {
         // unit-tested by invoking the hook function independent of live
         // canUseTool timing.
         hooks: {
+          // CEO-04 / research Pitfall 1: a settings allow rule (this repo's own
+          // .claude/settings.local.json allows git push, git merge, pnpm add,
+          // mcp__coolify__deploy) would approve a call before canUseTool runs.
+          // A hook "ask" outranks "allow", forcing every classified call back
+          // to canUseTool. Same classifier, so hook and gate never disagree;
+          // no isCurrent guard, so a superseded invocation still asks (never
+          // allows). Never parks here: a hook timeout would skip the tool.
+          PreToolUse: [
+            {
+              hooks: [
+                async (hookInput) => {
+                  const { tool_name, tool_input } = hookInput as { tool_name: string; tool_input: unknown };
+                  if (!classifySignal(tool_name, tool_input)) return {};
+                  return {
+                    hookSpecificOutput: {
+                      hookEventName: "PreToolUse" as const,
+                      permissionDecision: "ask" as const,
+                      permissionDecisionReason: "CEO-gated: requires an explicit CEO decision",
+                    },
+                  };
+                },
+              ],
+            },
+          ],
           Notification: [
             {
               hooks: [

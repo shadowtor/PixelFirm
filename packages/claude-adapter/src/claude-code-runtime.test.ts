@@ -1022,3 +1022,77 @@ describe("CEO protocol system prompt (D-05/D-06)", () => {
     expect("systemPrompt" in options).toBe(false);
   });
 });
+
+describe("PreToolUse ask backstop and subprocess env (06-02 Task 2, CEO-04)", () => {
+  const STRIPPED = [
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_API_KEY_HELPER",
+    "CLAUDE_CODE_USE_BEDROCK",
+    "CLAUDE_CODE_USE_VERTEX",
+    "CLAUDE_CODE_USER_DIALOG_TIMEOUT_MS",
+    "WORKER_TOKEN",
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  const ASK = {
+    hookSpecificOutput: {
+      hookEventName: "PreToolUse",
+      permissionDecision: "ask",
+      permissionDecisionReason: "CEO-gated: requires an explicit CEO decision",
+    },
+  };
+
+  function preToolUse(toolName: string, toolInput: unknown) {
+    return { hook_event_name: "PreToolUse", tool_name: toolName, tool_input: toolInput, tool_use_id: "tool-1" };
+  }
+
+  it("a classified call gets permissionDecision 'ask' (outranks a settings allow rule); an unclassified one gets {}", async () => {
+    (query as unknown as Mock).mockReturnValue(fakeQuery([initMessage("s"), resultMessage("success")]));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+    await runtime.startTask(startInput);
+
+    const hook = (query as unknown as Mock).mock.calls[0][0].options.hooks.PreToolUse[0].hooks[0];
+    const signal = new AbortController().signal;
+    const gated = await hook(preToolUse("Bash", { command: "git push -f" }), "tool-1", { signal });
+    expect(gated.hookSpecificOutput.permissionDecision).toBe("ask");
+    expect(gated).toEqual(ASK);
+    expect(await hook(preToolUse("mcp__coolify__deploy", {}), "tool-2", { signal })).toEqual(ASK);
+    expect(await hook(preToolUse("Bash", { command: "ls" }), "tool-3", { signal })).toEqual({});
+  });
+
+  it("a superseded invocation's PreToolUse hook still returns 'ask', never allow", async () => {
+    (query as unknown as Mock)
+      .mockReturnValueOnce(pausableQuery(initMessage("session-0")))
+      .mockReturnValueOnce(fakeQuery([resultMessage("success")]));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+    void runtime.startTask(startInput);
+    await flushMicrotasks();
+    await runtime.sendMessage("task-1", "second");
+
+    const firstHook = (query as unknown as Mock).mock.calls[0][0].options.hooks.PreToolUse[0].hooks[0];
+    const result = await firstHook(preToolUse("Bash", { command: "git push origin main" }), "t", {
+      signal: new AbortController().signal,
+    });
+    expect(result).toEqual(ASK);
+  });
+
+  it("query() options.env carries none of the eight stripped keys, and still carries PATH", async () => {
+    for (const key of STRIPPED) vi.stubEnv(key, "leak");
+    (query as unknown as Mock).mockReturnValue(fakeQuery([initMessage("s"), resultMessage("success")]));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+    await runtime.startTask(startInput);
+
+    const env = (query as unknown as Mock).mock.calls[0][0].options.env as Record<string, string>;
+    expect(Object.keys(env).filter((k) => STRIPPED.includes(k))).toEqual([]);
+    expect(Object.keys(env).some((k) => k.toUpperCase() === "PATH")).toBe(true);
+  });
+});
