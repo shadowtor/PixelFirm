@@ -49,6 +49,46 @@ describe("classifySignal — CEO-04 narrow command/MCP set", () => {
     expect(classifySignal("Monitor", { ws: { url: "wss://example.com" }, description: "x", timeout_ms: 1 })).toBeNull();
   });
 
+  // WR-01 (06-REVIEW): equivalent spellings of the destructive ops.
+  it.each([
+    "rm -rf build",
+    "rm -fr build",
+    "rm -r -f build",
+    "rm -rfv build",
+    "rm --recursive --force build",
+    "rm -R -f build",
+    "Remove-Item -Recurse -Force build",
+    "git clean -fdx",
+    "git -C ../repo clean --force -d",
+  ])("destructive filesystem op: %s", (command) => {
+    expect(classifySignal("Bash", { command })?.reason).toBe(
+      "Bash command matched a CEO-gated pattern: destructive filesystem op",
+    );
+  });
+
+  it.each(["psql -c 'DROP SCHEMA public CASCADE'", "psql -c 'TRUNCATE users'", "psql -c 'drop table x'"])(
+    "destructive DB op: %s",
+    (command) => {
+      expect(classifySignal("Bash", { command })?.reason).toBe("Bash command matched a CEO-gated pattern: destructive DB op");
+    },
+  );
+
+  it.each(["git -C ../repo reset --hard HEAD~1", "git -C ../repo merge feature/x", "git -c core.x=y rebase main"])(
+    "git global options before the subcommand: %s",
+    (command) => {
+      expect(classifySignal("Bash", { command })?.reason).toBe(
+        "Bash command matched a CEO-gated pattern: merge/rebase/reset --hard",
+      );
+    },
+  );
+
+  it("near misses stay ungated", () => {
+    expect(classifySignal("Bash", { command: "rm -r build" })).toBeNull();
+    expect(classifySignal("Bash", { command: "rm -f a.txt" })).toBeNull();
+    expect(classifySignal("Bash", { command: "git clean -n" })).toBeNull();
+    expect(classifySignal("Bash", { command: "git log --grep merge" })).toBeNull();
+  });
+
   it("merge, rebase and reset --hard are gated; git status is not", () => {
     expect(classifySignal("Bash", { command: "git reset --hard HEAD~1" })?.reason).toBe(
       "Bash command matched a CEO-gated pattern: merge/rebase/reset --hard",
@@ -124,6 +164,11 @@ describe("classifySignal — CEO-04 gate-paths production-change set", () => {
     expect(classifySignal("Bash", { command: "echo x | tee -a infra/main.tf" })?.reason).toBe(WRITE);
     expect(classifySignal("Bash", { command: "cp .env.example .env" })?.reason).toBe(WRITE);
     expect(classifySignal("Bash", { command: "mv ci.yml .github/workflows/ci.yml" })?.reason).toBe(WRITE);
+    // WR-01: the PowerShell spellings of the same writes.
+    expect(classifySignal("PowerShell", { command: "Set-Content -Path .env -Value X=1" })?.kind).toBe("ceo_gated_tool");
+    expect(classifySignal("PowerShell", { command: "'x' | Out-File infra/main.tf" })?.kind).toBe("ceo_gated_tool");
+    expect(classifySignal("PowerShell", { command: "Copy-Item .env.example .env" })?.kind).toBe("ceo_gated_tool");
+    expect(classifySignal("PowerShell", { command: "Get-Content .env.example" })).toBeNull();
     expect(classifySignal("Bash", { command: "cat .env.example" })).toBeNull();
     expect(classifySignal("Bash", { command: "cat Dockerfile > /tmp/out.txt" })).toBeNull();
   });

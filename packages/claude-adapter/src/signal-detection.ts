@@ -46,6 +46,10 @@ const PRODUCTION_CONFIG_PATH = new RegExp(`(?:^|/)${CONFIG_FILE}$`, "i");
 const DEPLOY_HOOK_URL = /deploy|webhook|\/hooks?(?:[/?#]|$)/i;
 const DESTRUCTIVE_MCP_NAME = /deploy|delete|destroy|drop|remove|restart|stop|publish|push|merge/i;
 
+// `git` plus any global options (-C <dir>, -c <k=v>, --no-pager, ...) up to
+// the subcommand (06-REVIEW WR-01: `git -C dir reset --hard` spelling).
+const GIT = String.raw`\bgit(?:\s+-[Cc]\s+\S+|\s+--[\w-]+(?:=\S+)?)*\s+`;
+
 // Tested against the command with backslashes normalised to "/". Order only
 // decides which name a command reports; force-push stays first.
 const CEO_GATED_BASH_PATTERNS: { name: string; pattern: RegExp }[] = [
@@ -54,12 +58,25 @@ const CEO_GATED_BASH_PATTERNS: { name: string; pattern: RegExp }[] = [
   // docker build -f) — scope it to a push-shaped command by requiring
   // `push` to appear before the flag, same as the `--force` alternative.
   { name: "force-push", pattern: /\bforce\b.*push|push.*(--force|-f\b)/i },
-  { name: "destructive filesystem op", pattern: /\brm\s+-rf\b/i },
-  { name: "destructive DB op", pattern: /\bDROP\s+(TABLE|DATABASE)\b/i },
+  // 06-REVIEW WR-01: any spelling of a recursive forced delete (rm -fr,
+  // rm -r -f, rm --recursive --force, Remove-Item -Recurse -Force), and
+  // git clean -f, which deletes untracked files the same way.
+  {
+    name: "destructive filesystem op",
+    pattern: new RegExp(
+      String.raw`\b(?:rm|remove-item)\b(?=[^|;&]*\s-(?:\w*r|-recursive\b))(?=[^|;&]*\s-(?:\w*f|-force\b))|` +
+        String.raw`${GIT}clean\b[^|;&]*\s-(?:\w*f|-force\b)`,
+      "i",
+    ),
+  },
+  { name: "destructive DB op", pattern: /\bDROP\s+(TABLE|DATABASE|SCHEMA)\b|\bTRUNCATE\b/i },
   { name: "publish/deploy", pattern: /\bnpm\s+publish\b|\bdeploy\b/i },
   // On this stack a push to main deploys through Coolify.
   { name: "push to main/master", pattern: /\bgit\b[^|;&]*\bpush\b[^|;&]*\b(main|master)\b/i },
-  { name: "merge/rebase/reset --hard", pattern: /\bgit\s+(merge|rebase)\b|\bgit\s+reset\b[^|;&]*--hard\b/i },
+  {
+    name: "merge/rebase/reset --hard",
+    pattern: new RegExp(String.raw`${GIT}(?:merge|rebase)\b|${GIT}reset\b[^|;&]*--hard\b`, "i"),
+  },
   // Only an install that names a package: bare `pnpm install` / `npm ci`
   // reproduce the lockfile and change no dependency.
   {
@@ -70,7 +87,10 @@ const CEO_GATED_BASH_PATTERNS: { name: string; pattern: RegExp }[] = [
   {
     name: "production config write",
     pattern: new RegExp(
-      String.raw`(?:>>?|\btee\b[^|;&]*\s|\bsed\b[^|;&]*\s-\w*i\b[^|;&]*\s|\b(?:cp|mv)\b[^|;&]*\s)\s*['"]?(?:[^\s'";&|<>]*/)?` +
+      // cp/mv plus their PowerShell spellings (06-REVIEW WR-01).
+      String.raw`(?:>>?|\btee\b[^|;&]*\s|\bsed\b[^|;&]*\s-\w*i\b[^|;&]*\s|` +
+        String.raw`\b(?:cp|mv|copy-item|move-item|set-content|add-content|out-file|new-item)\b[^|;&]*\s)` +
+        String.raw`\s*['"]?(?:[^\s'";&|<>]*/)?` +
         CONFIG_FILE +
         String.raw`(?=$|[\s'";&|<>)])`,
       "i",
