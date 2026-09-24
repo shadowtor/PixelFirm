@@ -5,7 +5,7 @@
 // the worker's single-resolve broker makes the repeat harmless.
 import { randomUUID } from "node:crypto";
 import type { FastifyBaseLogger } from "fastify";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, sql } from "drizzle-orm";
 import { CompanyEventSchema, type CompanyEvent, type DecisionAction } from "event-schema";
 import { db } from "../db/client.js";
 import { events } from "../db/schema.js";
@@ -36,6 +36,26 @@ async function insertOnce(event: CompanyEvent): Promise<CompanyEvent | null> {
   return inserted.length > 0 ? event : null;
 }
 
+// 06-REVIEW WR-08: a task status (other than waiting/blocked) received after
+// the decision means the worker applied it and carried on; only its
+// ceo.decision_applied POST was lost. receivedAt is the control plane's own
+// clock on both rows, so worker clock skew cannot decide this.
+async function movedOnSince(taskId: string, decisionReceivedAt: Date): Promise<boolean> {
+  const [row] = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(
+      and(
+        eq(events.type, "task.status_changed"),
+        eq(events.taskId, taskId),
+        gt(events.receivedAt, decisionReceivedAt),
+        sql`${events.payload}->>'status' NOT IN ('waiting_for_review', 'blocked')`,
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
 /**
  * workerId is always the authenticated connection's identity, never a message
  * field, so a hello can only ever touch that worker's own requests. Never logs
@@ -57,7 +77,7 @@ export async function reconcileWorker(workerId: string, bootId: string, log: Fas
   if (requests.length === 0) return;
 
   const outcomes = await db
-    .select({ type: events.type, payload: events.payload })
+    .select({ type: events.type, payload: events.payload, receivedAt: events.receivedAt })
     .from(events)
     .where(
       and(
@@ -70,10 +90,13 @@ export async function reconcileWorker(workerId: string, bootId: string, log: Fas
     );
   const closed = new Set<string>();
   const made = new Map<string, DecisionPayload>();
+  const madeAt = new Map<string, Date>();
   for (const o of outcomes) {
     const p = o.payload as DecisionPayload;
-    if (o.type === "ceo.decision_made") made.set(p.decisionId, p);
-    else closed.add(p.decisionId);
+    if (o.type === "ceo.decision_made") {
+      made.set(p.decisionId, p);
+      madeAt.set(p.decisionId, o.receivedAt);
+    } else closed.add(p.decisionId);
   }
 
   let expired = 0;
@@ -83,6 +106,8 @@ export async function reconcileWorker(workerId: string, bootId: string, log: Fas
     if (closed.has(decisionId)) continue;
 
     if (workerBootId !== bootId) {
+      const decidedAt = madeAt.get(decisionId);
+      if (decidedAt && (await movedOnSince(taskId, decidedAt))) continue;
       const now = new Date().toISOString();
       const expiry = await insertOnce(
         CompanyEventSchema.parse({

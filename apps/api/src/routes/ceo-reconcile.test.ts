@@ -314,6 +314,46 @@ describe("hello reconcile (D-02, 06-04)", () => {
     );
   });
 
+  // WR-08 (06-REVIEW): only the decision_applied POST was lost; the worker had
+  // already moved the task on, so a restart must not rewrite that as expired.
+  it("a new bootId leaves a decided request alone once the task moved on after the decision", async () => {
+    const ws = await fakeWorker();
+    const { taskId, decisionId } = await openRequest(randomUUID());
+    expect((await postDecision(decisionId, { action: "approve" })).statusCode).toBe(202);
+    await sleep(20);
+    const running = await postEvent({
+      id: randomUUID(),
+      type: "task.status_changed",
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      companyId: "company-1",
+      taskId,
+      sourceAgentId: AGENT_ID,
+      visibility: "INTERNAL",
+      payload: { taskId, status: "completed" },
+    });
+    expect(running.statusCode).toBe(202);
+    // A request of W's own, undecided, so the hello provably ran before the assertion.
+    const own = await openRequest(randomUUID());
+
+    hello(ws, randomUUID());
+    await waitFor("W's own expiry", async () => (await rowsOfType("ceo.approval_expired", own.decisionId)).length > 0);
+    await sleep(200);
+
+    expect(await rowsOfType("ceo.approval_expired", decisionId)).toHaveLength(0);
+    expect(await blockedRows(taskId)).toHaveLength(0);
+  });
+
+  it("a new bootId still expires a decided request whose task never moved on", async () => {
+    const ws = await fakeWorker();
+    const { taskId, decisionId } = await openRequest(randomUUID());
+    expect((await postDecision(decisionId, { action: "approve" })).statusCode).toBe(202);
+
+    hello(ws, randomUUID());
+    await waitFor("expiry", async () => (await rowsOfType("ceo.approval_expired", decisionId)).length > 0);
+    await waitFor("blocked", async () => (await blockedRows(taskId)).length > 0);
+  });
+
   it("never touches a request stamped with another worker", async () => {
     const ws = await fakeWorker();
     const { taskId, decisionId } = await openRequest(randomUUID(), workerBToken);
