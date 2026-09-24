@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Separator } from "@/components/ui/separator";
 import { DiffView } from "./DiffView";
-import { actionLabel, detailMeta, safeLink } from "./view-model";
+import { actionLabel, detailMeta, safeLink, visibleText } from "./view-model";
 
 // 06-UI-SPEC "Detail pane, top to bottom". Every agent string is a React text child: no raw HTML,
 // no markdown (T-06-09-01). `questions` is section 3, supplied by the caller for AskUserQuestion items.
@@ -22,7 +22,7 @@ export function DetailPane({ item, now, questions }: { item: PendingItem; now: n
           </Badge>
         )}
         <pre className="max-h-[240px] overflow-auto rounded-md border bg-card p-4 font-mono text-xs leading-normal wrap-anywhere whitespace-pre-wrap">
-          {request.toolInput ?? ""}
+          {visibleText(request.toolInput ?? "")}
         </pre>
       </>,
     ]);

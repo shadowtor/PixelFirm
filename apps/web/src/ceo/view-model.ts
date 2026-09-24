@@ -67,6 +67,17 @@ export function safeLink(raw: string): SafeLink {
   return protocol === "http:" || protocol === "https:" ? { href: raw } : { text: raw };
 }
 
+// Bidi overrides/isolates, zero-width and other invisible format characters.
+const INVISIBLE = /[؜​-‏‪-‮⁠-⁩﻿]/g;
+
+/**
+ * WR-07 (06-REVIEW): shows invisible and bidi characters as \uXXXX escapes, so
+ * agent text (tool input above all) cannot render differently from what runs.
+ */
+export function visibleText(text: string): string {
+  return text.replace(INVISIBLE, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+}
+
 export type DiffChunk = { path: string; lines: string[] };
 
 /** One chunk per `diff --git` header, keyed by its b/ path. Lines before the first header are dropped. */

@@ -16,6 +16,7 @@ import {
   successToast,
   validateNote,
   safeLink,
+  visibleText,
   splitDiffByFile,
   truncationCopy,
   waitedLabel,
@@ -299,3 +300,13 @@ describe("historyBadge", () => {
     expect(historyBadge({ ...decidedAs("approve"), status: "expired", ...expired })).toEqual({ label: "Expired", tone: "expired" });
   });
 });
+
+// WR-07 (06-REVIEW): what the CEO reads must be what runs.
+describe("visibleText", () => {
+  it("escapes bidi controls and invisible characters, leaves everything else alone", () => {
+    expect(visibleText('{"command":"git push origin \u202Emain"}')).toBe('{"command":"git push origin \\u202emain"}');
+    expect(visibleText("a\u200Bb\uFEFFc\u2066d\u061Ce")).toBe("a\\u200bb\\ufeffc\\u2066d\\u061ce");
+    expect(visibleText("git push origin feature/é 🚀")).toBe("git push origin feature/é 🚀");
+  });
+});
+

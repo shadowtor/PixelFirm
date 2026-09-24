@@ -19,7 +19,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import type { DecisionBody, PostResult } from "./api";
-import { inProgressLabel, validateNote } from "./view-model";
+import { inProgressLabel, validateNote, visibleText } from "./view-model";
 
 type Props = {
   request: DecisionRequestView;
@@ -149,7 +149,7 @@ export function ActionBar({ request, note, onNoteChange, answers, answersReady, 
                       </Badge>
                     )}
                     <pre className="max-h-[240px] overflow-auto rounded-md border bg-background p-4 font-mono text-xs leading-normal wrap-anywhere whitespace-pre-wrap">
-                      {request.toolInput ?? ""}
+                      {visibleText(request.toolInput ?? "")}
                     </pre>
                   </div>
                   <AlertDialogFooter>
