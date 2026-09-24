@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 06
 current_phase_name: CEO Dashboard & Approval Workflow
 status: executing
-stopped_at: Completed 06-06-PLAN.md
-last_updated: "2026-09-24T05:19:16.942Z"
+stopped_at: Completed 06-04-PLAN.md
+last_updated: "2026-09-24T05:41:36.922Z"
 last_activity: 2026-09-24
 last_activity_desc: Phase 06 execution started
-state_head: d9ab7ff2037227890c1c0c439429f04d03a6015d
+state_head: c7759b0a66567ae5cae744b73d500fda55c61cbc
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 70
-  completed_plans: 64
+  completed_plans: 65
   percent: 63
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 06 (CEO Dashboard & Approval Workflow) — EXECUTING
-Plan: 9 of 14
+Plan: 10 of 14
 Status: Ready to execute
 Last activity: 2026-09-24 — Phase 06 execution started
 
@@ -125,6 +125,7 @@ Progress: [██████░░░░] 63%
 | Phase 06 P03 | 20min | 3 tasks | 9 files |
 | Phase 06 P05 | 14 min | 3 tasks | 11 files |
 | Phase 06 P06 | 14 min | 3 tasks | 9 files |
+| Phase 06 P04 | 18 min | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -268,6 +269,8 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-05: requireCeo verifies the Cloudflare Access JWT with jose 6.2.10 (header, then CF_Authorization cookie) and fails closed with a uniform 401 when CF_ACCESS_* or CEO_EMAIL is unset
 - [Phase 06]: 06-06: office /ws/browser drops PRIVATE events live and in snapshot (acceptsOffice); /ceo/ws carries ceo.* only, snapshot = foldDecisions of stored ceo.* rows
 - [Phase 06]: 06-06: foldDecisions keeps the newest 50 closed records plus every record of a still-pending thread; expired wins over decided but keeps the decision
+- [Phase 06]: 06-04: a restarted worker's open CEO requests expire (worker_restarted) and their tasks go blocked, never approved; the blocked event is written only by the hello whose expiry insert won the unique index
+- [Phase 06]: 06-04: CEO resume sends task.resume with stored ids only; the worker resumes only a worktree listed by listWorktrees(repoPath)
 
 ### Pending Todos
 
@@ -298,6 +301,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-24T05:19:16.590Z
-Stopped at: Completed 06-06-PLAN.md
+Last session: 2026-09-24T05:41:36.447Z
+Stopped at: Completed 06-04-PLAN.md
 Resume file: None
