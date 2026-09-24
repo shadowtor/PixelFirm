@@ -169,10 +169,11 @@ export function createClaudeCodeRuntime(options: {
     );
   }
 
-  // Posts a PRIVATE ceo.* event attributed to the task's agent.
-  async function postPrivate(taskId: string, type: string, payload: unknown): Promise<void> {
+  // Posts a PRIVATE ceo.* event attributed to the task's agent; resolves
+  // whether the control plane accepted it.
+  async function postPrivate(taskId: string, type: string, payload: unknown): Promise<boolean> {
     const sourceAgentId = tasks.get(taskId)?.agentId;
-    await postEvent(
+    return postEvent(
       options.controlPlaneUrl,
       options.token,
       buildEnvelope(options.companyId, type, payload, taskId, "PRIVATE", sourceAgentId),
@@ -319,7 +320,7 @@ export function createClaudeCodeRuntime(options: {
             await emitStatus(taskId, "waiting_for_review");
             // D-09: the control plane has no repo access, so the worker ships the diff.
             const diff = await readDiffOrNothing(record.worktreePath);
-            await postPrivate(
+            const accepted = await postPrivate(
               taskId,
               "ceo.approval_requested",
               buildDecisionRequest({
@@ -338,6 +339,12 @@ export function createClaudeCodeRuntime(options: {
                 taskTitle: record.title,
               }),
             );
+            // 06-REVIEW WR-04: a request the control plane did not store has
+            // no dashboard row and cannot be decided or expired; parking on it
+            // would hang the task with the watchdog suspended. Fail closed.
+            if (!accepted) {
+              return { behavior: "deny", message: "The CEO could not be reached; the tool call was not run." };
+            }
             // D-02: every way a parked call is lost ends in deny plus an
             // expiry record, never in ceo.decision_applied or "running".
             // postPrivate never throws, so an outage cannot change the deny.

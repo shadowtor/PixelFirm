@@ -19,7 +19,7 @@ vi.mock("./event-emitter.js", () => ({
       ...(sourceAgentId !== undefined ? { sourceAgentId } : {}),
     }),
   ),
-  postEvent: vi.fn(async () => {}),
+  postEvent: vi.fn(async () => true),
 }));
 vi.mock("gsd-adapter", () => ({ observeGsdState: vi.fn() }));
 vi.mock("git-adapter", () => ({ readDiff: vi.fn(async () => undefined) }));
@@ -1038,6 +1038,30 @@ describe("parked canUseTool (D-01)", () => {
     );
     expect(result).toEqual({ behavior: "deny", message: "No CEO decision was applied; the tool call was not run." });
     await finish();
+  });
+
+  // WR-04 (06-REVIEW): a request the control plane never accepted cannot be
+  // decided, so the call must not stay parked on it.
+  it("a ceo.approval_requested the control plane does not accept denies at once, never parks", async () => {
+    const { awaitDecision, canUseTool, finish } = await startParked();
+    (postEvent as unknown as Mock).mockImplementation(async (_url: string, _token: string, event: { type: string }) =>
+      event.type !== "ceo.approval_requested",
+    );
+    try {
+      const result = await canUseTool(
+        "Bash",
+        { command: "npm publish" },
+        { signal: new AbortController().signal, toolUseID: "t" },
+      );
+      expect(result).toEqual({ behavior: "deny", message: "The CEO could not be reached; the tool call was not run." });
+      for (const [, signal] of awaitDecision.mock.calls as unknown as [string, AbortSignal][]) {
+        expect(signal.aborted).toBe(true);
+      }
+      expect(posted().filter((e) => e.type === "ceo.decision_applied")).toHaveLength(0);
+    } finally {
+      (postEvent as unknown as Mock).mockImplementation(async () => true);
+      await finish();
+    }
   });
 
   it("AskUserQuestion: copies the parked questions into the PRIVATE request payload", async () => {

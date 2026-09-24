@@ -37,9 +37,10 @@ export function buildEnvelope(
 /**
  * POSTs an event to the control plane's /events ingestion path. Logs, never
  * throws, on any failure — a single failed emit must not crash ClaudeCodeRuntime's
- * startTask loop.
+ * startTask loop. Resolves whether the control plane accepted it (2xx), for
+ * the callers that must not carry on as if it had (06-REVIEW WR-04).
  */
-export async function postEvent(controlPlaneUrl: string, token: string, event: unknown): Promise<void> {
+export async function postEvent(controlPlaneUrl: string, token: string, event: unknown): Promise<boolean> {
   try {
     const response = await fetch(`${controlPlaneUrl}/events`, {
       method: "POST",
@@ -55,7 +56,9 @@ export async function postEvent(controlPlaneUrl: string, token: string, event: u
     if (!response.ok) {
       console.error(`postEvent: control plane responded ${response.status}`);
     }
+    return response.ok;
   } catch (err) {
     console.error("postEvent: failed to reach control plane", err);
+    return false;
   }
 }
