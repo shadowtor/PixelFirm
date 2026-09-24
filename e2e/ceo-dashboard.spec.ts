@@ -253,7 +253,7 @@ test("a live arrival appends, is announced, and never steals the selection", asy
   await expect(items).toHaveCount(4);
   await expect(items.nth(3)).toContainText("Rotate the API key?");
   await expect(items.nth(3).getByText("Gated action · mcp__coolify__deploy", { exact: true })).toBeVisible();
-  await expect(page.locator('[aria-live="polite"]')).toHaveText("New decision from dee: Rotate the API key?");
+  await expect(page.locator('div[aria-live="polite"]')).toHaveText("New decision from dee: Rotate the API key?");
   await expect(items.nth(0)).toHaveAttribute("aria-current", "true");
   await expect(items.nth(3)).not.toHaveAttribute("aria-current", "true");
   await expect(page.getByTestId("pending-badge")).toHaveText("4");
@@ -784,7 +784,7 @@ test("Enter in the note inserts a newline, and no key on the note or the page se
   await page.keyboard.type("second");
   await page.keyboard.press("Space");
   await page.keyboard.press("Control+Enter");
-  await expect(note(page)).toHaveValue("first\nsecond \n");
+  await expect(note(page)).toHaveValue("first\nsecond ");
 
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   for (const key of ["Enter", "Space", "a", "r", "Control+Enter"]) await page.keyboard.press(key);

@@ -138,26 +138,56 @@ export function allAnswered(questions: Question[], selections: Selections): bool
 
 export const NOTE_REQUIRED_ERROR = "Add a note. The agent needs to know what you want.";
 
-export function noteRequired(_action: DecisionAction): boolean {
-  return false;
+const NOTE_ACTIONS = new Set<DecisionAction>(["request_changes", "more_research", "discuss"]);
+
+/** D-07: the three note actions need a real note; Approve and Reject never do (mirrors the server's DecisionBodySchema). */
+export function noteRequired(action: DecisionAction): boolean {
+  return NOTE_ACTIONS.has(action);
 }
 
-export function validateNote(_action: DecisionAction, _note: string): string | null {
-  return null;
+export function validateNote(action: DecisionAction, note: string): string | null {
+  return noteRequired(action) && !note.trim() ? NOTE_REQUIRED_ERROR : null;
 }
 
-export function inProgressLabel(_action: DecisionAction, _question = false): string {
-  return "";
+const IN_PROGRESS: Record<DecisionAction, string> = {
+  approve: "Approving…",
+  reject: "Rejecting…",
+  request_changes: "Requesting changes…",
+  more_research: "Requesting research…",
+  discuss: "Sending to discuss…",
+};
+
+/** `question` is true for "Send answers" (approve on a clarifying question). */
+export function inProgressLabel(action: DecisionAction, question = false): string {
+  return action === "approve" && question ? "Sending…" : IN_PROGRESS[action];
 }
 
-export function successToast(_action: DecisionAction, _agentName: string, _question = false): string {
-  return "";
+export function successToast(action: DecisionAction, agentName: string, question = false): string {
+  if (action === "approve") return question ? `Answers sent to ${agentName}.` : `Approved. ${agentName} is continuing.`;
+  if (action === "reject") return `Rejected. ${agentName} has been told not to proceed.`;
+  return `Sent to ${agentName}. It will reply before asking again.`;
 }
 
-export function relativeTime(_iso: string, _now: number): string {
-  return "";
+const RELATIVE = new Intl.RelativeTimeFormat("en", { numeric: "always" });
+
+/** "just now" under a minute, else "12 minutes ago" / "3 hours ago" / "2 days ago". */
+export function relativeTime(iso: string, now: number): string {
+  const minutes = Math.floor((now - Date.parse(iso)) / MINUTE);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return RELATIVE.format(-minutes, "minute");
+  if (minutes < 60 * 24) return RELATIVE.format(-Math.floor(minutes / 60), "hour");
+  return RELATIVE.format(-Math.floor(minutes / (60 * 24)), "day");
 }
 
-export function noLongerPendingCopy(_record: DecisionRecord, _now: number): string {
-  return "";
+/**
+ * The detail pane's alert once a decision is no longer pending. A 409 can land before the live
+ * event that explains it, so an undecided record still gets the decided copy with a neutral decider.
+ */
+export function noLongerPendingCopy(record: DecisionRecord, now: number): string {
+  if (record.status === "expired") {
+    return "This request expired: the worker restarted before you decided. The task is blocked; resume it from History to ask again.";
+  }
+  const by = record.decision?.decidedBy ?? "another session";
+  const when = record.decision ? relativeTime(record.decision.decidedAt, now) : "just now";
+  return `This decision was already made by ${by} ${when}.`;
 }
