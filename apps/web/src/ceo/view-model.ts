@@ -1,5 +1,5 @@
 // Pure display helpers for the /ceo queue and detail heading. No React here.
-import type { DecisionRequestView } from "company-core";
+import type { DecisionRecord, DecisionRequestView } from "company-core";
 import type { DecisionAction } from "event-schema";
 
 const MINUTE = 60_000;
@@ -133,3 +133,31 @@ export function allAnswered(questions: Question[], selections: Selections): bool
   return questions.every((q) => q.question in answers);
 }
 
+
+// ---- action bar (06-10) ----
+
+export const NOTE_REQUIRED_ERROR = "Add a note. The agent needs to know what you want.";
+
+export function noteRequired(_action: DecisionAction): boolean {
+  return false;
+}
+
+export function validateNote(_action: DecisionAction, _note: string): string | null {
+  return null;
+}
+
+export function inProgressLabel(_action: DecisionAction, _question = false): string {
+  return "";
+}
+
+export function successToast(_action: DecisionAction, _agentName: string, _question = false): string {
+  return "";
+}
+
+export function relativeTime(_iso: string, _now: number): string {
+  return "";
+}
+
+export function noLongerPendingCopy(_record: DecisionRecord, _now: number): string {
+  return "";
+}

@@ -259,24 +259,29 @@ test("a live arrival appends, is announced, and never steals the selection", asy
   await expect(page.getByTestId("pending-badge")).toHaveText("4");
 });
 
-test("when the selected decision is decided elsewhere, the next item is selected", async ({ page }) => {
+test("when the selected decision is decided elsewhere, the detail says who decided it until the CEO moves on", async ({ page }) => {
   await fakeMe(page, { email: EMAIL, devBypass: false });
   const feed = await fakeFeed(page, (ws) => ws.send(snapshot(threeEvents())));
   await page.goto(`${BASE}/ceo`);
   const items = queue(page).getByRole("button");
   await expect(items).toHaveCount(3);
 
-  // Select the middle one, then decide it elsewhere: the next (third) item takes over.
+  // Select the middle one and type a note, then decide it elsewhere (06-10, UI-SPEC "Live updates").
   await items.nth(1).click();
   await expect(items.nth(1)).toHaveAttribute("aria-current", "true");
+  await page.getByLabel("Note to agent").fill("Blue, please");
   feed.ws().send(eventFrame(decided(2, "approve", minutesAgo(0))));
 
   await expect(items).toHaveCount(2);
-  await expect(items.nth(1)).toContainText("Pick a pricing tier, round two");
+  const detail = page.getByRole("region", { name: "Decision detail" });
+  await expect(detail.getByText("This decision was already made by ceo@pixelfirm.dev just now.", { exact: true })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Reject" })).toHaveCount(0);
+  await expect(page.getByLabel("Note to agent")).toHaveValue("Blue, please");
+
+  // Moving on is the CEO's click.
+  await items.nth(1).click();
   await expect(items.nth(1)).toHaveAttribute("aria-current", "true");
-  await expect(page.getByRole("region", { name: "Decision detail" }).getByRole("heading", { level: 2 })).toHaveText(
-    "Pick a pricing tier, round two",
-  );
+  await expect(detail.getByRole("heading", { level: 2 })).toHaveText("Pick a pricing tier, round two");
 });
 
 test("the queue column scrolls on its own while the header and tabs stay put", async ({ page }) => {
@@ -576,4 +581,226 @@ test("selections are kept per decision when switching queue items", async ({ pag
   await expect(detailOf(page).getByRole("heading", { level: 2 })).toHaveText("Pick the stack 1");
   await expect(qs.getByRole("radio", { name: /SQLite/ })).toBeChecked();
   await expect(qs.getByRole("checkbox", { name: /Billing/ })).toBeChecked();
+});
+
+// ---- 06-10 Task 1: the action bar (CEO-03) ----------------------------------------------------
+
+type Posted = { url: string; body: unknown; headers: Record<string, string> };
+type Reply = { status: number; json: object };
+
+/** Intercepts decision POSTs. `respond` may return a promise to hold the submit open. */
+async function fakeDecisions(page: Page, respond: () => Reply | Promise<Reply> = () => ({ status: 202, json: { accepted: true } })) {
+  const posts: Posted[] = [];
+  await page.route("**/ceo/api/decisions/*", async (route) => {
+    const req = route.request();
+    posts.push({ url: req.url(), body: req.postDataJSON(), headers: req.headers() });
+    await route.fulfill(await respond());
+  });
+  return posts;
+}
+
+const bar = (page: Page) => page.getByRole("region", { name: "Decision actions" });
+const note = (page: Page) => page.getByLabel("Note to agent");
+const FIVE = ["Approve", "Request changes", "More research", "Discuss", "Reject"];
+
+test("Request changes with an empty or whitespace note sends nothing and asks for a note", async ({ page }) => {
+  const posts = await fakeDecisions(page);
+  await showSnapshot(page, [gated(1)]);
+  const button = bar(page).getByRole("button", { name: "Request changes" });
+
+  await button.click();
+  await expect(note(page)).toBeFocused();
+  await expect(note(page)).toHaveAttribute("aria-invalid", "true");
+  await expect(bar(page).getByText("Add a note. The agent needs to know what you want.", { exact: true })).toBeVisible();
+  await note(page).fill("   ");
+  await button.click();
+  await expect(note(page)).toBeFocused();
+  expect(posts).toHaveLength(0);
+
+  await note(page).fill("Push to a new branch instead");
+  await expect(note(page)).not.toHaveAttribute("aria-invalid", "true");
+  await button.click();
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]!.url).toMatch(new RegExp(`/ceo/api/decisions/${uuid(1)}$`));
+  expect(posts[0]!.body).toEqual({ action: "request_changes", note: "Push to a new branch instead" });
+  expect(posts[0]!.headers["content-type"]).toBe("application/json");
+  expect(posts[0]!.headers["x-pixelfirm-csrf"]).toBe("1");
+});
+
+test("Approve on a gated call confirms against the exact call, with focus starting on Keep waiting", async ({ page }) => {
+  const posts = await fakeDecisions(page);
+  const input = JSON.stringify({ command: "git push --force origin main" });
+  await showSnapshot(page, [gated(1, { toolInput: input })]);
+  const approve = bar(page).getByRole("button", { name: "Approve" });
+
+  await approve.click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog.getByRole("heading", { name: "Approve this action?" })).toBeVisible();
+  await expect(dialog.getByText("ada will run exactly this call. Nothing else is approved.", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Bash", { exact: true })).toBeVisible();
+  expect(await dialog.locator("pre").textContent()).toBe(input);
+  await expect(page.locator(":focus")).toHaveAccessibleName("Keep waiting");
+
+  await dialog.getByRole("button", { name: "Keep waiting" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(approve).toBeFocused();
+  expect(posts).toHaveLength(0);
+
+  await approve.click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Approve and run" }).click();
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]!.body).toEqual({ action: "approve" });
+  expect(posts[0]!.headers["x-pixelfirm-csrf"]).toBe("1");
+});
+
+test("Send answers stays disabled until every question is answered, then posts the answers with no dialog", async ({ page }) => {
+  const posts = await fakeDecisions(page);
+  await showSnapshot(page, [question(1)]);
+  const send = bar(page).getByRole("button", { name: "Send answers" });
+  const qs = sectionOf(page, "Questions");
+  await expect(bar(page).getByRole("button", { name: "Approve" })).toHaveCount(0);
+
+  await expect(send).toBeDisabled();
+  await qs.getByText("SQLite", { exact: true }).click();
+  await expect(send).toBeDisabled();
+  await qs.getByText("Billing", { exact: true }).click();
+  await qs.getByText("Auth", { exact: true }).click();
+  await expect(send).toBeEnabled();
+
+  await send.click();
+  await expect.poll(() => posts.length).toBe(1);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  expect(posts[0]!.body).toEqual({ action: "approve", answers: { "Which DB?": "SQLite", "Which features?": "Auth, Billing" } });
+  expect(posts[0]!.headers["x-pixelfirm-csrf"]).toBe("1");
+  await expect(page.getByText("Answers sent to cy.", { exact: true })).toBeVisible();
+});
+
+test("Reject posts at once with no dialog, carrying a typed note", async ({ page }) => {
+  const posts = await fakeDecisions(page);
+  await showSnapshot(page, [gated(1)]);
+  await note(page).fill("Never force-push main");
+  await bar(page).getByRole("button", { name: "Reject" }).click();
+  await expect.poll(() => posts.length).toBe(1);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  expect(posts[0]!.body).toEqual({ action: "reject", note: "Never force-push main" });
+});
+
+test("while submitting everything is disabled; success removes the item, selects the next and toasts", async ({ page }) => {
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  const posts = await fakeDecisions(page, async () => {
+    await held;
+    return { status: 202, json: { accepted: true } };
+  });
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  const feed = await fakeFeed(page, (ws) => ws.send(snapshot(threeEvents())));
+  await page.goto(`${BASE}/ceo`);
+  const items = queue(page).getByRole("button");
+  await expect(items).toHaveCount(3);
+
+  await bar(page).getByRole("button", { name: "Reject" }).click();
+  await expect(bar(page).getByRole("button", { name: "Rejecting…" })).toBeDisabled();
+  for (const name of FIVE.filter((n) => n !== "Reject")) await expect(bar(page).getByRole("button", { name })).toBeDisabled();
+  await expect(note(page)).toBeDisabled();
+  await expect(items).toHaveCount(3);
+
+  release();
+  await expect(items).toHaveCount(2);
+  await expect(items.nth(0)).toContainText("Which colour for the CTA?");
+  await expect(items.nth(0)).toHaveAttribute("aria-current", "true");
+  await expect(page.getByText("Rejected. ada has been told not to proceed.", { exact: true })).toBeVisible();
+  expect(posts).toHaveLength(1);
+
+  // The live decision_made for our own decision changes nothing further.
+  feed.ws().send(eventFrame(decided(1, "approve", minutesAgo(0))));
+  await expect(items).toHaveCount(2);
+  await expect(items.nth(0)).toHaveAttribute("aria-current", "true");
+  await expect(page.getByText("This decision was already made", { exact: false })).toHaveCount(0);
+});
+
+test("a 503 keeps the item and the note, re-enables the buttons and shows the submit error", async ({ page }) => {
+  await fakeDecisions(page, () => ({ status: 503, json: { error: "worker offline" } }));
+  await showSnapshot(page, [gated(1), gated(2)]);
+  await note(page).fill("Try the staging remote");
+  await bar(page).getByRole("button", { name: "More research" }).click();
+
+  await expect(
+    bar(page).getByText("Decision not sent: worker offline. The agent is still waiting. Try again.", { exact: true }),
+  ).toBeVisible();
+  await expect(note(page)).toHaveValue("Try the staging remote");
+  await expect(note(page)).toBeEnabled();
+  for (const name of FIVE) await expect(bar(page).getByRole("button", { name })).toBeEnabled();
+  await expect(queue(page).getByRole("button")).toHaveCount(2);
+});
+
+test("a 409 shows the no-longer-pending alert and removes the action buttons for that item", async ({ page }) => {
+  await fakeDecisions(page, () => ({ status: 409, json: { error: "already decided" } }));
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  const feed = await fakeFeed(page, (ws) => ws.send(snapshot([gated(1), gated(2)])));
+  await page.goto(`${BASE}/ceo`);
+  await bar(page).getByRole("button", { name: "Reject" }).click();
+
+  const detail = detailOf(page);
+  await expect(detail.getByText(/^This decision was already made by /)).toBeVisible();
+  for (const name of FIVE) await expect(detail.getByRole("button", { name })).toHaveCount(0);
+
+  // The live event behind the 409 fills in who decided it; the item stays open until the CEO moves on.
+  feed.ws().send(eventFrame(decided(1, "approve", minutesAgo(0))));
+  await expect(detail.getByText("This decision was already made by ceo@pixelfirm.dev just now.", { exact: true })).toBeVisible();
+  await expect(detail.getByRole("heading", { level: 2 })).toHaveText("Gated 1");
+});
+
+test("a live ceo.approval_expired for the open item shows the expired copy and removes the buttons", async ({ page }) => {
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  const feed = await fakeFeed(page, (ws) => ws.send(snapshot([gated(1)])));
+  await page.goto(`${BASE}/ceo`);
+  await expect(bar(page).getByRole("button", { name: "Reject" })).toBeVisible();
+  await note(page).fill("Hold on");
+
+  feed.ws().send(
+    eventFrame({
+      ...envelope(minutesAgo(0)),
+      type: "ceo.approval_expired",
+      payload: { decisionId: uuid(1), taskId: "task-1", reason: "worker_restarted" },
+    }),
+  );
+  const detail = detailOf(page);
+  await expect(
+    detail.getByText(
+      "This request expired: the worker restarted before you decided. The task is blocked; resume it from History to ask again.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  for (const name of FIVE) await expect(detail.getByRole("button", { name })).toHaveCount(0);
+  await expect(note(page)).toHaveValue("Hold on");
+});
+
+test("Enter in the note inserts a newline, and no key on the note or the page sends a decision", async ({ page }) => {
+  const posts = await fakeDecisions(page);
+  await showSnapshot(page, [gated(1)]);
+  await note(page).click();
+  await page.keyboard.type("first");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("second");
+  await page.keyboard.press("Space");
+  await page.keyboard.press("Control+Enter");
+  await expect(note(page)).toHaveValue("first\nsecond \n");
+
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  for (const key of ["Enter", "Space", "a", "r", "Control+Enter"]) await page.keyboard.press(key);
+  await page.waitForTimeout(300);
+  expect(posts).toHaveLength(0);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+});
+
+test("after the live feed drops, the status reads Reconnecting and the action buttons stay enabled", async ({ page }) => {
+  let connects = 0;
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  const feed = await fakeFeed(page, (ws) => (connects++ === 0 ? ws.send(snapshot([gated(1)])) : void ws.close()));
+  await page.goto(`${BASE}/ceo`);
+  await expect(bar(page).getByRole("button", { name: "Approve" })).toBeEnabled();
+  await feed.ws().close();
+  await expect(page.getByRole("banner").getByText("Reconnecting", { exact: true })).toBeVisible();
+  for (const name of FIVE) await expect(bar(page).getByRole("button", { name })).toBeEnabled();
+  await expect(note(page)).toBeEnabled();
 });

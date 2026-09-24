@@ -6,8 +6,14 @@ import {
   diffLineKind,
   documentTitle,
   isLongWait,
+  inProgressLabel,
   kindLabel,
   nextSelection,
+  noLongerPendingCopy,
+  noteRequired,
+  relativeTime,
+  successToast,
+  validateNote,
   safeLink,
   splitDiffByFile,
   truncationCopy,
@@ -201,5 +207,71 @@ describe("buildAnswers", () => {
     expect(allAnswered(QUESTIONS, { "Which DB?": { labels: [], other: "   " }, "Which features?": { labels: ["Auth"] } })).toBe(false);
     expect(buildAnswers(QUESTIONS, { "Which DB?": { labels: [], other: "   " } })).toEqual({});
     expect(allAnswered(QUESTIONS, {})).toBe(false);
+  });
+});
+
+describe("noteRequired / validateNote", () => {
+  it("requires a note for request changes, more research and discuss only", () => {
+    expect(noteRequired("request_changes")).toBe(true);
+    expect(noteRequired("more_research")).toBe(true);
+    expect(noteRequired("discuss")).toBe(true);
+    expect(noteRequired("approve")).toBe(false);
+    expect(noteRequired("reject")).toBe(false);
+  });
+
+  it("returns the required-note copy for an empty or whitespace note on a note action", () => {
+    const error = "Add a note. The agent needs to know what you want.";
+    expect(validateNote("request_changes", "   ")).toBe(error);
+    expect(validateNote("discuss", "")).toBe(error);
+    expect(validateNote("more_research", "Check the logs")).toBeNull();
+    expect(validateNote("approve", "   ")).toBeNull();
+    expect(validateNote("reject", "")).toBeNull();
+  });
+});
+
+describe("inProgressLabel / successToast", () => {
+  it("uses the UI-SPEC in-progress labels", () => {
+    expect(inProgressLabel("approve")).toBe("Approving…");
+    expect(inProgressLabel("approve", true)).toBe("Sending…");
+    expect(inProgressLabel("reject")).toBe("Rejecting…");
+    expect(inProgressLabel("request_changes")).toBe("Requesting changes…");
+    expect(inProgressLabel("more_research")).toBe("Requesting research…");
+    expect(inProgressLabel("discuss")).toBe("Sending to discuss…");
+  });
+
+  it("uses the UI-SPEC success toasts", () => {
+    expect(successToast("approve", "ada")).toBe("Approved. ada is continuing.");
+    expect(successToast("approve", "cy", true)).toBe("Answers sent to cy.");
+    expect(successToast("reject", "ada")).toBe("Rejected. ada has been told not to proceed.");
+    for (const action of ["request_changes", "more_research", "discuss"] as const) {
+      expect(successToast(action, "bob")).toBe("Sent to bob. It will reply before asking again.");
+    }
+  });
+});
+
+describe("relativeTime / noLongerPendingCopy", () => {
+  it("says just now under a minute, then Intl relative time", () => {
+    expect(relativeTime(ago(0.5), NOW)).toBe("just now");
+    expect(relativeTime(ago(12), NOW)).toBe("12 minutes ago");
+    expect(relativeTime(ago(180), NOW)).toBe("3 hours ago");
+    expect(relativeTime(ago(60 * 50), NOW)).toBe("2 days ago");
+  });
+
+  const request = { decisionId: "d", threadId: "d", taskId: "t", reason: "r", requestedAt: ago(30) };
+
+  it("names the decider and when for a decision made elsewhere", () => {
+    const record = {
+      request,
+      status: "decided" as const,
+      decision: { action: "approve" as const, decidedBy: "ceo@pixelfirm.dev", decidedAt: ago(12) },
+    };
+    expect(noLongerPendingCopy(record, NOW)).toBe("This decision was already made by ceo@pixelfirm.dev 12 minutes ago.");
+  });
+
+  it("uses the expired copy when the request expired", () => {
+    const record = { request, status: "expired" as const, expired: { reason: "worker_restarted" as const, expiredAt: ago(1) } };
+    expect(noLongerPendingCopy(record, NOW)).toBe(
+      "This request expired: the worker restarted before you decided. The task is blocked; resume it from History to ask again.",
+    );
   });
 });
