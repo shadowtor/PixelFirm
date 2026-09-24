@@ -5,6 +5,7 @@ process.env.CREDENTIAL_PEPPER = "test-pepper";
 process.env.BOOTSTRAP_SECRET = "test-bootstrap";
 process.env.BROWSER_ACCESS_TOKEN = "test-browser-access-token";
 process.env.CEO_DEV_AUTH_BYPASS = "1";
+process.env.CEO_ALLOWED_ORIGINS = "http://localhost:5173";
 
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -109,18 +110,22 @@ const DEV_CEO = "dev-bypass@pixelfirm.invalid";
 function postDecision(
   decisionId: string,
   body: unknown,
-  opts: { remoteAddress?: string; headers?: Record<string, string> } = {},
+  opts: { remoteAddress?: string; headers?: Record<string, string>; omit?: string[] } = {},
 ) {
+  // Every positive-path request carries the full D-12 set: allowlisted Origin,
+  // X-PixelFirm-CSRF: 1 and a JSON content-type.
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    origin: "http://localhost:5173",
+    "x-pixelfirm-csrf": "1",
+    ...opts.headers,
+  };
+  for (const key of opts.omit ?? []) delete headers[key];
   return server.inject({
     method: "POST",
     url: `/ceo/api/decisions/${decisionId}`,
     remoteAddress: opts.remoteAddress,
-    headers: {
-      "content-type": "application/json",
-      origin: "http://localhost:5173",
-      "x-pixelfirm-csrf": "1",
-      ...opts.headers,
-    },
+    headers,
     payload: typeof body === "string" ? body : JSON.stringify(body),
   });
 }
@@ -132,9 +137,14 @@ async function decisionRows(decisionId: string) {
     .where(and(eq(events.type, "ceo.decision_made"), sql`${events.payload}->>'decisionId' = ${decisionId}`));
 }
 
-/** A connected fake worker that has posted a PRIVATE ceo.approval_requested through /events. */
+// One fake worker socket shared by the decision-route tests: /ws is rate
+// limited to 20 upgrades a minute per IP, so reconnect only when closed.
+let sharedWorker: WebSocket | undefined;
+
+/** The connected fake worker, after it has posted a PRIVATE ceo.approval_requested through /events. */
 async function openRequest(kind: "ceo_gated_tool" | "clarifying_question" = "ceo_gated_tool") {
-  const ws = await connectWorker();
+  if (sharedWorker?.readyState !== WebSocket.OPEN) sharedWorker = await connectWorker();
+  const ws = sharedWorker;
   const event = approvalRequest();
   event.payload.kind = kind;
   const res = await postEvent(event);
@@ -347,7 +357,6 @@ describe("POST /ceo/api/decisions/:decisionId", () => {
     expect(rows[0].visibility).toBe("PRIVATE");
     expect(rows[0].taskId).toBe(taskId);
     expect(rows[0].payload).toEqual({ decisionId, taskId, action: "approve", decidedBy: DEV_CEO });
-    await closeAndWait(ws);
   });
 
   it("returns 404 for an unknown decisionId", async () => {
@@ -366,7 +375,6 @@ describe("POST /ceo/api/decisions/:decisionId", () => {
     const res = await postDecision(decisionId, { action: "yolo" });
     expect(res.statusCode).toBe(400);
     expect(await decisionRows(decisionId)).toHaveLength(0);
-    await closeAndWait(ws);
   });
 
   it("returns 503 and appends nothing when the owning worker is offline", async () => {
@@ -394,7 +402,6 @@ describe("POST /ceo/api/decisions/:decisionId", () => {
     expect(forwarded.statusCode).toBe(401);
     expect(forwarded.json()).toEqual({ error: "unauthorized" });
     expect(await decisionRows(decisionId)).toHaveLength(0);
-    await closeAndWait(ws);
   });
 
   it("refuses a loopback request with 401 when the dev bypass is off", async () => {
@@ -402,7 +409,6 @@ describe("POST /ceo/api/decisions/:decisionId", () => {
     const res = await withBypassOff(() => postDecision(decisionId, { action: "approve" }));
     expect(res.statusCode).toBe(401);
     expect(res.json()).toEqual({ error: "unauthorized" });
-    await closeAndWait(ws);
   });
 
   it("never accepts BROWSER_ACCESS_TOKEN as CEO auth (401)", async () => {
@@ -415,7 +421,6 @@ describe("POST /ceo/api/decisions/:decisionId", () => {
     expect(remoteRes.statusCode).toBe(401);
     expect(remoteRes.json()).toEqual({ error: "unauthorized" });
     expect(await decisionRows(decisionId)).toHaveLength(0);
-    await closeAndWait(ws);
   });
 });
 
@@ -440,5 +445,119 @@ describe("parseEnv CEO_DEV_AUTH_BYPASS guard", () => {
     const parseEnv = envMod.parseEnv as (src: Record<string, string | undefined>) => { CEO_DEV_AUTH_BYPASS: boolean };
     expect(parseEnv({ ...base, CEO_DEV_AUTH_BYPASS: "1" }).CEO_DEV_AUTH_BYPASS).toBe(true);
     expect(parseEnv(base).CEO_DEV_AUTH_BYPASS).toBe(false);
+  });
+});
+
+async function countAllDecisions() {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(events)
+    .where(eq(events.type, "ceo.decision_made"));
+  return row.n;
+}
+
+describe("D-12 CSRF guard on /ceo/api", () => {
+  const cases: [string, Parameters<typeof postDecision>[2]][] = [
+    ["a missing X-PixelFirm-CSRF header", { omit: ["x-pixelfirm-csrf"] }],
+    ["a foreign Origin", { headers: { origin: "https://evil.example" } }],
+    ["no Origin", { omit: ["origin"] }],
+    ["content-type text/plain", { headers: { "content-type": "text/plain" } }],
+  ];
+
+  for (const [label, opts] of cases) {
+    it(`refuses ${label} with 403 and appends nothing`, async () => {
+      const { ws, decisionId } = await openRequest();
+      const before = await countAllDecisions();
+      const res = await postDecision(decisionId, { action: "approve" }, opts);
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ error: "forbidden" });
+      expect(await countAllDecisions()).toBe(before);
+    });
+  }
+
+  it("refuses an unknown decisionId without the header with 403, not 404 (guard runs before any database work)", async () => {
+    const res = await postDecision(randomUUID(), { action: "approve" }, { omit: ["x-pixelfirm-csrf"] });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: "forbidden" });
+  });
+});
+
+describe("D-07 per-action note rules and question answers", () => {
+  for (const action of ["request_changes", "more_research", "discuss"] as const) {
+    it(`refuses ${action} with a missing, empty or whitespace-only note (400, nothing appended)`, async () => {
+      const { ws, decisionId } = await openRequest();
+      const before = await countAllDecisions();
+      for (const body of [{ action }, { action, note: "" }, { action, note: "   " }]) {
+        const res = await postDecision(decisionId, body);
+        expect(res.statusCode).toBe(400);
+      }
+      expect(await countAllDecisions()).toBe(before);
+      expect(await decisionRows(decisionId)).toHaveLength(0);
+    });
+  }
+
+  it("accepts request_changes with a real note and sends it to the worker", async () => {
+    const { ws, decisionId, taskId } = await openRequest();
+    const received = nextMessage(ws);
+    const res = await postDecision(decisionId, { action: "request_changes", note: "use a feature branch" });
+    expect(res.statusCode).toBe(202);
+    expect(WorkerDownlinkSchema.parse(await received)).toEqual({
+      type: "decision",
+      decisionId,
+      action: "request_changes",
+      note: "use a feature branch",
+    });
+    const [row] = await decisionRows(decisionId);
+    expect(row.payload).toEqual({
+      decisionId,
+      taskId,
+      action: "request_changes",
+      note: "use a feature branch",
+      decidedBy: DEV_CEO,
+    });
+  });
+
+  it("records a reject with no note as action + decidedBy and no note key", async () => {
+    const { ws, decisionId, taskId } = await openRequest();
+    const res = await postDecision(decisionId, { action: "reject" });
+    expect(res.statusCode).toBe(202);
+    const [row] = await decisionRows(decisionId);
+    const payload = row.payload as Record<string, unknown>;
+    expect(payload).toEqual({ decisionId, taskId, action: "reject", decidedBy: DEV_CEO });
+    expect(Object.keys(payload)).not.toContain("note");
+  });
+
+  it("refuses approve on a clarifying_question without non-empty answers (400 answers required)", async () => {
+    const { ws, decisionId } = await openRequest("clarifying_question");
+    for (const body of [{ action: "approve" }, { action: "approve", answers: {} }]) {
+      const res = await postDecision(decisionId, body);
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toEqual({ error: "answers required" });
+    }
+    expect(await decisionRows(decisionId)).toHaveLength(0);
+  });
+
+  it("accepts approve on a clarifying_question with answers and forwards them", async () => {
+    const { ws, decisionId } = await openRequest("clarifying_question");
+    const received = nextMessage(ws);
+    const answers = { "Which database?": "Postgres" };
+    const res = await postDecision(decisionId, { action: "approve", answers });
+    expect(res.statusCode).toBe(202);
+    expect(WorkerDownlinkSchema.parse(await received)).toEqual({ type: "decision", decisionId, action: "approve", answers });
+    const [row] = await decisionRows(decisionId);
+    expect((row.payload as { answers?: unknown }).answers).toEqual(answers);
+  });
+
+  it("drops answers sent with a ceo_gated_tool request before the insert and the downlink", async () => {
+    const { ws, decisionId, taskId } = await openRequest("ceo_gated_tool");
+    const received = nextMessage(ws);
+    const res = await postDecision(decisionId, { action: "approve", answers: { q: "a" } });
+    expect(res.statusCode).toBe(202);
+    const frame = WorkerDownlinkSchema.parse(await received);
+    expect(frame).toEqual({ type: "decision", decisionId, action: "approve" });
+    expect(Object.keys(frame)).not.toContain("answers");
+    const [row] = await decisionRows(decisionId);
+    expect(row.payload).toEqual({ decisionId, taskId, action: "approve", decidedBy: DEV_CEO });
+    expect(Object.keys(row.payload as object)).not.toContain("answers");
   });
 });
