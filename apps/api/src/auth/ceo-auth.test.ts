@@ -263,6 +263,24 @@ describe("requireCeo with the Access verifier (bypass off)", () => {
     expect(await decisionRows(decisionId)).toHaveLength(0);
   });
 
+  it("GET /ceo/api/me returns the verified email and devBypass false", async () => {
+    setVerifier(makeVerifier());
+    const res = await server.inject({
+      method: "GET",
+      url: "/ceo/api/me",
+      headers: { "cf-access-jwt-assertion": await sign({ email: "ceo@example.com" }) },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ email: "ceo@example.com", devBypass: false });
+  });
+
+  it("GET /ceo/api/me without a token is 401", async () => {
+    setVerifier(makeVerifier());
+    const res = await server.inject({ method: "GET", url: "/ceo/api/me" });
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: "unauthorized" });
+  });
+
   it("fails closed with 401 on every /ceo/api request when no Access settings are configured", async () => {
     setVerifier(null);
     const decisionId = await openRequest();
@@ -270,5 +288,11 @@ describe("requireCeo with the Access verifier (bypass off)", () => {
     expect(res.statusCode).toBe(401);
     expect(res.json()).toEqual({ error: "unauthorized" });
     expect(await decisionRows(decisionId)).toHaveLength(0);
+    const me = await server.inject({
+      method: "GET",
+      url: "/ceo/api/me",
+      headers: { "cf-access-jwt-assertion": await sign({ email: "ceo@example.com" }) },
+    });
+    expect(me.statusCode).toBe(401);
   });
 });

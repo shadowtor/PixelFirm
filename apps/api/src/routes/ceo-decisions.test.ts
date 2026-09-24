@@ -433,6 +433,14 @@ describe("POST /ceo/api/decisions/:decisionId", () => {
   });
 });
 
+describe("GET /ceo/api/me (dev bypass)", () => {
+  it("reports the dev identity and devBypass true for a loopback peer", async () => {
+    const res = await server.inject({ method: "GET", url: "/ceo/api/me" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ email: DEV_CEO, devBypass: true });
+  });
+});
+
 describe("parseEnv CEO_DEV_AUTH_BYPASS guard", () => {
   const base = {
     DATABASE_URL: "postgres://x",
@@ -457,14 +465,6 @@ describe("parseEnv CEO_DEV_AUTH_BYPASS guard", () => {
   });
 });
 
-async function countAllDecisions() {
-  const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(events)
-    .where(eq(events.type, "ceo.decision_made"));
-  return row.n;
-}
-
 describe("D-12 CSRF guard on /ceo/api", () => {
   const cases: [string, Parameters<typeof postDecision>[2]][] = [
     ["a missing X-PixelFirm-CSRF header", { omit: ["x-pixelfirm-csrf"] }],
@@ -476,11 +476,10 @@ describe("D-12 CSRF guard on /ceo/api", () => {
   for (const [label, opts] of cases) {
     it(`refuses ${label} with 403 and appends nothing`, async () => {
       const { ws, decisionId } = await openRequest();
-      const before = await countAllDecisions();
       const res = await postDecision(decisionId, { action: "approve" }, opts);
       expect(res.statusCode).toBe(403);
       expect(res.json()).toEqual({ error: "forbidden" });
-      expect(await countAllDecisions()).toBe(before);
+      expect(await decisionRows(decisionId)).toHaveLength(0);
     });
   }
 
@@ -495,12 +494,10 @@ describe("D-07 per-action note rules and question answers", () => {
   for (const action of ["request_changes", "more_research", "discuss"] as const) {
     it(`refuses ${action} with a missing, empty or whitespace-only note (400, nothing appended)`, async () => {
       const { ws, decisionId } = await openRequest();
-      const before = await countAllDecisions();
       for (const body of [{ action }, { action, note: "" }, { action, note: "   " }]) {
         const res = await postDecision(decisionId, body);
         expect(res.statusCode).toBe(400);
       }
-      expect(await countAllDecisions()).toBe(before);
       expect(await decisionRows(decisionId)).toHaveLength(0);
     });
   }

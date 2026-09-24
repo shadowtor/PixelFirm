@@ -33,6 +33,15 @@ const ParamsSchema = z.object({ decisionId: z.string().uuid() });
 type RequestPayload = { taskId: string; workerId?: string; kind?: string };
 
 export async function registerCeoRoute(fastify: FastifyInstance) {
+  // Who the dashboard is signed in as (header, dev-bypass banner), and a way
+  // to observe 401 that a failed WebSocket upgrade hides in browsers. No CSRF
+  // guard: a same-origin GET may carry no Origin, and it changes nothing.
+  fastify.get(
+    "/ceo/api/me",
+    { preValidation: requireCeo, config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (request) => ({ email: request.ceoEmail, devBypass: request.ceoDevBypass === true }),
+  );
+
   fastify.post(
     "/ceo/api/decisions/:decisionId",
     {

@@ -19,7 +19,15 @@ import { registerCeoRoute } from "./routes/ceo.js";
 // header) in this file.
 export function buildServer() {
   const fastify = Fastify({
-    logger: { redact: ["req.headers.authorization", "req.headers['x-bootstrap-secret']"] },
+    // The Access JWT travels in a header and in the CF_Authorization cookie.
+    logger: {
+      redact: [
+        "req.headers.authorization",
+        "req.headers['x-bootstrap-secret']",
+        "req.headers['cf-access-jwt-assertion']",
+        "req.headers.cookie",
+      ],
+    },
     // Deployed behind Coolify's Traefik reverse proxy: without this, every
     // request's `request.ip` resolves to Traefik's own IP, so per-route rate
     // limits collapse into one shared bucket across all real clients.
