@@ -1239,6 +1239,12 @@ describe("seated whenever resting on the own seat (05-25, G-05-P3)", () => {
     "a %s agent resting on its own seat is drawn seated, keeping its pose's own frame (G-05-P3, D-01)",
     (status) => {
       _resetForTests();
+      upsertCharacterFromAgent("rest", AgentStatus.IDLE);
+      // 06-07 (D-10): a waiting_for_ceo agent rests on its own seat only as
+      // queue overflow, so four others take the CEO room's slots first.
+      if (status === AgentStatus.WAITING_FOR_CEO) {
+        for (let i = 0; i < 4; i++) upsertCharacterFromAgent(`queued-${i}`, AgentStatus.WAITING_FOR_CEO);
+      }
       upsertCharacterFromAgent("rest", status);
       const ch = getCharacter("rest")!;
       expect(ch.tileCol).toBe(SEATS[0].col);

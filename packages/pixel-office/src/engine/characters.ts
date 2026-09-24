@@ -26,6 +26,7 @@ import {
   WALK_FRAME_DURATION_SEC,
   WALK_SPEED_PX_PER_SEC,
 } from "../constants.js";
+import { isCeoQueueTile } from "../layout/officeLayout.js";
 import { findPath } from "../layout/tileMap.js";
 import type { CharacterSprites } from "../sprites/spriteData.js";
 import type { Character, SpriteData, TileType as TileTypeVal } from "../types.js";
@@ -119,8 +120,10 @@ export function updateCharacter(ch: Character, dt: number): void {
         const center = tileCenter(ch.tileCol, ch.tileRow);
         ch.x = center.x;
         ch.y = center.y;
-        // 05-25: home (a seat or standing spot) faces the viewer.
-        if (ch.tileCol === ch.seatCol && ch.tileRow === ch.seatRow) ch.dir = Direction.DOWN;
+        // 05-25: home (a seat or standing spot) faces the viewer; so does a
+        // CEO queue slot (06-07), toward the viewer and the CEO desk.
+        const home = ch.tileCol === ch.seatCol && ch.tileRow === ch.seatRow;
+        if (home || isCeoQueueTile(ch.tileCol, ch.tileRow)) ch.dir = Direction.DOWN;
         ch.state = ch.restPose;
         ch.frame = 0;
         ch.frameTimer = 0;

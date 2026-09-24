@@ -45,6 +45,7 @@ export type { ActiveHandoff } from "./handoff/handoff-choreography.js";
 // and offsets.
 export { interactionSlotsFor } from "./layout/officeLayout.js";
 import { _resetHandoffsForTests, applyBubble, checkHandoffArrivals } from "./handoff/handoff-choreography.js";
+import { _resetCeoQueueForTests, releaseCeoSlot, syncCeoQueue } from "./ceo/ceo-queue.js";
 import { FURNITURE, OFFICE_TILE_MAP, SEATS, STANDING_SPOTS } from "./layout/officeLayout.js";
 import { resolveStatusVisual } from "./status/status-mapping.js";
 import type { Character } from "./types.js";
@@ -147,6 +148,7 @@ export function upsertCharacterFromAgent(agentId: string, status: AgentStatus, n
     // transition was dropped from this repo's trimmed types.ts (05-01); no
     // equivalent one-shot effect exists here to reuse, so despawning is a
     // direct removal from the floor (documented in status-mapping.ts).
+    releaseCeoSlot(agentId);
     characters.delete(agentId);
     return;
   }
@@ -169,6 +171,8 @@ export function upsertCharacterFromAgent(agentId: string, status: AgentStatus, n
   applyBubble(ch);
   ch.frameSpeedMultiplier = visual.frameSpeedMultiplier ?? 1;
   if (name) ch.name = name;
+  // 06-07 (CEO-01): after the glyph is applied, so it shows during the walk.
+  syncCeoQueue(ch, status);
 }
 
 /** Read-only accessor for the current Character behind an agentId, if any. */
@@ -213,6 +217,7 @@ export function _resetForTests(): void {
   characters.clear();
   taskTitles.clear();
   _resetHandoffsForTests();
+  _resetCeoQueueForTests();
   // The renderer's per-frame placement record is module state too: agent ids
   // are reused across tests, so a leftover rect would answer getDialogueBox
   // for a fresh character that has not been drawn yet (review CR-01).
