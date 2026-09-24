@@ -346,14 +346,14 @@ Plans:
   3. The CEO can Approve, Reject, Discuss, Request Changes, or Request More Research on any pending decision, and the choice actually controls the AgentRuntime, not just the on-screen animation.
   4. No CEO-gated operation (deploy, destructive op, production change, major dependency change, security/pricing/architecture/legal decision) is ever auto-approved because an agent requested it, and every approval/rejection is recorded in an audit log.
 
-**Plans:** 1/14 plans executed
+**Plans:** 2/14 plans executed
 
 Plans:
 
 **Wave 1**
 
 - [x] 06-01-PLAN.md — Tracer: a decision frame on the worker WS resolves the parked canUseTool into the exact SDK result (event + wire contract, decision mapping, parked runtime, worker broker)
-- [ ] 06-07-PLAN.md — Office CEO room: 24x13 grid, walled room, 4-slot ceoQueue, agents walk in and back (CEO-01)
+- [x] 06-07-PLAN.md — Office CEO room: 24x13 grid, walled room, 4-slot ceoQueue, agents walk in and back (CEO-01)
 - [ ] 06-08-PLAN.md — /ceo scaffold: shadcn + Tailwind + Kibo scoped to a lazy chunk, office-bundle build check *(not autonomous — package-legitimacy checkpoint)*
 
 **Wave 2** *(blocked on 06-01)*
@@ -431,6 +431,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
 | 5. Pixel Office Renderer | 41/41 | Complete    | 2026-09-23 |
-| 6. CEO Dashboard & Approval Workflow | 1/14 | In Progress|  |
+| 6. CEO Dashboard & Approval Workflow | 2/14 | In Progress|  |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
