@@ -142,6 +142,31 @@ describe("classifySignal — CEO-04 gate-paths production-change set", () => {
     expect(classifySignal("Edit", { file_path: "/repo/.ENV" })?.reason).toBe(CONFIG);
   });
 
+  // WR-03 (06-REVIEW): files that control the agent and git are gate-paths too.
+  it("agent and git control files are gated, from file tools and from the shell", () => {
+    expect(classifySignal("Write", { file_path: "/repo/.claude/settings.json" })?.reason).toBe(CONFIG);
+    expect(classifySignal("Edit", { file_path: "C:\\repo\\.claude\\settings.local.json" })?.reason).toBe(CONFIG);
+    expect(classifySignal("Write", { file_path: "/repo/.mcp.json" })?.reason).toBe(CONFIG);
+    expect(classifySignal("Write", { file_path: "/repo/.gitattributes" })?.reason).toBe(CONFIG);
+    expect(classifySignal("Edit", { file_path: "/repo/.git/config" })?.reason).toBe(CONFIG);
+    expect(classifySignal("Write", { file_path: "/repo/.git/hooks/pre-commit" })?.reason).toBe(CONFIG);
+    expect(classifySignal("Write", { file_path: "/repo/.git/info/attributes" })?.reason).toBe(CONFIG);
+    expect(classifySignal("Bash", { command: "echo '{}' > .claude/settings.local.json" })?.kind).toBe("ceo_gated_tool");
+    expect(classifySignal("Bash", { command: "cp hook.sh .git/hooks/pre-commit" })?.kind).toBe("ceo_gated_tool");
+    expect(classifySignal("Write", { file_path: "/repo/docs/claude.md" })).toBeNull();
+    expect(classifySignal("Write", { file_path: "/repo/src/git/config.ts" })).toBeNull();
+  });
+
+  it("git config writes are gated; reads are not", () => {
+    const WRITE = "Bash command matched a CEO-gated pattern: git config write";
+    expect(classifySignal("Bash", { command: "git config core.fsmonitor ./x.sh" })?.reason).toBe(WRITE);
+    expect(classifySignal("Bash", { command: "git -C ../repo config --local core.hooksPath hooks" })?.reason).toBe(WRITE);
+    expect(classifySignal("Bash", { command: "git config set filter.x.clean ./x" })?.reason).toBe(WRITE);
+    expect(classifySignal("Bash", { command: "git config --get user.email" })).toBeNull();
+    expect(classifySignal("Bash", { command: "git config --list" })).toBeNull();
+    expect(classifySignal("Bash", { command: "git config get user.email" })).toBeNull();
+  });
+
   it("ordinary file changes are not gated", () => {
     expect(classifySignal("Write", { file_path: "/repo/src/app.ts" })).toBeNull();
     expect(classifySignal("Edit", { file_path: "/repo/docs/env.md" })).toBeNull();

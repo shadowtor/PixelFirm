@@ -39,6 +39,12 @@ const PRODUCTION_CONFIG_PATTERNS = [
   String.raw`nginx${SEG}*\.conf`,
   String.raw`${SEG}*\.tf(?:vars)?`,
   String.raw`\.github/workflows/[^\s'";&|<>]+`,
+  // 06-REVIEW WR-03: files that control the agent (settings hooks/env, MCP
+  // servers) and git (config, hooks, attribute filters) on the next run.
+  String.raw`\.claude/[^\s'";&|<>]+`,
+  String.raw`\.mcp\.json`,
+  String.raw`\.gitattributes`,
+  String.raw`\.git/(?:hooks/[^\s'";&|<>]+|info/attributes|(?:worktrees/${SEG}+/)?config(?:\.worktree)?)`,
 ];
 const CONFIG_FILE = `(?:${PRODUCTION_CONFIG_PATTERNS.join("|")})`;
 const PRODUCTION_CONFIG_PATH = new RegExp(`(?:^|/)${CONFIG_FILE}$`, "i");
@@ -83,6 +89,12 @@ const CEO_GATED_BASH_PATTERNS: { name: string; pattern: RegExp }[] = [
     name: "dependency change",
     pattern:
       /\b(npm|pnpm|yarn|bun)\b[^|;&]*\s(add|remove|rm|uninstall|update|upgrade)\b|\b(npm|pnpm|bun)\s+(install|i)\s+(?:-\S+\s+)*[^\s-]|\bpip3?\s+install\b/i,
+  },
+  // 06-REVIEW WR-03: the shell spelling of a .git/config write. Anything but
+  // an explicit read (--get*, --list, -l, get, list) counts as a write.
+  {
+    name: "git config write",
+    pattern: new RegExp(String.raw`${GIT}config\b(?![^|;&]*\s(?:--get[\w-]*|--list|-l|get|list)(?=\s|$))`, "i"),
   },
   // 06-REVIEW WR-02: DEPLOY_HOOK_URL's rule for a fetch from the shell (a URL
   // containing "deploy" already matches publish/deploy above).
