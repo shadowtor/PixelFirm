@@ -1,7 +1,8 @@
 ---
 phase: "06"
 slug: "ceo-dashboard-approval-workflow"
-status: draft
+status: approved
+reviewed_at: "2026-09-24"
 shadcn_initialized: false
 preset: "none (shadcn init --base radix; theme tokens below overwrite the generated CSS variables)"
 created: "2026-09-24"
@@ -167,6 +168,8 @@ Everything else is neutral: Request changes, More research and Discuss are `outl
 
 **Kind badge:** `clarifying_question` shows the badge "Question". `ceo_gated_tool` shows "Gated action", followed by the matched pattern name from `classifySignal`'s reason in mono (for example `Gated action · git push`).
 
+**Focal point:** the detail title, then the "Runs on approve" block. The Approve button is the only accent fill on the page.
+
 **Detail pane, top to bottom** (sections separated by 24px and a `separator`):
 1. **Title** (Heading) plus a meta line (Label, muted): `{agent} · {task title} · {project} · waiting {duration} · #{decisionId first 8}`.
 2. **Requested action** (gated tool calls only). Tool name as a mono badge, then the tool input summary in a mono `<pre>` (max-height 240px). The section heading reads "Runs on approve". This is the exact parked call (D-01): the UI never shows an edited or paraphrased version of what approval allows.
@@ -309,7 +312,7 @@ Extends `05-UI-SPEC.md` without changing any of its locked rules: glyph format, 
 
 ## UI Considerations
 
-Applicable state considerations resolved: 11 covered, 2 backstop, 1 unresolved
+Applicable state considerations resolved: 15 covered, 2 backstop, 0 unresolved
 
 | Category | Element(s) | Status | Resolution / Reason |
 |----------|------------|--------|---------------------|
@@ -326,7 +329,10 @@ Applicable state considerations resolved: 11 covered, 2 backstop, 1 unresolved
 | zero-one-many | CEO room queue | ✅ covered | 0 waiting: empty room. 1–4: slots filled lowest-index first with no shuffling. 5+: extra agents wait seated at their own desk with the glyph |
 | privacy | office canvas during a pending decision | 🧪 backstop | Nothing but the pose and glyph reaches the canvas. Backstop: a live-harness check that decision title/context strings never appear in the office route's DOM or WS frames |
 | scope isolation | office route bundle | 🧪 backstop | The office route loads no Tailwind preflight or `ceo` chunk. Backstop: a build-manifest or Playwright assertion on `/` |
-| visual | waiting chairs (CONTEXT specifics) | ⚠ unresolved | Queued agents stand on the slots and no chair sprite is drawn, because MetroCity Interior has no decoded chair and a seated-without-desk pose would need new renderer work. The planner assumes standing. Adding a chair sprite is a later polish item |
+| loading / error | History tab | ✅ covered | While history loads, the table shows 5 `skeleton` rows. A load failure shows the same loading-error `alert` with Retry used by the queue |
+| overflow | Pending queue with many items | ✅ covered | The queue column scrolls on its own (`overflow-y:auto`) while the header, pending badge and tabs stay fixed. The detail pane scrolls separately |
+| long-text | question header, text and option label/description | ✅ covered | Question and option text wraps in full (`overflow-wrap:anywhere`) and is never truncated or clamped. The CEO must see the whole choice before answering |
+| visual | waiting slots (CONTEXT "waiting chairs") | ✅ covered | Queued agents stand on the 4 slots and no chair sprite is drawn (confirmed by CEO 2026-09-24). "Waiting-chair slots" is only the layout-data name. Adding a chair sprite is a later polish item |
 
 <!-- Status vocabulary (locked by probe-core projectTruths):
      ✅ covered   → a plain truth string lifted into must_haves.truths
