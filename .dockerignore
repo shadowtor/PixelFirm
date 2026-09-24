@@ -10,3 +10,12 @@ apps/api/drizzle/meta
 **/.env
 **/.env.*
 **/dist
+# 06-REVIEW WR-15: local agent config (settings.local.json can hold tokens in
+# permission rules) and local-only artefacts never go into an image.
+.claude
+**/.claude
+test-results
+playwright-report
+references
+Brief.md
+e2e
