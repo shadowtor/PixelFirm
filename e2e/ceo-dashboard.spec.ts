@@ -35,7 +35,8 @@ test.afterAll(() => {
 
 let seq = 0;
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+// Mid-minute, so a few ms of browser/Node clock skew never floors "30 min" to "29 min".
+const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000 - 30_000).toISOString();
 
 function envelope(occurredAt: string, sourceAgentId?: string) {
   return {
