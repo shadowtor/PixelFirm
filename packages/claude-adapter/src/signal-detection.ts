@@ -10,12 +10,12 @@
 // categories per the user's 06-02 decision ("A. - Narrow", "B. - gate-paths",
 // recorded verbatim in 06-02-SUMMARY.md): deploys, destructive filesystem/DB/
 // git operations, pushes to main/master, dependency changes, MCP tools with a
-// destructive word in the name, and production changes made by editing
+// destructive word in the name, every Coolify MCP call that is not a known
+// read (06-REVIEW IN-01), and production changes made by editing
 // deployment config, writing it from the shell, or fetching a deploy hook.
 // Signed-off residual (NOT gated, by that decision): a deploy through a
-// feature-branch push; an MCP tool whose name and `action` argument have none
-// of the destructive words (except coolify's service/application/env_vars,
-// gated on every non-read action — 06-REVIEW IN-01); a script or binary that deploys under an innocuous name (for
+// feature-branch push; a non-Coolify MCP tool whose name and `action` argument
+// have none of the destructive words; a script or binary that deploys under an innocuous name (for
 // example `node scripts/release.mjs`); indirect writes (for example a
 // `node -e` script editing a config file); and a deploy endpoint whose URL
 // contains none of deploy, webhook or /hook(s)/.
@@ -52,12 +52,62 @@ const PRODUCTION_CONFIG_PATH = new RegExp(`(?:^|/)${CONFIG_FILE}$`, "i");
 
 const DEPLOY_HOOK_URL = /deploy|webhook|\/hooks?(?:[/?#]|$)/i;
 const DESTRUCTIVE_MCP_NAME = /deploy|delete|destroy|drop|remove|restart|stop|publish|push|merge/i;
-// 06-REVIEW IN-01 (iteration 2, user decision "Gate them"): coolify-mcp tools
-// whose every action but these reads changes production (checked against
-// @masonator/coolify-mcp 3.5.1's action enums). An unknown or missing action
-// is gated.
-const COOLIFY_ACTION_TOOL = /^mcp__.*coolify.*__(?:service|application|env_vars)$/i;
-const COOLIFY_READ_ACTIONS = new Set(["list", "get", "list_containers"]);
+
+// 06-REVIEW IN-01 (iteration 3, user decision "reading is always fine, only
+// edit/delete"): a coolify-mcp call is ungated only when it is a known read;
+// everything else — including an unknown tool and a missing or unknown action —
+// is gated. Taken from @masonator/coolify-mcp 3.5.1's registered tools: the
+// readOnlyHint ones, and the read values of each other tool's `action` enum.
+const COOLIFY_TOOL = /^mcp__.*coolify.*__(.+)$/i;
+const COOLIFY_READ_TOOLS = new Set([
+  "get_version",
+  "get_mcp_version",
+  "list_instances",
+  "get_infrastructure_overview",
+  "diagnose_app",
+  "diagnose_server",
+  "find_issues",
+  "list_servers",
+  "get_server",
+  "server_resources",
+  "server_domains",
+  "list_destinations",
+  "list_applications",
+  "get_application",
+  "logs",
+  "application_logs",
+  "list_databases",
+  "get_database",
+  "list_services",
+  "get_service",
+  "list_deployments",
+  "search_docs",
+]);
+// Every tool with an `action` argument, mapped to its read actions (none for
+// application, database and control). cloud_tokens `validate` (a POST) is not
+// counted as a read.
+const COOLIFY_READ_ACTIONS = new Map<string, Set<string>>(
+  Object.entries({
+    projects: ["list", "get"],
+    environments: ["list", "get", "verify_app"],
+    application: [],
+    database: [],
+    service: ["list_containers"],
+    control: [],
+    env_vars: ["list"],
+    deployment: ["get", "list_for_app"],
+    private_keys: ["list", "get"],
+    github_apps: ["list", "get", "list_repos", "list_branches"],
+    database_backups: ["list_schedules", "get_schedule", "list_executions", "get_execution"],
+    teams: ["list", "get", "get_members", "get_current", "get_current_members"],
+    cloud_tokens: ["list", "get"],
+    storages: ["list"],
+    scheduled_tasks: ["list", "list_executions"],
+    hetzner: ["list_locations", "list_server_types", "list_images", "list_ssh_keys"],
+    system: ["health", "list_resources"],
+    tags: ["list"],
+  }).map(([tool, actions]) => [tool, new Set(actions)]),
+);
 
 // `git` plus any global options (-C <dir>, -c <k=v>, --no-pager, ...) up to
 // the subcommand (06-REVIEW WR-01: `git -C dir reset --hard` spelling).
@@ -181,14 +231,20 @@ export function classifySignal(toolName: string, input: unknown): ClassifiedSign
     return null;
   }
 
+  const coolifyTool = COOLIFY_TOOL.exec(toolName)?.[1];
+  if (coolifyTool !== undefined) {
+    const readActions = COOLIFY_READ_ACTIONS.get(coolifyTool);
+    if (readActions === undefined) {
+      return COOLIFY_READ_TOOLS.has(coolifyTool) ? null : { kind: "ceo_gated_tool", reason: `MCP tool: ${toolName}` };
+    }
+    if (typeof fields.action === "string" && readActions.has(fields.action)) return null;
+    return { kind: "ceo_gated_tool", reason: `MCP tool: ${toolName} (action: ${String(fields.action)})` };
+  }
+
   if (toolName.startsWith("mcp__")) {
     if (DESTRUCTIVE_MCP_NAME.test(toolName)) return { kind: "ceo_gated_tool", reason: `MCP tool: ${toolName}` };
-    const action = typeof fields.action === "string" ? fields.action : undefined;
-    if (
-      (action !== undefined && DESTRUCTIVE_MCP_NAME.test(action)) ||
-      (COOLIFY_ACTION_TOOL.test(toolName) && !COOLIFY_READ_ACTIONS.has(action ?? ""))
-    ) {
-      return { kind: "ceo_gated_tool", reason: `MCP tool: ${toolName} (action: ${String(action)})` };
+    if (typeof fields.action === "string" && DESTRUCTIVE_MCP_NAME.test(fields.action)) {
+      return { kind: "ceo_gated_tool", reason: `MCP tool: ${toolName} (action: ${fields.action})` };
     }
   }
 

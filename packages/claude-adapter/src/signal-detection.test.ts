@@ -124,41 +124,173 @@ describe("classifySignal — CEO-04 narrow command/MCP set", () => {
     expect(classifySignal("mcp__plugin_context7_context7__query-docs", {})).toBeNull();
   });
 
-  // 06-REVIEW IN-01 (iteration 2, user decision "Gate them"): coolify-mcp puts
-  // many operations behind one tool with an `action` argument.
-  it.each([
-    ["mcp__coolify__service", "restart_application"],
-    ["mcp__coolify__service", "stop_application"],
-    ["mcp__coolify__service", "start_application"],
-    ["mcp__coolify__service", "delete"],
-    ["mcp__coolify__service", "update"],
-    ["mcp__coolify__service", "create"],
-    ["mcp__coolify__application", "update"],
-    ["mcp__coolify__application", "delete"],
-    ["mcp__coolify__application", "create_dockerfile"],
-    ["mcp__coolify__env_vars", "create"],
-    ["mcp__coolify__env_vars", "update"],
-    ["mcp__coolify__env_vars", "delete"],
-    ["mcp__coolify__env_vars", "bulk_update"],
-    ["mcp__coolify__env_vars", "some_future_action"],
-    ["mcp__coolify__env_vars", undefined],
-    // Any MCP tool: a destructive word in the action (the review's IN-01 rule).
-    ["mcp__coolify__control", "restart"],
-    ["mcp__coolify__database", "delete"],
-  ])("%s with action %s is gated", (tool, action) => {
-    expect(classifySignal(tool, action === undefined ? {} : { action })).toEqual({
+  // Any other MCP tool: a destructive word in the `action` (the review's IN-01 rule).
+  it("a non-Coolify MCP tool is gated on a destructive word in its action, and only then", () => {
+    expect(classifySignal("mcp__db__table", { action: "delete" })).toEqual({
       kind: "ceo_gated_tool",
-      reason: `MCP tool: ${tool} (action: ${String(action)})`,
+      reason: "MCP tool: mcp__db__table (action: delete)",
     });
+    expect(classifySignal("mcp__db__table", { action: "update" })).toBeNull();
+    expect(classifySignal("mcp__db__table", {})).toBeNull();
+  });
+});
+
+// 06-REVIEW IN-01 (iteration 3, user decision "reading is always fine, only
+// edit/delete"): every coolify-mcp call that changes anything waits for the
+// CEO. The table is every tool @masonator/coolify-mcp 3.5.1 registers, with
+// every value of its `action` enum, read from the installed package.
+describe("classifySignal — Coolify MCP: reads pass, everything else is gated", () => {
+  const call = (tool: string, action: unknown) =>
+    classifySignal(`mcp__coolify__${tool}`, action === undefined ? {} : { action });
+
+  // [tool, action] — undefined = the tool takes no action argument.
+  const READS: [string, string | undefined][] = [
+    ...[
+      "get_version",
+      "get_mcp_version",
+      "list_instances",
+      "get_infrastructure_overview",
+      "diagnose_app",
+      "diagnose_server",
+      "find_issues",
+      "list_servers",
+      "get_server",
+      "server_resources",
+      "server_domains",
+      "list_destinations",
+      "list_applications",
+      "get_application",
+      "logs",
+      "application_logs",
+      "list_databases",
+      "get_database",
+      "list_services",
+      "get_service",
+      "list_deployments",
+      "search_docs",
+    ].map((tool): [string, undefined] => [tool, undefined]),
+    ["projects", "list"],
+    ["projects", "get"],
+    ["environments", "list"],
+    ["environments", "get"],
+    ["environments", "verify_app"],
+    ["service", "list_containers"],
+    ["env_vars", "list"],
+    ["deployment", "get"],
+    ["deployment", "list_for_app"],
+    ["private_keys", "list"],
+    ["private_keys", "get"],
+    ["github_apps", "list"],
+    ["github_apps", "get"],
+    ["github_apps", "list_repos"],
+    ["github_apps", "list_branches"],
+    ["database_backups", "list_schedules"],
+    ["database_backups", "get_schedule"],
+    ["database_backups", "list_executions"],
+    ["database_backups", "get_execution"],
+    ["teams", "list"],
+    ["teams", "get"],
+    ["teams", "get_members"],
+    ["teams", "get_current"],
+    ["teams", "get_current_members"],
+    ["cloud_tokens", "list"],
+    ["cloud_tokens", "get"],
+    ["storages", "list"],
+    ["scheduled_tasks", "list"],
+    ["scheduled_tasks", "list_executions"],
+    ["hetzner", "list_locations"],
+    ["hetzner", "list_server_types"],
+    ["hetzner", "list_images"],
+    ["hetzner", "list_ssh_keys"],
+    ["system", "health"],
+    ["system", "list_resources"],
+    ["tags", "list"],
+  ];
+
+  const WRITES: [string, string | undefined][] = [
+    ...["deploy", "bulk_env_update", "redeploy_project", "restart_project_apps", "stop_all_apps", "validate_server"].map(
+      (tool): [string, undefined] => [tool, undefined],
+    ),
+    ...(
+      [
+        ["projects", ["create", "update", "delete"]],
+        ["environments", ["create", "delete"]],
+        [
+          "application",
+          [
+            "create_public",
+            "create_github",
+            "create_key",
+            "create_dockerimage",
+            "create_dockerfile",
+            "update",
+            "move",
+            "delete",
+            "delete_preview",
+          ],
+        ],
+        ["database", ["create", "update", "move", "delete"]],
+        [
+          "service",
+          [
+            "create",
+            "update",
+            "move",
+            "delete",
+            "update_application",
+            "start_application",
+            "stop_application",
+            "restart_application",
+          ],
+        ],
+        ["control", ["start", "stop", "restart"]],
+        ["env_vars", ["create", "update", "delete", "bulk_update"]],
+        ["deployment", ["cancel"]],
+        ["private_keys", ["create", "update", "delete"]],
+        ["github_apps", ["create", "update", "delete"]],
+        ["database_backups", ["create", "update", "delete", "delete_execution"]],
+        ["cloud_tokens", ["create", "update", "delete", "validate"]],
+        ["storages", ["create", "update", "delete", "backup_set", "backup_delete", "backup_run"]],
+        ["scheduled_tasks", ["create", "update", "delete", "run_once"]],
+        ["hetzner", ["create_server"]],
+        ["system", ["enable_api", "disable_api"]],
+        ["tags", ["attach", "detach"]],
+      ] as const
+    ).flatMap(([tool, actions]) => actions.map((action): [string, string] => [tool, action])),
+  ];
+
+  it.each(READS)("%s %s is a read and is not gated", (tool, action) => {
+    expect(call(tool, action)).toBeNull();
   });
 
-  it.each([
-    ["mcp__coolify__service", "list_containers"],
-    ["mcp__coolify__env_vars", "list"],
-    ["mcp__coolify__list_applications", undefined],
-    ["mcp__coolify__projects", "get"],
-  ])("%s with read-only action %s is not gated", (tool, action) => {
-    expect(classifySignal(tool, action === undefined ? {} : { action })).toBeNull();
+  it.each(WRITES)("%s %s changes something and is gated", (tool, action) => {
+    expect(call(tool, action)?.kind).toBe("ceo_gated_tool");
+  });
+
+  it("fails closed: an unknown tool, or a missing, unknown or non-string action, is gated", () => {
+    for (const [tool, action] of [
+      ["some_future_tool", undefined],
+      ["constructor", undefined],
+      ["projects", undefined],
+      ["projects", "archive"],
+      ["projects", "LIST"],
+      ["projects", ["list"]],
+      ["teams", "some_future_action"],
+      ["deploy", "list"],
+    ] as [string, unknown][]) {
+      expect(call(tool, action)?.kind, `${tool} ${String(action)}`).toBe("ceo_gated_tool");
+    }
+  });
+
+  it("names the action when the tool has one, and matches a prefixed server name", () => {
+    expect(call("control", "start")).toEqual({
+      kind: "ceo_gated_tool",
+      reason: "MCP tool: mcp__coolify__control (action: start)",
+    });
+    expect(call("env_vars", undefined)?.reason).toBe("MCP tool: mcp__coolify__env_vars (action: undefined)");
+    expect(call("bulk_env_update", undefined)?.reason).toBe("MCP tool: mcp__coolify__bulk_env_update");
+    expect(classifySignal("mcp__plugin_ops_coolify__stop_all_apps", {})?.kind).toBe("ceo_gated_tool");
+    expect(classifySignal("mcp__plugin_ops_coolify__list_deployments", {})).toBeNull();
   });
 });
 
