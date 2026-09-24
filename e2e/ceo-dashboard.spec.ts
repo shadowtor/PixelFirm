@@ -52,6 +52,7 @@ function envelope(occurredAt: string, sourceAgentId?: string) {
 function requested(
   n: number,
   opts: { agent: string; title: string; reason: string; kind: "clarifying_question" | "ceo_gated_tool"; at: string; thread?: number; worktreePath?: string },
+  extra: Partial<Extract<CompanyEvent, { type: "ceo.approval_requested" }>["payload"]> = {},
 ): CompanyEvent {
   return {
     ...envelope(opts.at, opts.agent),
@@ -65,15 +66,16 @@ function requested(
       title: opts.title,
       taskTitle: `Task ${n}`,
       worktreePath: opts.worktreePath ?? `/srv/worktrees/project-${n}`,
+      ...extra,
     },
   };
 }
 
-function decided(n: number, action: "approve" | "discuss", at: string): CompanyEvent {
+function decided(n: number, action: "approve" | "discuss", at: string, note?: string): CompanyEvent {
   return {
     ...envelope(at),
     type: "ceo.decision_made",
-    payload: { decisionId: uuid(n), taskId: `task-${n}`, action, decidedBy: EMAIL },
+    payload: { decisionId: uuid(n), taskId: `task-${n}`, action, decidedBy: EMAIL, ...(note ? { note } : {}) },
   };
 }
 
@@ -298,4 +300,155 @@ test("the queue column scrolls on its own while the header and tabs stay put", a
   await expect(page.getByRole("banner")).toBeInViewport();
   await expect(page.getByTestId("pending-badge")).toBeInViewport();
   await expect(page.getByRole("tab", { name: "Pending (30)" })).toBeInViewport();
+});
+
+// ---- 06-09 Task 1: detail sections (CEO-02) ---------------------------------------------------
+
+const detailOf = (page: Page) => page.getByRole("region", { name: "Decision detail" });
+const sectionOf = (page: Page, heading: string) =>
+  detailOf(page).locator("section").filter({ has: page.getByRole("heading", { level: 3, name: heading, exact: true }) });
+
+/** Loads /ceo with a snapshot of `events`; the first pending item is auto-selected. */
+async function showSnapshot(page: Page, events: CompanyEvent[]) {
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  await fakeFeed(page, (ws) => ws.send(snapshot(events)));
+  await page.goto(`${BASE}/ceo`);
+  await expect(detailOf(page).getByRole("heading", { level: 2 })).toBeVisible();
+}
+
+const gated = (n: number, extra: Parameters<typeof requested>[2] = {}) =>
+  requested(
+    n,
+    { agent: "ada", title: `Gated ${n}`, reason: "Bash command matched a CEO-gated pattern: force-push", kind: "ceo_gated_tool", at: minutesAgo(3) },
+    { toolName: "Bash", toolInput: JSON.stringify({ command: "git push --force origin main" }), ...extra },
+  );
+
+function diffOf(paths: string[], truncated = false) {
+  return {
+    files: paths.map((path) => ({ path, added: 2, removed: 1 })),
+    unified: paths
+      .flatMap((p) => [`diff --git a/${p} b/${p}`, `--- a/${p}`, `+++ b/${p}`, "@@ -1,2 +1,3 @@", " keep", `-old ${p}`, `+new ${p}`, "+more"])
+      .join("\n"),
+    truncated,
+    totalAdded: 900,
+    totalRemoved: 12,
+  };
+}
+
+test("a gated call shows Runs on approve with the tool badge and the exact parked input", async ({ page }) => {
+  const input = JSON.stringify({ command: "git push --force origin main", description: "push <b>rebased</b>" });
+  await showSnapshot(page, [gated(1, { toolInput: input })]);
+  const runs = sectionOf(page, "Runs on approve");
+  await expect(runs).toHaveCount(1);
+  await expect(runs.getByText("Bash", { exact: true })).toBeVisible();
+  expect(await runs.locator("pre").textContent()).toBe(input);
+});
+
+test("a question has no Runs on approve section", async ({ page }) => {
+  await showSnapshot(page, [
+    requested(2, { agent: "cy", title: "Which colour?", reason: "question", kind: "clarifying_question", at: minutesAgo(3) }),
+  ]);
+  await expect(detailOf(page).getByRole("heading", { level: 3, name: "Runs on approve" })).toHaveCount(0);
+});
+
+test("context renders literal markup as text, and a missing recommendation shows its copy", async ({ page }) => {
+  await showSnapshot(page, [gated(1, { context: "Line one\n<b>x</b> stays text" })]);
+  const context = sectionOf(page, "Context");
+  await expect(context).toContainText("<b>x</b> stays text");
+  await expect(context.locator("b")).toHaveCount(0);
+  await expect(sectionOf(page, "Recommendation").getByText("The agent did not give a recommendation.", { exact: true })).toBeVisible();
+  await expect(detailOf(page).getByRole("heading", { level: 3, name: "Links" })).toHaveCount(0);
+});
+
+test("a given recommendation renders as plain text", async ({ page }) => {
+  await showSnapshot(page, [gated(1, { recommendation: "Approve it. <i>Safe</i>." })]);
+  const rec = sectionOf(page, "Recommendation");
+  await expect(rec).toContainText("Approve it. <i>Safe</i>.");
+  await expect(rec.locator("i")).toHaveCount(0);
+});
+
+test("only http and https links become anchors, opening safely in a new tab", async ({ page }) => {
+  await showSnapshot(page, [gated(1, { links: ["https://a.test/pr/1", "http://b.test", "javascript:alert(1)"] })]);
+  const links = sectionOf(page, "Links");
+  const anchors = links.locator("a");
+  await expect(anchors).toHaveCount(2);
+  for (const i of [0, 1]) {
+    await expect(anchors.nth(i)).toHaveAttribute("target", "_blank");
+    await expect(anchors.nth(i)).toHaveAttribute("rel", "noopener noreferrer");
+  }
+  await expect(anchors.nth(0)).toHaveAttribute("href", "https://a.test/pr/1");
+  await expect(links.getByText("javascript:alert(1)", { exact: true })).toBeVisible();
+});
+
+test("a 5-file diff lists 5 rows with only the first expanded", async ({ page }) => {
+  const paths = ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts", "src/deeply/nested/folder/e.ts"];
+  await showSnapshot(page, [gated(1, { diff: diffOf(paths) })]);
+  const rows = sectionOf(page, "Changes").locator("[data-slot=collapsible-trigger]");
+  await expect(rows).toHaveCount(5);
+  await expect(rows.nth(0)).toHaveAttribute("aria-expanded", "true");
+  for (const i of [1, 2, 3, 4]) await expect(rows.nth(i)).toHaveAttribute("aria-expanded", "false");
+  await expect(rows.nth(0)).toContainText("+2");
+  await expect(rows.nth(0)).toContainText("-1");
+  await expect(rows.nth(4).locator('[title="src/deeply/nested/folder/e.ts"]')).toHaveCount(1);
+  const body = sectionOf(page, "Changes").locator("pre").first();
+  await expect(body).toContainText("+new src/a.ts");
+  await expect(body).toContainText("-old src/a.ts");
+});
+
+test("a 2-file diff starts with both rows collapsed", async ({ page }) => {
+  await showSnapshot(page, [gated(1, { diff: diffOf(["x.ts", "y.ts"]) })]);
+  const rows = sectionOf(page, "Changes").locator("[data-slot=collapsible-trigger]");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toHaveAttribute("aria-expanded", "false");
+  await expect(rows.nth(1)).toHaveAttribute("aria-expanded", "false");
+});
+
+test("a truncated diff shows the truncation copy", async ({ page }) => {
+  await showSnapshot(page, [gated(1, { diff: diffOf(["a.ts", "b.ts", "c.ts", "d.ts", "e.ts", "f.ts", "g.ts"], true) })]);
+  await expect(
+    sectionOf(page, "Changes").getByText(
+      "Diff cut at 400 lines. 7 files changed, 900 additions, 12 deletions in total. Open the branch for the rest.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+});
+
+test("a request without a diff shows the no-changes copy", async ({ page }) => {
+  await showSnapshot(page, [gated(2)]);
+  await expect(sectionOf(page, "Changes").getByText("No file changes attached to this request.", { exact: true })).toBeVisible();
+});
+
+test("a Discuss round 2 shows a collapsed Earlier in this thread with round 1", async ({ page }) => {
+  await showSnapshot(page, [
+    requested(20, { agent: "bob", title: "Draft the launch post", reason: "q", kind: "clarifying_question", at: minutesAgo(40), thread: 20 }),
+    decided(20, "discuss", minutesAgo(35), "Shorter, and name the price."),
+    requested(21, { agent: "bob", title: "Draft the launch post, round two", reason: "q", kind: "clarifying_question", at: minutesAgo(5), thread: 20 }),
+  ]);
+  const earlier = sectionOf(page, "Earlier in this thread");
+  const trigger = earlier.locator("[data-slot=collapsible-trigger]");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(earlier.getByText("Shorter, and name the price.")).toBeHidden();
+  await trigger.click();
+  await expect(earlier.getByText("Discuss", { exact: true })).toBeVisible();
+  await expect(earlier.getByText("Shorter, and name the price.", { exact: true })).toBeVisible();
+  await expect(earlier.getByText("Draft the launch post", { exact: true })).toBeVisible();
+});
+
+test("a 600-character single-line tool input never scrolls the page sideways", async ({ page }) => {
+  const input = JSON.stringify({ command: `echo ${"x".repeat(600)}` });
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await showSnapshot(page, [gated(1, { toolInput: input })]);
+  const pre = sectionOf(page, "Runs on approve").locator("pre");
+  await expect(pre).toBeVisible();
+  const widths = await pre.evaluate((el) => {
+    const detail = el.closest("section[aria-label='Decision detail']")!;
+    const doc = document.scrollingElement!;
+    return {
+      pre: el.scrollWidth <= el.clientWidth,
+      detail: detail.scrollWidth <= detail.clientWidth,
+      page: doc.scrollWidth === doc.clientWidth,
+      maxHeight: getComputedStyle(el).maxHeight,
+    };
+  });
+  expect(widths).toEqual({ pre: true, detail: true, page: true, maxHeight: "240px" });
 });

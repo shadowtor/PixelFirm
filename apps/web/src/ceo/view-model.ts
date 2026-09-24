@@ -52,3 +52,27 @@ export function detailMeta(request: DecisionRequestView, now: number): string {
     .filter(Boolean)
     .join(" · ");
 }
+
+// ---- 06-09 detail pane (RED stubs) ----
+export type SafeLink = { href: string } | { text: string };
+export function safeLink(raw: string): SafeLink {
+  return { text: raw.slice(0, 0) };
+}
+
+export type DiffChunk = { path: string; lines: string[] };
+export function splitDiffByFile(_unified: string): DiffChunk[] {
+  return [{ path: "", lines: [] }];
+}
+
+export type DiffLineKind = "add" | "del" | "hunk" | "file" | "context";
+export function diffLineKind(_line: string): DiffLineKind {
+  return "context";
+}
+
+export function truncationCopy(_t: { lineCap: number; files: number; added: number; removed: number }): string {
+  return "";
+}
+
+export function actionLabel(action: string): string {
+  return action;
+}
