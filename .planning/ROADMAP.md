@@ -346,7 +346,48 @@ Plans:
   3. The CEO can Approve, Reject, Discuss, Request Changes, or Request More Research on any pending decision, and the choice actually controls the AgentRuntime, not just the on-screen animation.
   4. No CEO-gated operation (deploy, destructive op, production change, major dependency change, security/pricing/architecture/legal decision) is ever auto-approved because an agent requested it, and every approval/rejection is recorded in an audit log.
 
-**Plans**: TBD
+**Plans:** 14 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 06-01-PLAN.md — Tracer: a decision frame on the worker WS resolves the parked canUseTool into the exact SDK result (event + wire contract, decision mapping, parked runtime, worker broker)
+- [ ] 06-07-PLAN.md — Office CEO room: 24x13 grid, walled room, 4-slot ceoQueue, agents walk in and back (CEO-01)
+- [ ] 06-08-PLAN.md — /ceo scaffold: shadcn + Tailwind + Kibo scoped to a lazy chunk, office-bundle build check *(not autonomous — package-legitimacy checkpoint)*
+
+**Wave 2** *(blocked on 06-01)*
+
+- [ ] 06-02-PLAN.md — Runtime CEO-04 hardening: gate-list + production-change decision, PreToolUse "ask" backstop, env strip, watchdog suspension, abort/superseded expiry *(not autonomous — opens with a `checkpoint:decision` on the gate list)*
+- [ ] 06-13-PLAN.md — Control-plane half: worker-socket registry, workerId stamping, dev-bypass + CSRF decision route with per-action rules
+
+**Wave 3**
+
+- [ ] 06-03-PLAN.md — Enriched requests: readDiff, context/recommendation/links/questions, Discuss threads, restoreTask
+- [ ] 06-05-PLAN.md — One decision per request (migration 0004, 409s) + Cloudflare Access JWT via jose + GET /ceo/api/me + production guards
+- [ ] 06-06-PLAN.md — foldDecisions projection, office-feed PRIVATE filter, /ceo/ws snapshot + relay
+
+**Wave 4**
+
+- [ ] 06-04-PLAN.md — Worker hosts ClaudeCodeRuntime; hello/bootId reconcile expiry (D-02); resume route
+- [ ] 06-14-PLAN.md — /ceo shell (auth/loading/empty/error states, live feed status) + live pending queue + e2e
+
+**Wave 5**
+
+- [ ] 06-09-PLAN.md — Detail pane (runs on approve, context, recommendation, links, diff, earlier rounds) + question answering
+
+**Wave 6**
+
+- [ ] 06-10-PLAN.md — Action bar (five actions, required notes, approve dialog, submit states) + History + Resume task
+
+**Wave 7**
+
+- [ ] 06-11-PLAN.md — Live proof with a real Claude session (allow-rule backstop, >120 s hold, privacy backstop, evidence)
+
+**Wave 8**
+
+- [ ] 06-12-PLAN.md — Staging: web image, Cloudflare Access on /ceo, migration 0004 on staging, guard-boundary e2e *(not autonomous — hosting `checkpoint:decision`)*
+
 **UI hint**: yes
 
 ### Phase 7: Stream-Safe Visibility & Overlay Route

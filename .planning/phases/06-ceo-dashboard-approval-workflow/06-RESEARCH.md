@@ -512,18 +512,25 @@ Installed CLI: `claude --version` → `2.1.280 (Claude Code)`, above every versi
 | A6 | Access JWTs are RS256 and carry an `email` claim for identity-provider logins | Code Examples | Verification rejects valid tokens. Adjust `algorithms` after decoding a real token |
 | A7 | The assistant message holding a tool_use is yielded before `canUseTool` fires, so "last assistant text" is available as request context | Pattern 2 (`context`) | Context field empty. The UI already has empty-state copy |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+All five are resolved for planning: two by a blocking user checkpoint inside the plan that needs the answer (the plan cannot proceed past it without the user's reply), three by a planning decision within Claude's Discretion that a plan implements and tests.
 
 1. **Where does `/ceo` get served in staging/production?**
    - Known: only `apps/api` has a Dockerfile; the web app has so far run on Vite dev. `/ceo` and `/ceo/api` must be same-origin (no CORS plugin allowed; Access cookie scope).
    - Recommendation: one hostname (`test.pixelfirm.dev`) with Traefik path routing (`/ceo/api`, `/ceo/ws`, `/events`, `/ws`, `/admin`, `/health` → api; everything else → a static web container with SPA fallback), and the Access app on `/ceo*`. Verify the phase locally (Vite proxy) first, then stage it with the coolify/cloudflare skills. The planner should make the deploy a separate, final plan.
+   - **RESOLVED:** by the blocking `checkpoint:decision` in 06-12 Task 1 ("how /ceo is served on staging"), options `traefik-paths` (this recommendation, marked recommended) and `nginx-proxy`; the chosen id is recorded in 06-12-SUMMARY.md before any infrastructure change. Local verification uses the Vite proxy set up in 06-08. The deploy is the separate final plan, 06-12.
 2. **Widen the gate list?**
    - Known: `CEO_GATED_BASH_PATTERNS` covers `"force-push"`, `"destructive filesystem op"`, `"destructive DB op"`, `"publish/deploy"` [VERIFIED: signal-detection.ts:20-29]. On this developer's stack, pushing to `main` deploys through Coolify, and MCP tools (e.g. `mcp__coolify__deploy`) aren't classified at all.
    - Recommendation (fits CEO-04's list): gate any `git push`, `git merge|rebase|reset --hard`, package-manager `add|remove|install <pkg>|update`, and **every `mcp__*` tool** (fail closed). Confirm with the user, because gating plain `git push` adds CEO round-trips.
+   - **RESOLVED:** by the blocking `checkpoint:decision` in 06-02 Task 1: answer A `widen` (this recommendation) or `narrow`, and answer B `gate-paths` (production-config file changes, deploy-hook fetches and shell writes into those files) or `accept-gap`, with the still-ungated residual signed off in the user's reply. Both answers are recorded verbatim in 06-02-SUMMARY.md, and 06-02 Task 2 implements them.
 3. **How are tasks launched on the worker?**
    - Recommendation: env/argv only (`WORKER_TASK_PROMPT`, `WORKER_AGENT_ID`, optional `WORKER_TASK_TITLE`). The worker starts one task on boot, and the control plane can only `decision`/`task.resume`. This keeps SEC-03 and gives the live proof a real driver.
+   - **RESOLVED:** recommendation adopted (CONTEXT Claude's Discretion: how the worker hosts/launches `ClaudeCodeRuntime`). 06-04 adds `WORKER_TASK_PROMPT`, `WORKER_AGENT_ID`, `WORKER_TASK_ID`, `WORKER_TASK_TITLE` to the worker env, and `WorkerDownlinkSchema` (06-01) is closed to `decision` and `task.resume`.
 4. **Should the office `?token=` feed move to Access now?** Recommendation: no. Phase 7 rebuilds that route; `/ceo/ws` uses Access from day one.
+   - **RESOLVED:** recommendation adopted (CONTEXT Claude's Discretion lists exactly this choice). 06-06's objective records it: the office feed keeps `?token=` in this phase, and `/ceo/ws` uses the Access JWT/cookie from day one, never a query token.
 5. **What about a decision recorded but not applied because the worker restarted?** Both `decision_made` and `approval_expired` exist, which the unique index allows because it keys on type. History should show it as Expired with the decision attached. The planner should add a fixture test.
+   - **RESOLVED:** 06-06 adds the fixture test (request + `decision_made` + `approval_expired` folds to status `expired` with the decision attached, both events kept, CEO-05); 06-05's unique index keys on event type so both rows are allowed; 06-04 emits the restart expiry.
 
 ## Environment Availability
 
