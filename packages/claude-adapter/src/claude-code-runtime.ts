@@ -559,6 +559,14 @@ export function createClaudeCodeRuntime(options: {
         // Never crash the caller on a non-terminal stream error — log and
         // continue, matching apps/worker/src/poll-loop.ts's pattern.
         console.error(`ClaudeCodeRuntime.runQuery: stream error for task ${taskId}`, err);
+        // 06-REVIEW WR-10: the session died before a result, so nothing will
+        // ever move this task on; report it blocked (resumable) rather than
+        // leave it running or waiting in the CEO room. A watchdog abort has
+        // already set blocked, and pause/cancel/supersession changed the owner.
+        if (isCurrent() && record.status !== "blocked" && !TERMINAL_STATUSES.includes(record.status)) {
+          record.status = "blocked";
+          await emitStatus(taskId, "blocked");
+        }
       } finally {
         // A completed task's watchdog must never fire after the fact —
         // clear on every exit path (result received, graceful/hard cancel,

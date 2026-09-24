@@ -793,7 +793,9 @@ describe("ClaudeCodeRuntime superseded invocations (one live query() per task)",
       yield initMsg;
       for (;;) {
         await new Promise((resolve) => setTimeout(resolve, 10_000));
-        yield { type: "assistant" };
+        // SDK-shaped: a bare { type: "assistant" } threw in the text
+        // extraction and silently ended the stream (surfaced by WR-10).
+        yield { type: "assistant", message: { content: [] } };
       }
     }
     const iter = gen() as AsyncGenerator<unknown, void> & { interrupt: Mock };
@@ -1250,6 +1252,47 @@ describe("enriched decision request (06-03, CEO-02, D-06, D-02)", () => {
     const r3 = requests()[2].payload;
     expect(r3.threadId).toBe(r3.decisionId);
     await finish();
+  });
+});
+
+// WR-10 (06-REVIEW): a stream that dies mid-task must not leave a stale status.
+describe("stream error", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("a stream error before any result marks the task blocked and emits it", async () => {
+    async function* dying() {
+      yield initMessage("session-1");
+      throw new Error("claude subprocess exited");
+    }
+    (query as unknown as Mock).mockReturnValue(dying());
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+    await runtime.startTask(startInput);
+    errorSpy.mockRestore();
+
+    expect(await runtime.getStatus("task-1")).toBe("blocked");
+    const statuses = (postEvent as unknown as Mock).mock.calls
+      .map((call) => call[2])
+      .filter((e) => e.type === "task.status_changed")
+      .map((e) => e.payload.status);
+    expect(statuses).toEqual(["starting", "blocked"]);
+  });
+
+  it("a stream error after a terminal result leaves the terminal status alone", async () => {
+    async function* dying() {
+      yield initMessage("session-1");
+      yield resultMessage("success");
+      throw new Error("late");
+    }
+    (query as unknown as Mock).mockReturnValue(dying());
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+    await runtime.startTask(startInput);
+    errorSpy.mockRestore();
+
+    expect(await runtime.getStatus("task-1")).toBe("completed");
   });
 });
 
