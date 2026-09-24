@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { ne } from "drizzle-orm";
 import { fold } from "company-core";
 import { authenticateBrowser } from "../auth/browser-auth.js";
 import { flushBrowserSocket, registerBrowserSocket, unregisterBrowserSocket } from "../ws/browser-connections.js";
@@ -35,7 +36,10 @@ export async function registerWsBrowserRoute(fastify: FastifyInstance) {
       // after the snapshot has gone out.
       registerBrowserSocket(socket);
       try {
-        const rows = await db.select().from(events).orderBy(events.occurredAt);
+        // Phase 6: the snapshot drops PRIVATE rows, matching acceptsOffice on
+        // the live path (05-09 same-code rule), so decision content never
+        // reaches the office in either (Pitfall 2).
+        const rows = await db.select().from(events).where(ne(events.visibility, "PRIVATE")).orderBy(events.occurredAt);
         const companyEvents = rows.map(rowToCompanyEvent);
         const state = fold(companyEvents);
         socket.send(JSON.stringify({ type: "snapshot", state }));
