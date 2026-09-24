@@ -104,6 +104,18 @@ const GRACEFUL_TIMEOUT_MS = 5000;
 // see this plan's Task 2 action text).
 const ROLE_POLL_INTERVAL_MS = 5000;
 
+/** What a worker persisted about a task it lost on restart (D-02). */
+export interface RestoreTaskInput {
+  taskId: string;
+  sessionId: string;
+  worktreePath: string;
+  agentId: string;
+  title?: string;
+}
+
+// restoreTask is ClaudeCodeRuntime-only, not an AgentRuntime interface change (D-06).
+export type ClaudeCodeRuntime = AgentRuntime & { restoreTask(input: RestoreTaskInput): void };
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -128,7 +140,7 @@ export function createClaudeCodeRuntime(options: {
   // D-02: this worker process's boot id (a UUID), stamped on every CEO request
   // so a decision arriving after a restart can be told apart.
   workerBootId?: string;
-}): AgentRuntime {
+}): ClaudeCodeRuntime {
   const tasks = new Map<string, TaskRecord>();
 
   async function emitStatus(taskId: string, status: AgentTaskStatus): Promise<void> {
@@ -644,6 +656,29 @@ export function createClaudeCodeRuntime(options: {
       // The caller-supplied message becomes the new turn's prompt —
       // documented interpretation, see Plan 04-02's Task 1 Behavior Test 3.
       await runQuery(taskId, message, record.sessionId);
+    },
+
+    // D-02: re-creates a task record lost on worker restart, as "blocked", so
+    // resumeTask can pick up its Claude session in its worktree. No path
+    // validation here: the worker checks worktreePath against listWorktrees
+    // before calling (06-04). A known, settled task is left untouched.
+    restoreTask(input: RestoreTaskInput): void {
+      const record = tasks.get(input.taskId);
+      if (record) {
+        // inFlight stays true after pause/cancel with nothing running (see
+        // TaskRecord.inFlight), so those statuses count as settled.
+        if (record.inFlight && record.status !== "paused" && !TERMINAL_STATUSES.includes(record.status)) {
+          throw new Error("ClaudeCodeRuntime.restoreTask: task is running");
+        }
+        return;
+      }
+      tasks.set(input.taskId, {
+        status: "blocked",
+        sessionId: input.sessionId,
+        worktreePath: input.worktreePath,
+        agentId: input.agentId,
+        title: input.title,
+      });
     },
 
     requestReview,
