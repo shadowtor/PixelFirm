@@ -6,6 +6,9 @@ import {
   _resetForTests,
   MIN_DISPLAY_SCALE,
   displayScaleFor,
+  DEFAULT_COLS,
+  DEFAULT_ROWS,
+  TILE_SIZE,
 } from "./index";
 import { CharacterState, Direction } from "./types";
 import { findPath } from "./layout/tileMap";
@@ -229,13 +232,19 @@ describe("display scale (G-05-1a)", () => {
     expect(MIN_DISPLAY_SCALE).toBe(3);
   });
 
+  it("sizes the map from the 24x13 grid (06-07, D-10)", () => {
+    expect(DEFAULT_COLS * TILE_SIZE).toBe(384);
+    expect(DEFAULT_ROWS * TILE_SIZE).toBe(208);
+  });
+
   it("picks the largest integer scale that fits, floored at the minimum", () => {
     const cases: [number, number, number][] = [
-      [1920, 1056, 6],
-      [1280, 696, 3],
-      [3840, 2136, 12],
+      [1920, 1040, 5],
+      [1920, 1080, 5],
+      [1280, 720, 3],
+      [3840, 2080, 10],
       [800, 600, 3],
-      [1400, 900, 4],
+      [1400, 900, 3],
     ];
     for (const [w, h, n] of cases) {
       const got = displayScaleFor(w, h);

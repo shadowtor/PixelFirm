@@ -70,7 +70,7 @@ describe("App attribution", () => {
 });
 
 describe("App canvas", () => {
-  // 05-21 (G-05-1a): never native 320x176 — SSR (no window) falls back to
+  // 05-21 (G-05-1a): never native (384x208 since 06-07) — SSR (no window) falls back to
   // the minimum integer display scale.
   it("sizes the canvas from pixel-office's own grid constants at the minimum display scale", () => {
     expect(markup).toContain(`width="${DEFAULT_COLS * TILE_SIZE * MIN_DISPLAY_SCALE}"`);
@@ -90,10 +90,11 @@ describe("App canvas", () => {
 // black.
 describe("App viewport fill", () => {
   it("sizes the documented OBS sources from the full viewport, with no footer allowance", () => {
-    // 720/176 = 4.09 -> 4. The old 24px allowance made this (720-24)/176 -> 3,
-    // which is what left 320px of black to the right of the canvas.
-    expect(displayScaleFor(1280, 720)).toBe(4);
-    expect(displayScaleFor(1920, 1080)).toBe(6);
+    // 06-07 (D-10): the office is 384x208. 1280/384 = 3.33 -> 3 (1152x624).
+    // 208 x 5 = 1040, so 1920x1080 presents at 5 with a 20px WALL_COLOR strip
+    // above and below; no footer allowance is taken from either height.
+    expect(displayScaleFor(1280, 720)).toBe(3);
+    expect(displayScaleFor(1920, 1080)).toBe(5);
   });
 
   it("surrounds the canvas in the office border colour, so a remainder is never black", () => {

@@ -4,7 +4,7 @@ import type { CompanyEvent } from "event-schema";
 import { renderFrame, renderScene, resolveBubbleY } from "./renderer.js";
 import { FURNITURE, FURNITURE_BLOCKED_TILES, OFFICE_TILE_MAP, SEATS, STANDING_SPOTS, isOwnSeat } from "../layout/officeLayout.js";
 import officeSprites from "../sprites/office-metrocity.json" with { type: "json" };
-import { CHARACTER_SITTING_OFFSET_PX, WALL_COLOR } from "../constants.js";
+import { CHARACTER_SITTING_OFFSET_PX, DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE, WALL_COLOR } from "../constants.js";
 import { createCharacter, getCharacterSprite, updateCharacter, walkCharacterTo } from "./characters.js";
 import { getCharacterSprites } from "../sprites/spriteData.js";
 import { BUBBLE_SPRITES } from "../sprites/bubbleSprites.js";
@@ -1050,7 +1050,7 @@ describe("furnished office (G-05-1e)", () => {
 
   it("renderFrame paints MetroCity floor and wall tiles", () => {
     const { ctx, rects } = mockCtx();
-    renderFrame(ctx, 320, 176, OFFICE_TILE_MAP, [], 1, FURNITURE);
+    renderFrame(ctx, DEFAULT_COLS * TILE_SIZE, DEFAULT_ROWS * TILE_SIZE, OFFICE_TILE_MAP, [], 1, FURNITURE);
     const painted = new Set(rects.filter((r) => r.w === 1 && r.h === 1).map((r) => `${r.x},${r.y},${r.color.toLowerCase()}`));
     const floor = (office.floorTiles.data as SpriteData[])[(1 % 2) * 2 + (1 % 2)];
     const floorKeys = cellKeys(floor, 16, 16);
@@ -1064,9 +1064,10 @@ describe("furnished office (G-05-1e)", () => {
 
   it("every furniture piece is painted at its footprint", () => {
     const { ctx, rects } = mockCtx();
-    renderFrame(ctx, 320, 176, OFFICE_TILE_MAP, [], 1, FURNITURE);
+    renderFrame(ctx, DEFAULT_COLS * TILE_SIZE, DEFAULT_ROWS * TILE_SIZE, OFFICE_TILE_MAP, [], 1, FURNITURE);
     const painted = new Set(rects.map((r) => `${r.x},${r.y},${r.color.toLowerCase()}`));
-    expect(FURNITURE.length).toBe(8 + 16 + 4 + 2);
+    // 06-07: + 3 for the CEO room (its desk, a plant and a painting).
+    expect(FURNITURE.length).toBe(8 + 16 + 4 + 2 + 3);
     for (const f of FURNITURE) for (const k of cellKeys(f.sprite, f.x, f.y)) expect(painted.has(k), k).toBe(true);
   });
 
