@@ -4,13 +4,14 @@ process.env.DATABASE_URL = "postgres://postgres:postgres@localhost:5434/pixelfir
 process.env.CREDENTIAL_PEPPER = "test-pepper";
 process.env.BOOTSTRAP_SECRET = "test-bootstrap";
 process.env.BROWSER_ACCESS_TOKEN = "test-browser-access-token";
+process.env.CEO_DEV_AUTH_BYPASS = "1";
 
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { WebSocket } from "ws";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, afterAll, describe, expect, it, vi } from "vitest";
 import { WorkerDownlinkSchema } from "event-schema";
 import { events, workers } from "../db/schema.js";
@@ -32,6 +33,7 @@ let db: typeof dbType;
 let issueCredential: typeof issueCredentialType;
 // Namespace import so a missing export fails on an assertion, not on ESM linking.
 let wc: Record<string, unknown>;
+let envMod: Record<string, unknown>;
 let wsBaseUrl: string;
 let server: Awaited<ReturnType<typeof buildServerType>>;
 let workerToken: string;
@@ -102,6 +104,55 @@ async function rowsById(id: string) {
   return db.select().from(events).where(eq(events.id, id));
 }
 
+const DEV_CEO = "dev-bypass@pixelfirm.invalid";
+
+function postDecision(
+  decisionId: string,
+  body: unknown,
+  opts: { remoteAddress?: string; headers?: Record<string, string> } = {},
+) {
+  return server.inject({
+    method: "POST",
+    url: `/ceo/api/decisions/${decisionId}`,
+    remoteAddress: opts.remoteAddress,
+    headers: {
+      "content-type": "application/json",
+      origin: "http://localhost:5173",
+      "x-pixelfirm-csrf": "1",
+      ...opts.headers,
+    },
+    payload: typeof body === "string" ? body : JSON.stringify(body),
+  });
+}
+
+async function decisionRows(decisionId: string) {
+  return db
+    .select()
+    .from(events)
+    .where(and(eq(events.type, "ceo.decision_made"), sql`${events.payload}->>'decisionId' = ${decisionId}`));
+}
+
+/** A connected fake worker that has posted a PRIVATE ceo.approval_requested through /events. */
+async function openRequest(kind: "ceo_gated_tool" | "clarifying_question" = "ceo_gated_tool") {
+  const ws = await connectWorker();
+  const event = approvalRequest();
+  event.payload.kind = kind;
+  const res = await postEvent(event);
+  expect(res.statusCode).toBe(202);
+  return { ws, decisionId: event.payload.decisionId, taskId: event.taskId };
+}
+
+/** Runs fn with the dev bypass switched off, restoring it afterwards. */
+async function withBypassOff<T>(fn: () => Promise<T>): Promise<T> {
+  const env = envMod.env as { CEO_DEV_AUTH_BYPASS: boolean };
+  env.CEO_DEV_AUTH_BYPASS = false;
+  try {
+    return await fn();
+  } finally {
+    env.CEO_DEV_AUTH_BYPASS = true;
+  }
+}
+
 beforeAll(async () => {
   const migrateClient = new Client({ connectionString: process.env.DATABASE_URL });
   await migrateClient.connect();
@@ -114,6 +165,7 @@ beforeAll(async () => {
   ({ db } = await import("../db/client.js"));
   ({ issueCredential } = await import("../auth/credentials.js"));
   wc = (await import("../ws/worker-connections.js")) as Record<string, unknown>;
+  envMod = (await import("../env.js")) as Record<string, unknown>;
 
   const issued = issueCredential(WORKER_ID);
   workerToken = issued.token;
@@ -277,5 +329,116 @@ describe("worker socket registry (downlink)", () => {
     expect(sendToWorker(WORKER_ID, { type: "decision", decisionId, action: "reject" })).toBe(true);
     expect(WorkerDownlinkSchema.parse(await received)).toEqual({ type: "decision", decisionId, action: "reject" });
     await closeAndWait(second);
+  });
+});
+
+describe("POST /ceo/api/decisions/:decisionId", () => {
+  it("records a PRIVATE ceo.decision_made and sends the decision to the owning worker", async () => {
+    const { ws, decisionId, taskId } = await openRequest();
+    const received = nextMessage(ws);
+
+    const res = await postDecision(decisionId, { action: "approve" });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ accepted: true, decisionId });
+    expect(WorkerDownlinkSchema.parse(await received)).toEqual({ type: "decision", decisionId, action: "approve" });
+
+    const rows = await decisionRows(decisionId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].visibility).toBe("PRIVATE");
+    expect(rows[0].taskId).toBe(taskId);
+    expect(rows[0].payload).toEqual({ decisionId, taskId, action: "approve", decidedBy: DEV_CEO });
+    await closeAndWait(ws);
+  });
+
+  it("returns 404 for an unknown decisionId", async () => {
+    const res = await postDecision(randomUUID(), { action: "approve" });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: "unknown decision" });
+  });
+
+  it("returns 400 for a non-uuid decisionId", async () => {
+    const res = await postDecision("not-a-uuid", { action: "approve" });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 400 for an invalid body and appends nothing", async () => {
+    const { ws, decisionId } = await openRequest();
+    const res = await postDecision(decisionId, { action: "yolo" });
+    expect(res.statusCode).toBe(400);
+    expect(await decisionRows(decisionId)).toHaveLength(0);
+    await closeAndWait(ws);
+  });
+
+  it("returns 503 and appends nothing when the owning worker is offline", async () => {
+    const { ws, decisionId } = await openRequest();
+    await closeAndWait(ws);
+    await vi.waitFor(() => expect((wc.isWorkerConnected as (id: string) => boolean)(WORKER_ID)).toBe(false));
+
+    const res = await postDecision(decisionId, { action: "approve" });
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({ error: "worker offline" });
+    expect(await decisionRows(decisionId)).toHaveLength(0);
+  });
+
+  it("refuses a non-loopback peer with 401, even when it sends X-Forwarded-For: 127.0.0.1", async () => {
+    const { ws, decisionId } = await openRequest();
+    const plain = await postDecision(decisionId, { action: "approve" }, { remoteAddress: "10.1.2.3" });
+    expect(plain.statusCode).toBe(401);
+    expect(plain.json()).toEqual({ error: "unauthorized" });
+
+    const forwarded = await postDecision(
+      decisionId,
+      { action: "approve" },
+      { remoteAddress: "10.1.2.3", headers: { "x-forwarded-for": "127.0.0.1" } },
+    );
+    expect(forwarded.statusCode).toBe(401);
+    expect(forwarded.json()).toEqual({ error: "unauthorized" });
+    expect(await decisionRows(decisionId)).toHaveLength(0);
+    await closeAndWait(ws);
+  });
+
+  it("refuses a loopback request with 401 when the dev bypass is off", async () => {
+    const { ws, decisionId } = await openRequest();
+    const res = await withBypassOff(() => postDecision(decisionId, { action: "approve" }));
+    expect(res.statusCode).toBe(401);
+    expect(res.json()).toEqual({ error: "unauthorized" });
+    await closeAndWait(ws);
+  });
+
+  it("never accepts BROWSER_ACCESS_TOKEN as CEO auth (401)", async () => {
+    const { ws, decisionId } = await openRequest();
+    const headers = { authorization: "Bearer test-browser-access-token" };
+    const offRes = await withBypassOff(() => postDecision(decisionId, { action: "approve" }, { headers }));
+    expect(offRes.statusCode).toBe(401);
+    expect(offRes.json()).toEqual({ error: "unauthorized" });
+    const remoteRes = await postDecision(decisionId, { action: "approve" }, { headers, remoteAddress: "10.1.2.3" });
+    expect(remoteRes.statusCode).toBe(401);
+    expect(remoteRes.json()).toEqual({ error: "unauthorized" });
+    expect(await decisionRows(decisionId)).toHaveLength(0);
+    await closeAndWait(ws);
+  });
+});
+
+describe("parseEnv CEO_DEV_AUTH_BYPASS guard", () => {
+  const base = {
+    DATABASE_URL: "postgres://x",
+    CREDENTIAL_PEPPER: "p",
+    BOOTSTRAP_SECRET: "b",
+    BROWSER_ACCESS_TOKEN: "t",
+  };
+
+  it("throws naming CEO_DEV_AUTH_BYPASS when the bypass is on with NODE_ENV=production", () => {
+    expect(typeof envMod.parseEnv).toBe("function");
+    const parseEnv = envMod.parseEnv as (src: Record<string, string | undefined>) => unknown;
+    expect(() => parseEnv({ ...base, CEO_DEV_AUTH_BYPASS: "1", NODE_ENV: "production" })).toThrow(
+      /CEO_DEV_AUTH_BYPASS/,
+    );
+  });
+
+  it("returns the bypass as true with NODE_ENV unset, and false by default", () => {
+    expect(typeof envMod.parseEnv).toBe("function");
+    const parseEnv = envMod.parseEnv as (src: Record<string, string | undefined>) => { CEO_DEV_AUTH_BYPASS: boolean };
+    expect(parseEnv({ ...base, CEO_DEV_AUTH_BYPASS: "1" }).CEO_DEV_AUTH_BYPASS).toBe(true);
+    expect(parseEnv(base).CEO_DEV_AUTH_BYPASS).toBe(false);
   });
 });
