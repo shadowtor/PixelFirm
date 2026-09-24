@@ -22,6 +22,7 @@ vi.mock("./event-emitter.js", () => ({
   postEvent: vi.fn(async () => {}),
 }));
 vi.mock("gsd-adapter", () => ({ observeGsdState: vi.fn() }));
+vi.mock("git-adapter", () => ({ readDiff: vi.fn(async () => undefined) }));
 
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { reduce, emptyState } from "company-core";
@@ -32,6 +33,7 @@ import * as es from "event-schema";
 import * as claudeAdapter from "./index.js";
 import * as decisionMapping from "./decision-mapping.js";
 import { observeGsdState } from "gsd-adapter";
+import { readDiff } from "git-adapter";
 import { postEvent } from "./event-emitter.js";
 import { createClaudeCodeRuntime } from "./claude-code-runtime.js";
 import { DEFAULT_WATCHDOG_TIMEOUT_MS } from "./watchdog.js";
@@ -893,6 +895,10 @@ describe("parked canUseTool (D-01)", () => {
       kind: "ceo_gated_tool",
       toolName: "Bash",
       toolInput: JSON.stringify(input),
+      // 06-03 (CEO-02, D-02): derived title plus the resume fields.
+      title: "Bash: npm publish",
+      sessionId: "session-abc",
+      worktreePath: startInput.worktreePath,
     });
 
     decide(wireDecision({ action: "approve" }));
@@ -990,6 +996,141 @@ describe("parked canUseTool (D-01)", () => {
   it("the package index exports toPermissionResult and CEO_PREFIX", () => {
     expect(typeof claudeAdapter.toPermissionResult).toBe("function");
     expect(claudeAdapter.CEO_PREFIX.reject).toBe("[CEO:REJECT]");
+  });
+});
+
+describe("enriched decision request (06-03, CEO-02, D-06, D-02)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const bootId = "5d2c1b0a-9e8f-4a7b-8c6d-5e4f3a2b1c0d";
+
+  // Yields every message, then blocks until interrupt() releases it.
+  function gatedQuery(messages: unknown[]) {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    async function* gen() {
+      for (const m of messages) yield m;
+      await gate;
+    }
+    const iter = gen() as AsyncGenerator<unknown, void> & { interrupt: Mock };
+    iter.interrupt = vi.fn(async () => {
+      release();
+      return undefined;
+    });
+    return iter;
+  }
+
+  async function startEnriched(messages: unknown[]) {
+    const q = gatedQuery(messages);
+    (query as unknown as Mock).mockReturnValue(q);
+    const resolvers = new Map<string, (d: unknown) => void>();
+    const awaitDecision = vi.fn(
+      (id: string) =>
+        new Promise((resolve) => {
+          resolvers.set(id, resolve);
+        }),
+    );
+    const runtime = createClaudeCodeRuntime({ ...runtimeOptions(), awaitDecision, workerBootId: bootId } as Parameters<
+      typeof createClaudeCodeRuntime
+    >[0]);
+    const startPromise = runtime.startTask({ ...startInput, title: "Release v2" } as typeof startInput);
+    await flushMicrotasks();
+    const options = (query as unknown as Mock).mock.calls[0][0].options;
+    const park = (input: Record<string, unknown> = { command: "npm publish" }) =>
+      options.canUseTool("Bash", input, { signal: new AbortController().signal, toolUseID: "t" });
+    const decide = (id: string, d: unknown) => resolvers.get(id)!(d);
+    const finish = async () => {
+      q.interrupt();
+      await startPromise;
+    };
+    return { park, decide, finish };
+  }
+
+  function requests() {
+    return (postEvent as unknown as Mock).mock.calls
+      .map((call) => call[2])
+      .filter((e) => e.type === "ceo.approval_requested");
+  }
+
+  const assistantText = {
+    type: "assistant",
+    message: {
+      content: [
+        { type: "text", text: "I will deploy now, see https://example.com/x" },
+        { type: "tool_use", id: "tu-1", name: "Bash", input: { command: "npm publish" } },
+      ],
+    },
+  };
+
+  const fakeDiff = {
+    files: [{ path: "src/a.ts", added: 2, removed: 1 }],
+    unified: "+a\n+b\n-c",
+    truncated: false,
+    totalAdded: 2,
+    totalRemoved: 1,
+  };
+
+  it("carries the agent's last text as context, its links, the worker diff, and the resume fields", async () => {
+    (readDiff as unknown as Mock).mockResolvedValueOnce(fakeDiff);
+    const { park, finish } = await startEnriched([initMessage("session-xyz"), assistantText]);
+
+    void park();
+    await flushMicrotasks();
+
+    expect(readDiff).toHaveBeenCalledWith(startInput.worktreePath);
+    const [request] = requests();
+    expect(request.visibility).toBe("PRIVATE");
+    expect(request.sourceAgentId).toBe("test-agent-1");
+    expect(request.payload.context).toBe("I will deploy now, see https://example.com/x");
+    expect(request.payload.links).toEqual(["https://example.com/x"]);
+    expect(request.payload.diff).toEqual(fakeDiff);
+    expect(request.payload.sessionId).toBe("session-xyz");
+    expect(request.payload.worktreePath).toBe(startInput.worktreePath);
+    expect(request.payload.workerBootId).toBe(bootId);
+    expect(request.payload.taskTitle).toBe("Release v2");
+    await finish();
+  });
+
+  it("a readDiff failure still posts the request, with no diff key", async () => {
+    (readDiff as unknown as Mock).mockRejectedValueOnce(new Error("not a git repo"));
+    const { park, finish } = await startEnriched([initMessage("session-xyz")]);
+
+    void park();
+    await flushMicrotasks();
+
+    const [request] = requests();
+    expect(request).toBeDefined();
+    expect(request.payload).not.toHaveProperty("diff");
+    await finish();
+  });
+
+  it("after a discuss decision the next request keeps the thread; the one after starts its own", async () => {
+    const { park, decide, finish } = await startEnriched([initMessage("session-xyz")]);
+
+    const first = park();
+    await flushMicrotasks();
+    const r1 = requests()[0].payload;
+    expect(r1.threadId).toBe(r1.decisionId);
+    decide(r1.decisionId, { action: "discuss", note: "why now?" });
+    await first;
+
+    const second = park();
+    await flushMicrotasks();
+    const r2 = requests()[1].payload;
+    expect(r2.decisionId).not.toBe(r1.decisionId);
+    expect(r2.threadId).toBe(r1.threadId);
+    decide(r2.decisionId, { action: "approve" });
+    await second;
+
+    void park();
+    await flushMicrotasks();
+    const r3 = requests()[2].payload;
+    expect(r3.threadId).toBe(r3.decisionId);
+    await finish();
   });
 });
 
