@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { authenticateWorker } from "../auth/worker-auth.js";
 import { markSocketClosed, markSocketOpen } from "../ws/connection-status.js";
+import { registerWorkerSocket, unregisterWorkerSocket } from "../ws/worker-connections.js";
 
 export async function registerWsRoute(fastify: FastifyInstance) {
   fastify.get(
@@ -15,11 +16,15 @@ export async function registerWsRoute(fastify: FastifyInstance) {
       // already succeeded, or the connection would never have reached this handler.
       const workerId = request.workerId as string;
       markSocketOpen(workerId);
+      // Phase 6 downlink: keyed by the authenticated workerId, never a message field.
+      registerWorkerSocket(workerId, socket);
       socket.on("close", () => {
         markSocketClosed(workerId);
+        unregisterWorkerSocket(workerId, socket);
       });
       socket.on("error", () => {
         markSocketClosed(workerId);
+        unregisterWorkerSocket(workerId, socket);
       });
     },
   );

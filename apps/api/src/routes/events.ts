@@ -23,6 +23,11 @@ const WORKER_ALLOWED_EVENT_TYPES = new Set([
   "ceo.approval_requested",
   "agent.handoff_requested",
   "agent.handoff_completed",
+  // Phase 6: the worker reports what it did with a decision, or that a parked
+  // call was lost. Never ceo.decision_made or ceo.task_resume_requested: only
+  // an authenticated CEO request authors those (T-06-13-03).
+  "ceo.decision_applied",
+  "ceo.approval_expired",
 ]);
 
 export async function registerEventsRoute(fastify: FastifyInstance) {
@@ -42,7 +47,18 @@ export async function registerEventsRoute(fastify: FastifyInstance) {
       if (!parsed.success) {
         return reply.code(400).send({ error: parsed.error.flatten() });
       }
-      const event = parsed.data;
+      // T-06-13-07: every ceo.* event is CEO-only information.
+      if (parsed.data.type.startsWith("ceo.") && parsed.data.visibility !== "PRIVATE") {
+        return reply.code(400).send({ error: "ceo events must be PRIVATE" });
+      }
+      // T-03-01 rationale, as for the heartbeat below: the owning worker is the
+      // AUTHENTICATED request.workerId, never a body field. Decisions are routed
+      // back to exactly this worker (T-06-13-04), and the stored and relayed
+      // event carry the same stamped value.
+      const event =
+        parsed.data.type === "ceo.approval_requested"
+          ? { ...parsed.data, payload: { ...parsed.data.payload, workerId: request.workerId } }
+          : parsed.data;
 
       const inserted = await db
         .insert(events)
