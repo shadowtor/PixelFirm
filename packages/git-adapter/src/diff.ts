@@ -1,4 +1,5 @@
 import { execa } from "execa";
+import { gitExecOptions } from "./git-env.js";
 
 export interface DiffSummary {
   files: { path: string; added: number; removed: number }[];
@@ -11,6 +12,9 @@ export interface DiffSummary {
 // Pitfall 10: diff.external and .gitattributes textconv drivers run arbitrary
 // repo-configured programs. Every diff call starts from these flags.
 const BASE_ARGS = ["--no-ext-diff", "--no-textconv", "--no-color"];
+// CR-02: a core.fsmonitor hook would also run on every worktree diff. Clean
+// filters cannot be switched off by a flag; gitExecOptions keeps secrets from them.
+const SAFE_CONFIG = ["-c", "core.fsmonitor=false"];
 
 /**
  * Read-only, capped diff of a worktree for a CEO decision request (D-09).
@@ -31,7 +35,11 @@ export async function readDiff(
 ): Promise<DiffSummary> {
   const base = await diffBase(worktreePath);
 
-  const numstat = await execa("git", ["diff", ...BASE_ARGS, "--numstat", base, "--"], { cwd: worktreePath });
+  const numstat = await execa(
+    "git",
+    [...SAFE_CONFIG, "diff", ...BASE_ARGS, "--numstat", base, "--"],
+    gitExecOptions(worktreePath),
+  );
   const allFiles = numstat.stdout
     .split("\n")
     .filter((line) => line.length > 0)
@@ -40,8 +48,8 @@ export async function readDiff(
       return { path: path.join("\t"), added: toCount(added), removed: toCount(removed) };
     });
 
-  const full = await execa("git", ["diff", ...BASE_ARGS, base, "--"], {
-    cwd: worktreePath,
+  const full = await execa("git", [...SAFE_CONFIG, "diff", ...BASE_ARGS, base, "--"], {
+    ...gitExecOptions(worktreePath),
     maxBuffer: 8 * 1024 * 1024,
   });
   const lines = full.stdout.length === 0 ? [] : full.stdout.split("\n");
@@ -65,11 +73,15 @@ export async function readDiff(
 
 async function diffBase(worktreePath: string): Promise<string> {
   try {
-    await execa("git", ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"], { cwd: worktreePath });
+    await execa(
+      "git",
+      ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+      gitExecOptions(worktreePath),
+    );
   } catch {
     return "HEAD";
   }
-  const { stdout } = await execa("git", ["merge-base", "HEAD", "@{upstream}"], { cwd: worktreePath });
+  const { stdout } = await execa("git", ["merge-base", "HEAD", "@{upstream}"], gitExecOptions(worktreePath));
   return stdout.trim();
 }
 

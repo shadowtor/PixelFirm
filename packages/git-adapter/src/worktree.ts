@@ -1,4 +1,5 @@
 import { execa } from "execa";
+import { gitExecOptions } from "./git-env.js";
 
 export interface WorktreeRecord {
   path: string;
@@ -18,7 +19,7 @@ const REFS_HEADS_PREFIX = "refs/heads/";
  * name) is never truncated.
  */
 export async function listWorktrees(repoPath: string): Promise<WorktreeRecord[]> {
-  const { stdout } = await execa("git", ["worktree", "list", "--porcelain"], { cwd: repoPath });
+  const { stdout } = await execa("git", ["worktree", "list", "--porcelain"], gitExecOptions(repoPath));
 
   const blocks = stdout.split("\n\n").map((block) => block.trim()).filter((block) => block.length > 0);
 

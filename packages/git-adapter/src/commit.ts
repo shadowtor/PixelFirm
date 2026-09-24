@@ -1,4 +1,5 @@
 import { execa } from "execa";
+import { gitExecOptions } from "./git-env.js";
 
 /**
  * Resolves the current HEAD commit sha for a repo. Runs real `git` plumbing,
@@ -6,7 +7,7 @@ import { execa } from "execa";
  * mitigation (RESEARCH.md Security Domain, T-03-05).
  */
 export async function readHead(repoPath: string): Promise<string> {
-  const { stdout } = await execa("git", ["rev-parse", "HEAD"], { cwd: repoPath });
+  const { stdout } = await execa("git", ["rev-parse", "HEAD"], gitExecOptions(repoPath));
   return stdout.trim();
 }
 
@@ -14,7 +15,7 @@ export async function readHead(repoPath: string): Promise<string> {
  * Resolves the current branch name for a repo (e.g. "main").
  */
 export async function readBranch(repoPath: string): Promise<string> {
-  const { stdout } = await execa("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: repoPath });
+  const { stdout } = await execa("git", ["rev-parse", "--abbrev-ref", "HEAD"], gitExecOptions(repoPath));
   return stdout.trim();
 }
 
@@ -26,7 +27,7 @@ export async function readBranch(repoPath: string): Promise<string> {
  */
 export async function isGitWorktree(repoPath: string): Promise<boolean> {
   try {
-    const { stdout } = await execa("git", ["-C", repoPath, "rev-parse", "--is-inside-work-tree"]);
+    const { stdout } = await execa("git", ["-C", repoPath, "rev-parse", "--is-inside-work-tree"], gitExecOptions());
     return stdout.trim() === "true";
   } catch {
     return false;

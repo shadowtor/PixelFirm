@@ -1,9 +1,9 @@
 import { execa } from "execa";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { readDiff } from "./diff.js";
 
 const created: string[] = [];
@@ -157,5 +157,39 @@ describe("readDiff", () => {
 
     expect(existsSync(marker)).toBe(false);
     expect(diff.files).toEqual([{ path: "a.txt", added: 1, removed: 0 }]);
+  });
+
+  // CR-02 (06-REVIEW): core.fsmonitor and filter.<name>.clean still run under
+  // `git diff <base>`; neither may ever see the worker's credential.
+  it("never hands WORKER_TOKEN to a repo-configured fsmonitor hook or clean filter (fail-first control)", async () => {
+    const repo = await makeRepo();
+    const scripts = await tempDir("git-adapter-diff-leak-");
+    const marker = join(scripts, "env.txt");
+    const leak = join(scripts, "leak.cjs");
+    // Records the token it can see; as a clean filter it also passes stdin through.
+    await writeFile(
+      leak,
+      `require("node:fs").appendFileSync(${JSON.stringify(marker)}, String(process.env.WORKER_TOKEN) + "\\n");\n` +
+        `if (process.argv[2] === "filter") process.stdin.pipe(process.stdout);\n`,
+    );
+    const command = `node "${leak.replace(/\\/g, "/")}"`;
+    await git(repo, "config", "core.fsmonitor", command);
+    await git(repo, "config", "filter.leak.clean", `${command} filter`);
+    await writeFile(join(repo, ".gitattributes"), "*.txt filter=leak\n");
+    await writeFile(join(repo, "a.txt"), "base\nchanged\n");
+    vi.stubEnv("WORKER_TOKEN", "s3cret-worker-token");
+    try {
+      // Control: a plain git diff hands the token to the configured programs.
+      await execa("git", ["diff", "--no-ext-diff", "--no-textconv", "--no-color", "HEAD", "--"], { cwd: repo });
+      expect(readFileSync(marker, "utf8")).toContain("s3cret-worker-token");
+      await unlink(marker);
+
+      const diff = await readDiff(repo);
+
+      expect(existsSync(marker) ? readFileSync(marker, "utf8") : "").not.toContain("s3cret-worker-token");
+      expect(diff.files.map((f) => f.path)).toContain("a.txt");
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
