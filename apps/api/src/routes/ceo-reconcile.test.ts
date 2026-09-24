@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
-import { WebSocket } from "ws";
+import { WebSocket, type ClientOptions } from "ws";
 import { and, eq, sql } from "drizzle-orm";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { WorkerDownlinkSchema } from "event-schema";
@@ -53,7 +53,7 @@ async function applyIdempotently(client: Client, text: string) {
   }
 }
 
-function openSocket(url: string, options: ConstructorParameters<typeof WebSocket>[1]): Promise<WebSocket> {
+function openSocket(url: string, options: ClientOptions = {}): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(url, options);
     ws.once("open", () => resolve(ws));
@@ -204,7 +204,7 @@ afterAll(async () => {
 describe("hello reconcile (D-02, 06-04)", () => {
   it("a new bootId expires the open request (never approves) and blocks its task for the requesting agent", async () => {
     const ws = await fakeWorker();
-    const office = await openSocket(`${wsBaseUrl}/ws/browser?token=test-browser-access-token`, {});
+    const office = await openSocket(`${wsBaseUrl}/ws/browser?token=test-browser-access-token`);
     const ceo = await openSocket(`${wsBaseUrl}/ceo/ws`, { origin: ORIGIN });
     const officeFrames = record(office);
     const ceoFrames = record(ceo);
