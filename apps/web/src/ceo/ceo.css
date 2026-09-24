@@ -67,3 +67,11 @@
     @apply bg-background text-foreground font-sans;
   }
 }
+
+/* Continuous motion (skeleton pulse, Status ping) stops under reduced motion (UI-SPEC accessibility). */
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .animate-ping {
+    animation: none;
+  }
+}
