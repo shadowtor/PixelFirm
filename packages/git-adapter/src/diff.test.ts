@@ -42,7 +42,9 @@ afterAll(async () => {
   for (const dir of created) await rm(dir, { recursive: true, force: true });
 });
 
-describe("readDiff", () => {
+// WR-16 (06-REVIEW): each test spawns up to ~15 git processes, which can take
+// longer than vitest's 5 s default under a full parallel run on Windows.
+describe("readDiff", { timeout: 30_000 }, () => {
   it("reports an uncommitted 3-line change with numstat counts and + lines", async () => {
     const repo = await makeRepo();
     await writeFile(join(repo, "a.txt"), "base\nadd one\nadd two\nadd three\n");
