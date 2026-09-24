@@ -383,3 +383,28 @@ describe("agent.handoff_completed (Phase 5, 05-03)", () => {
     expect(result.agents["agent-2"].status).toBe(AgentStatus.CODING);
   });
 });
+
+describe("ProjectionState never holds decision content (D-08, T-06-06-02)", () => {
+  it("folding PRIVATE ceo.approval_requested payloads leaves none of their strings in the state", () => {
+    const privateStrings = ["PRIV-TITLE-9", "PRIV-CONTEXT-9", "PRIV-TOOL-INPUT-9", "PRIV-DIFF-9", "PRIV-RECO-9"];
+    const request = {
+      ...companyStartedEvent(),
+      id: "3fa85f64-5717-4562-b3fc-2c963f66afb9",
+      visibility: "PRIVATE",
+      type: "ceo.approval_requested",
+      taskId: "task-1",
+      payload: {
+        taskId: "task-1",
+        reason: "gated",
+        decisionId: "3fa85f64-5717-4562-b3fc-2c963f66afc9",
+        title: privateStrings[0],
+        context: privateStrings[1],
+        toolInput: privateStrings[2],
+        diff: { files: [], unified: privateStrings[3], truncated: false, totalAdded: 0, totalRemoved: 0 },
+        recommendation: privateStrings[4],
+      },
+    } as CompanyEvent;
+    const json = JSON.stringify(fold([...stubEventSequence, request]));
+    expect(privateStrings.filter((s) => json.includes(s))).toEqual([]);
+  });
+});

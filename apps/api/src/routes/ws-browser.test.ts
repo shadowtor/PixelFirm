@@ -184,6 +184,78 @@ describe("POST /events relay", () => {
   });
 });
 
+function postEvent(event: object) {
+  return fetch(`${httpBaseUrl}/events`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${workerToken}` },
+    body: JSON.stringify(event),
+  });
+}
+
+const PRIVATE_STRINGS = ["SECRET-TITLE-123", "SECRET-CONTEXT-123", "SECRET-TOOL-INPUT-123", "SECRET-DIFF-123"];
+
+function privateApprovalRequest() {
+  return {
+    id: randomUUID(),
+    type: "ceo.approval_requested",
+    version: 1,
+    occurredAt: new Date().toISOString(),
+    companyId: "company-1",
+    visibility: "PRIVATE",
+    taskId: "ws-browser-private-task",
+    payload: {
+      taskId: "ws-browser-private-task",
+      reason: "gated",
+      decisionId: randomUUID(),
+      kind: "ceo_gated_tool",
+      toolName: "Bash",
+      title: PRIVATE_STRINGS[0],
+      context: PRIVATE_STRINGS[1],
+      toolInput: PRIVATE_STRINGS[2],
+      diff: { files: [], unified: PRIVATE_STRINGS[3], truncated: false, totalAdded: 0, totalRemoved: 0 },
+    },
+  };
+}
+
+describe("office feed privacy (Pitfall 2, T-06-06-01)", () => {
+  it("an office socket skips a PRIVATE ceo.approval_requested: the next message is the INTERNAL event", async () => {
+    const result = await attempt("test-browser-access-token");
+    if (!result.opened) throw new Error("office socket did not open");
+    await nextMessage(result.ws);
+
+    const internal = {
+      id: randomUUID(),
+      type: "task.status_changed",
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      companyId: "company-1",
+      visibility: "INTERNAL",
+      payload: { taskId: "ws-browser-private-task", status: "running" },
+    };
+    const next = nextMessage(result.ws);
+    expect((await postEvent(privateApprovalRequest())).status).toBe(202);
+    expect((await postEvent(internal)).status).toBe(202);
+
+    const relayed = (await next) as { type: string; event: { id: string; type: string } };
+    expect({ type: relayed.type, id: relayed.event.id, eventType: relayed.event.type }).toEqual({
+      type: "event",
+      id: internal.id,
+      eventType: "task.status_changed",
+    });
+    result.ws.close();
+  });
+
+  it("an office snapshot taken after a PRIVATE row exists contains none of its private strings", async () => {
+    expect((await postEvent(privateApprovalRequest())).status).toBe(202);
+    const result = await attempt("test-browser-access-token");
+    if (!result.opened) throw new Error("office socket did not open");
+
+    const json = JSON.stringify(await nextMessage(result.ws));
+    expect(PRIVATE_STRINGS.filter((s) => json.includes(s))).toEqual([]);
+    result.ws.close();
+  });
+});
+
 describe("GET /ws/browser ordering (WR-01 regression)", () => {
   it("the first message received is always the snapshot, even when a POST /events broadcast fires immediately after the socket opens (no snapshot-drain delay)", async () => {
     const result = await attempt("test-browser-access-token");

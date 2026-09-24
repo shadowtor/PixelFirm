@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { WebSocket } from "ws";
 import {
   _resetBrowserSocketsForTests,
+  acceptsCeo,
+  acceptsOffice,
   broadcastToBrowsers,
   flushBrowserSocket,
   registerBrowserSocket,
@@ -85,5 +87,54 @@ describe("browser socket buffering (CR-03)", () => {
     // path (and is still skipped by the readyState guard), never re-queues.
     broadcastToBrowsers({ type: "event", event: { id: "e6" } });
     expect(sent).toEqual([]);
+  });
+});
+
+describe("per-socket event filter (Pitfall 2, T-06-06-01)", () => {
+  const internal = { type: "event", event: { id: "i1", type: "task.status_changed", visibility: "INTERNAL" } };
+  const privateCeo = { type: "event", event: { id: "p1", type: "ceo.approval_requested", visibility: "PRIVATE" } };
+
+  function promoted(accepts?: typeof acceptsOffice) {
+    const fake = fakeSocket();
+    registerBrowserSocket(fake.socket, accepts);
+    flushBrowserSocket(fake.socket);
+    return fake;
+  }
+
+  it("an acceptsOffice socket gets the INTERNAL event and not the PRIVATE one", () => {
+    const { sent } = promoted(acceptsOffice);
+    broadcastToBrowsers(privateCeo);
+    broadcastToBrowsers(internal);
+    expect(sent.map((raw) => JSON.parse(raw))).toEqual([internal]);
+  });
+
+  it("registerBrowserSocket defaults to the office filter", () => {
+    const { sent } = promoted();
+    broadcastToBrowsers(privateCeo);
+    expect(sent).toEqual([]);
+  });
+
+  it("an acceptsCeo socket gets ceo.* events only", () => {
+    const { sent } = promoted(acceptsCeo);
+    broadcastToBrowsers(internal);
+    broadcastToBrowsers(privateCeo);
+    expect(sent.map((raw) => JSON.parse(raw))).toEqual([privateCeo]);
+  });
+
+  it("a non-event message goes to both kinds of socket", () => {
+    const office = promoted(acceptsOffice);
+    const ceo = promoted(acceptsCeo);
+    broadcastToBrowsers({ type: "control" });
+    expect([office.sent.length, ceo.sent.length]).toEqual([1, 1]);
+  });
+
+  it("a buffering socket queues only what its filter accepts, still after the snapshot (CR-03)", () => {
+    const { socket, sent } = fakeSocket();
+    registerBrowserSocket(socket, acceptsOffice);
+    broadcastToBrowsers(privateCeo);
+    broadcastToBrowsers(internal);
+    socket.send(JSON.stringify({ type: "snapshot", state: {} }));
+    flushBrowserSocket(socket);
+    expect(sent.map((raw) => JSON.parse(raw))).toEqual([{ type: "snapshot", state: {} }, internal]);
   });
 });
