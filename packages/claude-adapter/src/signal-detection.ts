@@ -84,6 +84,13 @@ const CEO_GATED_BASH_PATTERNS: { name: string; pattern: RegExp }[] = [
     pattern:
       /\b(npm|pnpm|yarn|bun)\b[^|;&]*\s(add|remove|rm|uninstall|update|upgrade)\b|\b(npm|pnpm|bun)\s+(install|i)\s+(?:-\S+\s+)*[^\s-]|\bpip3?\s+install\b/i,
   },
+  // 06-REVIEW WR-02: DEPLOY_HOOK_URL's rule for a fetch from the shell (a URL
+  // containing "deploy" already matches publish/deploy above).
+  {
+    name: "deploy hook",
+    pattern:
+      /\b(?:curl|wget|https?|iwr|irm|invoke-webrequest|invoke-restmethod)\b[^|;&]*https?:\/\/[^\s'"]*(?:webhook|\/hooks?(?=[/?#\s'"]|$))/i,
+  },
   {
     name: "production config write",
     pattern: new RegExp(

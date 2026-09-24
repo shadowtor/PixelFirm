@@ -157,6 +157,19 @@ describe("classifySignal — CEO-04 gate-paths production-change set", () => {
     expect(classifySignal("WebFetch", { url: "https://docs.example.com/guide" })).toBeNull();
   });
 
+  // WR-02 (06-REVIEW): the same deploy-hook rule for a fetch from the shell.
+  it("a shell fetch of a webhook or /hook(s)/ URL is gated; an ordinary fetch is not", () => {
+    const HOOK = "Bash command matched a CEO-gated pattern: deploy hook";
+    expect(classifySignal("Bash", { command: "curl -X POST https://ci.example/webhooks/abc" })?.reason).toBe(HOOK);
+    expect(classifySignal("Bash", { command: "curl -fsS -X POST 'https://ci.example/hooks/abc?x=1'" })?.reason).toBe(HOOK);
+    expect(classifySignal("Bash", { command: "wget -q -O- https://ci.example/hook" })?.reason).toBe(HOOK);
+    expect(
+      classifySignal("PowerShell", { command: "Invoke-WebRequest -Method Post https://ci.example/webhook/x" })?.kind,
+    ).toBe("ceo_gated_tool");
+    expect(classifySignal("Bash", { command: "curl -fsSL https://docs.example.com/guide" })).toBeNull();
+    expect(classifySignal("Bash", { command: "curl https://example.com/hookshot" })).toBeNull();
+  });
+
   it("shell writes into production config are gated; reads are not", () => {
     const WRITE = "Bash command matched a CEO-gated pattern: production config write";
     expect(classifySignal("Bash", { command: "echo X=1 >> .env" })?.reason).toBe(WRITE);
