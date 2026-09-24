@@ -964,7 +964,7 @@ describe("parked canUseTool (D-01)", () => {
       { command: "npm publish" },
       { signal: new AbortController().signal, toolUseID: "t" },
     );
-    expect(result).toEqual({ behavior: "deny", message: "No CEO decision was received; the tool call was not run." });
+    expect(result).toEqual({ behavior: "deny", message: "No CEO decision was applied; the tool call was not run." });
     await finish();
   });
 
@@ -1094,5 +1094,164 @@ describe("PreToolUse ask backstop and subprocess env (06-02 Task 2, CEO-04)", ()
     const env = (query as unknown as Mock).mock.calls[0][0].options.env as Record<string, string>;
     expect(Object.keys(env).filter((k) => STRIPPED.includes(k))).toEqual([]);
     expect(Object.keys(env).some((k) => k.toUpperCase() === "PATH")).toBe(true);
+  });
+});
+
+// 06-02 Task 3 (D-02, D-03): the parked call's lifecycle against the watchdog,
+// the Notification hook, pause/abort and supersession.
+describe("parked-call lifecycle (D-02, D-03)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    (observeGsdState as unknown as Mock).mockResolvedValue({
+      phase: "06",
+      status: "executing",
+      category: "execution",
+      role: "Engineering",
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  // awaitDecision mirroring apps/worker's broker: resolves per decisionId,
+  // rejects when the call's signal aborts.
+  async function start(first: unknown = pausableQuery(initMessage("session-abc"))) {
+    (query as unknown as Mock).mockReturnValueOnce(first);
+    const resolvers = new Map<string, (d: unknown) => void>();
+    const awaitDecision = vi.fn(
+      (id: string, signal: AbortSignal) =>
+        new Promise((resolve, reject) => {
+          resolvers.set(id, resolve);
+          signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+        }),
+    );
+    const runtime = createClaudeCodeRuntime({ ...runtimeOptions(), awaitDecision } as Parameters<
+      typeof createClaudeCodeRuntime
+    >[0]);
+    void runtime.startTask(startInput);
+    await vi.advanceTimersByTimeAsync(0);
+    const options = (query as unknown as Mock).mock.calls[0][0].options;
+    const ids = () => awaitDecision.mock.calls.map((call) => call[0] as string);
+    const decide = (id: string, d: unknown) => resolvers.get(id)!(d);
+    const park = (signal: AbortSignal = new AbortController().signal) =>
+      options.canUseTool("Bash", { command: "npm publish" }, { signal, toolUseID: "t" });
+    return { runtime, options, ids, decide, park };
+  }
+
+  function posted() {
+    return (postEvent as unknown as Mock).mock.calls.map((call) => call[2]);
+  }
+
+  function statuses(): string[] {
+    return posted()
+      .filter((e) => e.type === "task.status_changed")
+      .map((e) => e.payload.status);
+  }
+
+  it("the watchdog never fires while a call is parked, and restarts from zero once it resolves", async () => {
+    const q = pausableQuery(initMessage("session-abc"));
+    const { ids, decide, park } = await start(q);
+    const result = park();
+    await vi.advanceTimersByTimeAsync(0);
+
+    await vi.advanceTimersByTimeAsync(150_000);
+    expect(statuses()).toEqual(["starting", "waiting_for_review"]);
+    expect(q.interrupt).not.toHaveBeenCalled();
+
+    decide(ids()[0], { action: "approve" });
+    expect((await result).behavior).toBe("allow");
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_WATCHDOG_TIMEOUT_MS - 1);
+    expect(statuses()).not.toContain("blocked");
+    await vi.advanceTimersByTimeAsync(1 + GRACEFUL_TIMEOUT_MS);
+    expect(statuses().at(-1)).toBe("blocked");
+  });
+
+  it("two concurrently parked calls get distinct decisionIds and resolve independently, in reverse order", async () => {
+    const { ids, decide, park } = await start();
+    let firstSettled = false;
+    const first = park().then((r: unknown) => {
+      firstSettled = true;
+      return r;
+    });
+    const second = park();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const requested = posted().filter((e) => e.type === "ceo.approval_requested");
+    expect(requested).toHaveLength(2);
+    expect(requested[0].payload.decisionId).not.toBe(requested[1].payload.decisionId);
+    expect(ids()).toEqual(requested.map((e) => e.payload.decisionId));
+
+    decide(ids()[1], { action: "reject" });
+    expect(await second).toEqual({ behavior: "deny", message: "[CEO:REJECT]" });
+    await vi.advanceTimersByTimeAsync(150_000);
+    expect(firstSettled).toBe(false);
+    expect(statuses()).not.toContain("blocked");
+
+    decide(ids()[0], { action: "approve" });
+    expect((await first).behavior).toBe("allow");
+    await vi.advanceTimersByTimeAsync(DEFAULT_WATCHDOG_TIMEOUT_MS + GRACEFUL_TIMEOUT_MS);
+    expect(statuses().at(-1)).toBe("blocked");
+  });
+
+  it("the Notification hook posts nothing while a call is parked, and keeps requestReview when nothing is parked", async () => {
+    const { options, ids, decide, park } = await start();
+    const notify = () =>
+      options.hooks.Notification[0].hooks[0](
+        { hook_event_name: "Notification", message: "waiting", notification_type: "permission_prompt" },
+        "t",
+        { signal: new AbortController().signal },
+      );
+    const result = park();
+    await vi.advanceTimersByTimeAsync(0);
+    const before = posted().length;
+
+    await notify();
+    expect(posted().length).toBe(before);
+
+    decide(ids()[0], { action: "approve" });
+    await result;
+    await notify();
+    const requested = posted().filter((e) => e.type === "ceo.approval_requested");
+    expect(requested).toHaveLength(2);
+    expect(requested[1].payload.reason).toContain("permission_prompt");
+  });
+
+  it("pauseTask on a parked call denies it and posts PRIVATE ceo.approval_expired reason aborted, no decision_applied", async () => {
+    const { runtime, options, ids, park } = await start(hangingQuery(initMessage("session-abc")));
+    // The SDK derives each canUseTool signal from the query's abortController.
+    const result = park(options.abortController.signal);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const pause = runtime.pauseTask("task-1");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+    await pause;
+
+    expect(await result).toEqual({ behavior: "deny", message: "No CEO decision was applied; the tool call was not run." });
+    const expired = posted().filter((e) => e.type === "ceo.approval_expired");
+    expect(expired).toHaveLength(1);
+    expect(expired[0].visibility).toBe("PRIVATE");
+    expect(expired[0].payload).toEqual({ decisionId: ids()[0], taskId: "task-1", reason: "aborted" });
+    expect(posted().filter((e) => e.type === "ceo.decision_applied")).toHaveLength(0);
+  });
+
+  it("a decision arriving after sendMessage superseded the invocation denies, posts reason superseded, and never posts running", async () => {
+    const { runtime, ids, decide, park } = await start(hangingQuery(initMessage("session-abc")));
+    (query as unknown as Mock).mockReturnValueOnce(fakeQuery([resultMessage("success")]));
+    const result = park();
+    await vi.advanceTimersByTimeAsync(0);
+
+    void runtime.sendMessage("task-1", "second");
+    await vi.advanceTimersByTimeAsync(GRACEFUL_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(0);
+
+    decide(ids()[0], { action: "approve" });
+    expect((await result).behavior).toBe("deny");
+    const expired = posted().filter((e) => e.type === "ceo.approval_expired");
+    expect(expired.map((e) => e.payload)).toEqual([{ decisionId: ids()[0], taskId: "task-1", reason: "superseded" }]);
+    expect(posted().filter((e) => e.type === "ceo.decision_applied")).toHaveLength(0);
+    expect(statuses()).not.toContain("running");
   });
 });
