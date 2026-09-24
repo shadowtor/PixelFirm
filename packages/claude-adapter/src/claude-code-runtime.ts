@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
 import { observeGsdState } from "gsd-adapter";
 import type { AgentRuntime, AgentTaskStatus, StartTaskInput } from "orchestration-adapter";
-import { type CeoDecision, type ParkedCall, toPermissionResult } from "./decision-mapping.js";
+import { CEO_PROTOCOL_APPEND, type CeoDecision, type ParkedCall, toPermissionResult } from "./decision-mapping.js";
 import { buildEnvelope, postEvent } from "./event-emitter.js";
 import { classifySignal } from "./signal-detection.js";
 import { createWatchdog, DEFAULT_WATCHDOG_TIMEOUT_MS } from "./watchdog.js";
@@ -208,6 +208,13 @@ export function createClaudeCodeRuntime(options: {
         // explicitly set here, spreading process.env for everything else
         // (PATH, HOME, etc.) but actively stripping the key.
         env: Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "ANTHROPIC_API_KEY")),
+        // D-05/D-06: with a decision source, tell the agent what each typed
+        // [CEO:...] denial means. This also moves the worker-hosted mode onto
+        // Claude Code's own system prompt (the preset), which the 06-11 live
+        // proof exercises. Without one, no systemPrompt key (Phase 4 unchanged).
+        ...(options.awaitDecision
+          ? { systemPrompt: { type: "preset" as const, preset: "claude_code" as const, append: CEO_PROTOCOL_APPEND } }
+          : {}),
         // D-08 signal #1: fires for AskUserQuestion and any Bash command
         // matching classifySignal's CEO-gated allowlist. Never auto-approves a
         // classified call (ARCHITECTURE.md Anti-Pattern 2). With a decision
