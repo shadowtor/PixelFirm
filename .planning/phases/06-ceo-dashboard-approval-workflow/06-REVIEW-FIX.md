@@ -2,7 +2,7 @@
 phase: 06-ceo-dashboard-approval-workflow
 fixed_at: 2026-09-25T00:00:00Z
 review_path: .planning/phases/06-ceo-dashboard-approval-workflow/06-REVIEW.md
-iteration: 2
+iteration: 3
 findings_in_scope: 19
 fixed: 19
 skipped: 0
@@ -10,6 +10,8 @@ status: all_fixed
 ---
 
 > **Iteration 2 (2026-09-25):** the user answered the four open decisions. WR-11 and IN-01 are now fixed, WR-03 was refined, and WR-01 was confirmed with no code change. See "Iteration 2 — user decisions" at the end. The iteration-1 sections below are left as written.
+>
+> **Iteration 3 (2026-09-25):** IN-01 now covers every Coolify MCP call. Reads pass, and everything else is gated, which fails closed. This replaces the "Not gated" list in iteration 2's IN-01 section. See "Iteration 3" at the end.
 
 # Phase 6: Code Review Fix Report
 
@@ -268,8 +270,66 @@ All gates ran in the **main checkout** (`workflow.use_worktrees: false`, branch 
 - `~/.pixelfirm` does not exist after both runs, so no test wrote to the default state dir.
 - I did not push, deploy, run the live script or commit this report.
 
+## Iteration 3 — IN-01 widened to every Coolify MCP call
+
+The user decided in chat on 2026-09-25: "reading is always fine, only edit/delete". So any Coolify MCP call that changes something now waits for the CEO, and read-only calls go through without asking. I wrote the tests first and watched 35 of them fail, then applied the fix. It is one commit.
+
+### IN-01: gate every Coolify call that is not a known read
+
+**Files modified:** `packages/claude-adapter/src/signal-detection.ts`, `signal-detection.test.ts`
+**Commit:** 28e9e45
+**Status:** fixed: requires human verification (classifier logic)
+**Applied fix:**
+- **It is an allowlist.** Any tool matching `mcp__*coolify*__<tool>` is let through in only two cases. Either `<tool>` is one of the 22 read-only tools, or it is one of the 18 tools that take an `action` argument and the call's `action` is on that tool's read list. Everything else is gated:
+  - an unknown tool;
+  - a missing, unknown, non-string or wrong-case action;
+  - an `action` passed to a tool that takes none (for example `deploy` with `action: "list"`).
+  The lists are kept in a `Map`, so an unexpected tool name such as `constructor` also parks.
+- **Where the lists come from:** I loaded the installed `@masonator/coolify-mcp` 3.5.1 (`npx` cache), created a `CoolifyMcpServer` and read back its registered tools. Read tools are those with `readOnlyHint: true`, plus the fleet-only `list_instances`. Each action list is the tool's `zod` enum. The test table has all 127 tool/action pairs. A script compared it with the package's registrations and found no differences.
+- **Newly gated:**
+  - `bulk_env_update`, `validate_server`, `control` `start`, `deployment` `cancel`
+  - every create/update/move action
+  - `database_backups` / `storages` backup actions, `scheduled_tasks` `run_once`, `hetzner` `create_server`, `system` `enable_api`/`disable_api`, `tags` `attach`/`detach`, `cloud_tokens` `validate`
+- **Newly ungated:** reads that the destructive-word rule used to catch because their names contain "deploy": `list_deployments`, and `deployment` `get` / `list_for_app`.
+- **Other MCP tools:** unchanged. The Coolify check runs first and returns a result. Any other MCP tool still falls through to the destructive-word rule on its name and its `action`.
+- **Reason text:**
+  - action tools: `MCP tool: <name> (action: <action>)`;
+  - other gated tools: `MCP tool: <name>`, the same as before for `mcp__coolify__deploy`.
+
+**Calls I had to make a judgement on (say if you disagree):**
+- **Gated:**
+  - `validate_server`: it is not annotated read-only, and Coolify's server validation can install Docker on the host.
+  - `cloud_tokens` `validate`: it is a POST to the Coolify API. I did not check whether it changes anything, so it fails closed.
+- **Ungated:**
+  - `server_domains` is annotated read-only in 3.5.1, even though the request mentioned it next to the write tools.
+  - `environments` `verify_app` only makes GETs.
+  - `get_application` / `get_database` / `get_service` / `env_vars` `list` with `reveal: true` return credentials in plaintext. That is still a read, so it is ungated under this decision.
+- **Version drift:** a Coolify MCP that adds a read tool or read action later will park it until the list is updated. That errs closed. The older 2.19.4 package in the `npx` cache was not used. Any tool name it has that 3.5.1 lacks is gated.
+
+### Iteration 3 verification
+
+All gates ran in the **main checkout** (`workflow.use_worktrees: false`, branch `main`), with local Postgres on port 5434.
+
+- `pnpm --filter claude-adapter typecheck`: **pass**.
+- `pnpm -r --no-bail --if-present test`: I ran it **once** and it **passed**:
+
+| Package | Result |
+|---|---|
+| event-schema | 53/53 |
+| gsd-adapter | 19/19 |
+| company-core | 60/60 |
+| pixel-office | 231/231 |
+| web | 62/62 |
+| api | 126/126 |
+| git-adapter | 18/18 |
+| claude-adapter | 279 passed, 3 skipped (the live-claude integration tests; the rise from 170 is the new Coolify table) |
+| worker | 46/46 |
+
+- `~/.pixelfirm` does not exist after the run.
+- I did not push, deploy or commit this report.
+
 ---
 
-_Fixed: 2026-09-24 (iteration 1), 2026-09-25 (iteration 2)_
+_Fixed: 2026-09-24 (iteration 1), 2026-09-25 (iterations 2 and 3)_
 _Fixer: Claude (gsd-code-fixer)_
-_Iteration: 2_
+_Iteration: 3_
