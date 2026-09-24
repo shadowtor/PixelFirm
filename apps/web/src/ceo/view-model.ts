@@ -191,3 +191,11 @@ export function noLongerPendingCopy(record: DecisionRecord, now: number): string
   const when = record.decision ? relativeTime(record.decision.decidedAt, now) : "just now";
   return `This decision was already made by ${by} ${when}.`;
 }
+
+// ---- history (06-10) ----
+
+export type HistoryTone = "success" | "destructive" | "neutral" | "expired";
+
+export function historyBadge(_record: DecisionRecord): { label: string; tone: HistoryTone } {
+  return { label: "", tone: "neutral" };
+}

@@ -804,3 +804,159 @@ test("after the live feed drops, the status reads Reconnecting and the action bu
   for (const name of FIVE) await expect(bar(page).getByRole("button", { name })).toBeEnabled();
   await expect(note(page)).toBeEnabled();
 });
+
+// ---- 06-10 Task 2: History and Resume task (CEO-05, D-02) --------------------------------------
+
+const historyTab = (page: Page) => page.getByRole("tab", { name: "History" });
+const historyPanel = (page: Page) => page.getByRole("tabpanel", { name: "History" });
+const historyRows = (page: Page) => historyPanel(page).locator("tbody tr");
+
+function expiredEvent(n: number, at: string, taskId = `task-${n}`): CompanyEvent {
+  return {
+    ...envelope(at),
+    type: "ceo.approval_expired",
+    payload: { decisionId: uuid(n), taskId, reason: "worker_restarted" },
+  };
+}
+
+/** 60 closed decisions: request i at 200+i minutes ago, decided i minutes ago (i = 1 newest). */
+function sixtyClosed(): CompanyEvent[] {
+  return Array.from({ length: 60 }, (_, k) => k + 1).flatMap((i) => [
+    requested(300 + i, { agent: `agent-${i}`, title: `Closed decision ${i}`, reason: "q", kind: "clarifying_question", at: minutesAgo(200 + i) }),
+    decided(300 + i, "discuss", minutesAgo(i), `Note ${i}: ${"say more ".repeat(20)}`),
+  ]);
+}
+
+test("History lists the latest 50 closed decisions newest first with every column", async ({ page }) => {
+  const events = sixtyClosed();
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  await fakeFeed(page, (ws) => ws.send(snapshot(events)));
+  await page.goto(`${BASE}/ceo`);
+  await historyTab(page).click();
+
+  await expect(historyRows(page)).toHaveCount(50);
+  const first = historyRows(page).first();
+  const cells = first.locator("td");
+  const decidedAt = (events[1] as Extract<CompanyEvent, { type: "ceo.decision_made" }>).occurredAt;
+  const absolute = await page.evaluate((iso) => new Date(iso).toLocaleString(), decidedAt);
+  await expect(cells.nth(0)).toHaveText(absolute);
+  await expect(cells.nth(0)).toHaveAttribute("title", "1 minute ago");
+  await expect(cells.nth(1)).toHaveText("agent-1");
+  await expect(cells.nth(2)).toHaveText("Closed decision 1");
+  await expect(cells.nth(2).locator("[title='Closed decision 1']")).toHaveCount(1);
+  await expect(cells.nth(3).getByText("Discuss", { exact: true })).toBeVisible();
+  await expect(cells.nth(4)).toHaveText(EMAIL);
+  const fullNote = `Note 1: ${"say more ".repeat(20)}`;
+  await expect(cells.nth(5).locator(`[title="${fullNote}"]`)).toHaveCount(1);
+  const clipped = await cells.nth(5).locator(`[title="${fullNote}"]`).evaluate((el) => el.scrollWidth > el.clientWidth);
+  expect(clipped).toBe(true);
+  await expect(historyRows(page).last().locator("td").nth(2)).toHaveText("Closed decision 50");
+});
+
+test("a resumable expired row resumes the task and loses its button; a superseded one has none", async ({ page }) => {
+  const events: CompanyEvent[] = [
+    requested(70, { agent: "dee", title: "Deploy to production?", reason: "MCP tool: deploy", kind: "ceo_gated_tool", at: minutesAgo(30) }),
+    expiredEvent(70, minutesAgo(10)),
+    requested(80, { agent: "eve", title: "Old question", reason: "q", kind: "clarifying_question", at: minutesAgo(40) }),
+    expiredEvent(80, minutesAgo(20)),
+    // A newer request for the same task: task-80 already asked again, so it is not resumable.
+    requested(81, { agent: "eve", title: "Old question, asked again", reason: "q", kind: "clarifying_question", at: minutesAgo(15) }, { taskId: "task-80" }),
+  ];
+  const posts: Posted[] = [];
+  await page.route("**/ceo/api/tasks/*/resume", async (route) => {
+    const req = route.request();
+    posts.push({ url: req.url(), body: req.postDataJSON(), headers: req.headers() });
+    await route.fulfill({ status: 202, json: { accepted: true, taskId: "task-70" } });
+  });
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  const feed = await fakeFeed(page, (ws) => ws.send(snapshot(events)));
+  await page.goto(`${BASE}/ceo`);
+  await historyTab(page).click();
+
+  const resumable = historyRows(page).filter({ hasText: "Deploy to production?" });
+  const superseded = historyRows(page).filter({ hasText: "Old question" }); // 81 is still pending, so not in History
+  await expect(resumable.getByText("Expired", { exact: true })).toBeVisible();
+  await expect(superseded.getByText("Expired", { exact: true })).toBeVisible();
+  await expect(superseded.getByRole("button", { name: "Resume task" })).toHaveCount(0);
+
+  await resumable.getByRole("button", { name: "Resume task" }).click();
+  await expect.poll(() => posts.length).toBe(1);
+  expect(posts[0]!.url).toMatch(/\/ceo\/api\/tasks\/task-70\/resume$/);
+  expect(posts[0]!.body).toEqual({});
+  expect(posts[0]!.headers["x-pixelfirm-csrf"]).toBe("1");
+  expect(posts[0]!.headers["content-type"]).toBe("application/json");
+  await expect(page.getByText("Task resumed. dee will ask again.", { exact: true })).toBeVisible();
+
+  feed.ws().send(
+    eventFrame({ ...envelope(minutesAgo(0)), type: "ceo.task_resume_requested", payload: { taskId: "task-70", decidedBy: EMAIL } }),
+  );
+  await expect(resumable.getByRole("button", { name: "Resume task" })).toHaveCount(0);
+  await expect(historyPanel(page).getByRole("button", { name: "Resume task" })).toHaveCount(0);
+});
+
+test("a live resume from elsewhere removes the Resume task button", async ({ page }) => {
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  const feed = await fakeFeed(page, (ws) =>
+    ws.send(
+      snapshot([
+        requested(70, { agent: "dee", title: "Deploy to production?", reason: "MCP tool: deploy", kind: "ceo_gated_tool", at: minutesAgo(30) }),
+        expiredEvent(70, minutesAgo(10)),
+      ]),
+    ),
+  );
+  await page.goto(`${BASE}/ceo`);
+  await historyTab(page).click();
+  await expect(historyPanel(page).getByRole("button", { name: "Resume task" })).toBeVisible();
+  feed.ws().send(
+    eventFrame({ ...envelope(minutesAgo(0)), type: "ceo.task_resume_requested", payload: { taskId: "task-70", decidedBy: EMAIL } }),
+  );
+  await expect(historyPanel(page).getByRole("button", { name: "Resume task" })).toHaveCount(0);
+});
+
+test("History shows 5 skeleton rows before the first snapshot", async ({ page }) => {
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  const feed = await fakeFeed(page);
+  await page.goto(`${BASE}/ceo`);
+  await feed.connected;
+  await historyTab(page).click();
+  await expect(historyPanel(page).locator("[data-slot=skeleton]")).toHaveCount(5);
+  await expect(historyPanel(page).getByText("No decisions yet")).toHaveCount(0);
+});
+
+test("History with no closed decisions shows the empty copy", async ({ page }) => {
+  await showSnapshot(page, [gated(1)]);
+  await historyTab(page).click();
+  await expect(historyPanel(page).getByText("No decisions yet", { exact: true })).toBeVisible();
+  await expect(
+    historyPanel(page).getByText("Every approval, rejection and expired request will be listed here.", { exact: true }),
+  ).toBeVisible();
+});
+
+test("History shows the loading error with Retry when the feed fails before any snapshot", async ({ page }) => {
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  await fakeFeed(page, (ws) => void ws.close());
+  await page.goto(`${BASE}/ceo`);
+  await historyTab(page).click();
+  await expect(
+    historyPanel(page).getByText("Couldn't load decisions: the live feed disconnected. Check the API is running, then retry.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(historyPanel(page).getByRole("button", { name: "Retry" })).toBeVisible();
+});
+
+test("switching tabs keeps the selection and the draft note", async ({ page }) => {
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  await fakeFeed(page, (ws) => ws.send(snapshot(threeEvents())));
+  await page.goto(`${BASE}/ceo`);
+  const items = queue(page).getByRole("button");
+  await expect(page.getByRole("tab", { name: "Pending (3)" })).toBeVisible();
+  await items.nth(1).click();
+  await note(page).fill("Keep this draft");
+
+  await historyTab(page).click();
+  await expect(historyRows(page)).toHaveCount(1);
+  await page.getByRole("tab", { name: "Pending (3)" }).click();
+  await expect(items.nth(1)).toHaveAttribute("aria-current", "true");
+  await expect(note(page)).toHaveValue("Keep this draft");
+});

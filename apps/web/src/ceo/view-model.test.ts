@@ -5,6 +5,7 @@ import {
   buildAnswers,
   diffLineKind,
   documentTitle,
+  historyBadge,
   isLongWait,
   inProgressLabel,
   kindLabel,
@@ -273,5 +274,28 @@ describe("relativeTime / noLongerPendingCopy", () => {
     expect(noLongerPendingCopy(record, NOW)).toBe(
       "This request expired: the worker restarted before you decided. The task is blocked; resume it from History to ask again.",
     );
+  });
+});
+
+describe("historyBadge", () => {
+  const request = { decisionId: "d", threadId: "d", taskId: "t", reason: "r", requestedAt: ago(30) };
+  const decidedAs = (action: "approve" | "reject" | "request_changes" | "more_research" | "discuss") => ({
+    request,
+    status: "decided" as const,
+    decision: { action, decidedBy: "ceo@pixelfirm.dev", decidedAt: ago(5) },
+  });
+
+  it("maps each action to its label and tone", () => {
+    expect(historyBadge(decidedAs("approve"))).toEqual({ label: "Approved", tone: "success" });
+    expect(historyBadge(decidedAs("reject"))).toEqual({ label: "Rejected", tone: "destructive" });
+    expect(historyBadge(decidedAs("request_changes"))).toEqual({ label: "Changes requested", tone: "neutral" });
+    expect(historyBadge(decidedAs("more_research"))).toEqual({ label: "More research", tone: "neutral" });
+    expect(historyBadge(decidedAs("discuss"))).toEqual({ label: "Discuss", tone: "neutral" });
+  });
+
+  it("shows Expired for an expired record, even one that also carries a late decision", () => {
+    const expired = { expired: { reason: "worker_restarted" as const, expiredAt: ago(1) } };
+    expect(historyBadge({ request, status: "expired", ...expired })).toEqual({ label: "Expired", tone: "expired" });
+    expect(historyBadge({ ...decidedAs("approve"), status: "expired", ...expired })).toEqual({ label: "Expired", tone: "expired" });
   });
 });
