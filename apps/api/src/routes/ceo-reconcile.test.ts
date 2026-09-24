@@ -32,6 +32,7 @@ const WORKER_ID = "ceo-reconcile-test-worker";
 const WORKER_B_ID = "ceo-reconcile-test-worker-b";
 const AGENT_ID = "agent-reconcile";
 const ORIGIN = "http://localhost:5173";
+const DEV_CEO = "dev-bypass@pixelfirm.invalid";
 
 let buildServer: typeof buildServerType;
 let db: typeof dbType;
@@ -98,6 +99,8 @@ function postEvent(body: unknown, token = workerToken) {
 async function openRequest(workerBootId: string, token = workerToken) {
   const taskId = `task-${randomUUID()}`;
   const decisionId = randomUUID();
+  const sessionId = `session-${randomUUID()}`;
+  const worktreePath = "F:/repos/demo";
   const res = await postEvent(
     {
       id: randomUUID(),
@@ -115,15 +118,15 @@ async function openRequest(workerBootId: string, token = workerToken) {
         kind: "ceo_gated_tool",
         toolName: "Bash",
         toolInput: JSON.stringify({ command: "git push" }),
-        sessionId: `session-${randomUUID()}`,
-        worktreePath: "F:/repos/demo",
+        sessionId,
+        worktreePath,
         workerBootId,
       },
     },
     token,
   );
   expect(res.statusCode).toBe(202);
-  return { taskId, decisionId };
+  return { taskId, decisionId, sessionId, worktreePath };
 }
 
 function postDecision(decisionId: string, body: unknown) {
@@ -336,5 +339,104 @@ describe("hello reconcile (D-02, 06-04)", () => {
     const { decisionId } = await openRequest(randomUUID());
     hello(ws, randomUUID());
     await waitFor("expiry after junk frames", async () => (await rowsOfType("ceo.approval_expired", decisionId)).length > 0);
+  });
+});
+
+function postResume(taskId: string, opts: { omit?: string[] } = {}) {
+  const headers: Record<string, string> = { origin: ORIGIN, "x-pixelfirm-csrf": "1" };
+  for (const key of opts.omit ?? []) delete headers[key];
+  return server.inject({ method: "POST", url: `/ceo/api/tasks/${encodeURIComponent(taskId)}/resume`, headers });
+}
+
+function resumeRows(taskId: string) {
+  return db
+    .select()
+    .from(events)
+    .where(and(eq(events.type, "ceo.task_resume_requested"), eq(events.taskId, taskId)));
+}
+
+/** An open request of W's that a new-bootId hello has expired. */
+async function expiredRequest() {
+  const ws = await fakeWorker();
+  const request = await openRequest(randomUUID());
+  hello(ws, randomUUID());
+  await waitFor("expiry", async () => (await rowsOfType("ceo.approval_expired", request.decisionId)).length > 0);
+  return request;
+}
+
+describe("POST /ceo/api/tasks/:taskId/resume (D-02, 06-04)", () => {
+  it("409 not blocked when the task's latest request has not expired", async () => {
+    await fakeWorker();
+    const { taskId } = await openRequest(randomUUID());
+    const res = await postResume(taskId);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: "not blocked" });
+    expect(await resumeRows(taskId)).toHaveLength(0);
+  });
+
+  it("202 after the expiry: records the resume with the verified decider and sends task.resume with the stored ids", async () => {
+    const { taskId, sessionId, worktreePath } = await expiredRequest();
+    const framesBefore = workerFrames.length;
+
+    const res = await postResume(taskId);
+    expect(res.statusCode).toBe(202);
+
+    const rows = await resumeRows(taskId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.visibility).toBe("PRIVATE");
+    expect(rows[0]!.payload).toEqual({ taskId, decidedBy: DEV_CEO });
+
+    const frame = await waitFor("task.resume frame", async () =>
+      workerFrames.slice(framesBefore).find((f) => (f as { type?: string }).type === "task.resume"),
+    );
+    expect(WorkerDownlinkSchema.parse(frame)).toEqual({
+      type: "task.resume",
+      taskId,
+      sessionId,
+      worktreePath,
+      agentId: AGENT_ID,
+    });
+    // SEC-03: stored identifiers only, never a prompt.
+    expect(Object.keys(frame as object).sort()).toEqual(["agentId", "sessionId", "taskId", "type", "worktreePath"]);
+
+    const again = await postResume(taskId);
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toEqual({ error: "already resumed" });
+    expect(await resumeRows(taskId)).toHaveLength(1);
+  });
+
+  it("503 and no row when the request's worker is offline", async () => {
+    // Worker B never opens a socket; it records its own request's expiry.
+    const { taskId, decisionId } = await openRequest(randomUUID(), workerBToken);
+    const expiry = await postEvent(
+      {
+        id: randomUUID(),
+        type: "ceo.approval_expired",
+        version: 1,
+        occurredAt: new Date().toISOString(),
+        companyId: "company-1",
+        taskId,
+        visibility: "PRIVATE",
+        payload: { decisionId, taskId, reason: "aborted" },
+      },
+      workerBToken,
+    );
+    expect(expiry.statusCode).toBe(202);
+
+    const res = await postResume(taskId);
+    expect(res.statusCode).toBe(503);
+    expect(await resumeRows(taskId)).toHaveLength(0);
+  });
+
+  it("404 for a task with no decision request", async () => {
+    const res = await postResume(`task-${randomUUID()}`);
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("403 without the CSRF header, and nothing is recorded", async () => {
+    const { taskId } = await expiredRequest();
+    const res = await postResume(taskId, { omit: ["x-pixelfirm-csrf"] });
+    expect(res.statusCode).toBe(403);
+    expect(await resumeRows(taskId)).toHaveLength(0);
   });
 });

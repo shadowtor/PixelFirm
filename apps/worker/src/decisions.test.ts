@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 // Namespace imports: a not-yet-existing export fails inside the test body
 // (assertion-level RED), not as an ESM link failure.
 import * as es from "event-schema";
@@ -102,5 +102,85 @@ describe("createDecisionBroker", () => {
     const broker = decisions.createDecisionBroker();
     const hello = es.WorkerUplinkSchema.parse(broker.helloMessage());
     expect(hello).toEqual({ type: "hello", bootId: broker.bootId });
+  });
+});
+
+const RESUME = {
+  type: "task.resume" as const,
+  taskId: "task-1",
+  sessionId: "session-1",
+  worktreePath: "C:/repos/demo-wt",
+  agentId: "agent-1",
+};
+
+describe("broker.onResume", () => {
+  it("routes a validated task.resume frame to the handler, and a decision frame never", () => {
+    const broker = decisions.createDecisionBroker();
+    const onResume = vi.fn();
+    broker.onResume(onResume);
+
+    broker.handleDownlink(frame({ type: "decision", decisionId: DECISION_ID, action: "approve" }));
+    expect(onResume).not.toHaveBeenCalled();
+
+    broker.handleDownlink(frame(RESUME));
+    expect(onResume).toHaveBeenCalledTimes(1);
+    expect(onResume).toHaveBeenCalledWith(RESUME);
+  });
+
+  it("ignores a task.resume frame that fails the schema", () => {
+    const broker = decisions.createDecisionBroker();
+    const onResume = vi.fn();
+    broker.onResume(onResume);
+    broker.handleDownlink(JSON.stringify({ ...RESUME, worktreePath: "x".repeat(1001) }));
+    expect(onResume).not.toHaveBeenCalled();
+  });
+});
+
+describe("handleResume (T-06-04-02: only a worktree of this worker's repo)", () => {
+  function deps() {
+    return {
+      repoPath: "C:/repos/demo",
+      listWorktrees: vi.fn(async () => [{ path: "C:/repos/demo" }, { path: "C:/repos/demo-wt" }]),
+      runtime: { restoreTask: vi.fn(), resumeTask: vi.fn(async () => {}) },
+      log: vi.fn(),
+    };
+  }
+
+  it("refuses a path that is not attached to the repo: nothing is restored or resumed", async () => {
+    const d = deps();
+    const resumed = await decisions.handleResume({ ...RESUME, worktreePath: "C:/elsewhere/evil" }, d);
+    expect(resumed).toBe(false);
+    expect(d.listWorktrees).toHaveBeenCalledWith("C:/repos/demo");
+    expect(d.runtime.restoreTask).toHaveBeenCalledTimes(0);
+    expect(d.runtime.resumeTask).toHaveBeenCalledTimes(0);
+    expect(d.log).toHaveBeenCalled();
+  });
+
+  it("accepts an attached path written with the other slash style (and drive-letter case on win32)", async () => {
+    const d = deps();
+    const worktreePath = process.platform === "win32" ? "c:\\repos\\demo-wt" : "C:/repos/demo-wt/";
+    const resumed = await decisions.handleResume({ ...RESUME, worktreePath }, d);
+    expect(resumed).toBe(true);
+    expect(d.runtime.restoreTask).toHaveBeenCalledTimes(1);
+    expect(d.runtime.restoreTask).toHaveBeenCalledWith({
+      taskId: "task-1",
+      sessionId: "session-1",
+      worktreePath,
+      agentId: "agent-1",
+    });
+    expect(d.runtime.resumeTask).toHaveBeenCalledTimes(1);
+    expect(d.runtime.resumeTask).toHaveBeenCalledWith("task-1");
+    expect(d.runtime.restoreTask.mock.invocationCallOrder[0]).toBeLessThan(
+      d.runtime.resumeTask.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("does not resume when restoreTask throws (the task is still running)", async () => {
+    const d = deps();
+    d.runtime.restoreTask.mockImplementation(() => {
+      throw new Error("ClaudeCodeRuntime.restoreTask: task is running");
+    });
+    expect(await decisions.handleResume(RESUME, d)).toBe(false);
+    expect(d.runtime.resumeTask).toHaveBeenCalledTimes(0);
   });
 });
