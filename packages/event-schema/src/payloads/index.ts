@@ -57,6 +57,8 @@ const CeoApprovalRequestedPayload = z.object({
       truncated: z.boolean(),
       totalAdded: z.number().int(),
       totalRemoved: z.number().int(),
+      // The worker could not read the diff: not the same as "no changes".
+      unavailable: z.boolean().optional(),
     })
     .optional(),
   sessionId: s(200).optional(),

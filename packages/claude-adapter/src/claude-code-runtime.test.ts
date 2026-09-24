@@ -1216,7 +1216,8 @@ describe("enriched decision request (06-03, CEO-02, D-06, D-02)", () => {
     await finish();
   });
 
-  it("a readDiff failure still posts the request, with no diff key", async () => {
+  // WR-06 (06-REVIEW): "no diff" must not read as "no changes".
+  it("a readDiff failure still posts the request, with a diff marked unavailable", async () => {
     (readDiff as unknown as Mock).mockRejectedValueOnce(new Error("not a git repo"));
     const { park, finish } = await startEnriched([initMessage("session-xyz")]);
 
@@ -1225,7 +1226,23 @@ describe("enriched decision request (06-03, CEO-02, D-06, D-02)", () => {
 
     const [request] = requests();
     expect(request).toBeDefined();
-    expect(request.payload).not.toHaveProperty("diff");
+    expect(request.payload.diff).toEqual({
+      files: [],
+      unified: "",
+      truncated: false,
+      totalAdded: 0,
+      totalRemoved: 0,
+      unavailable: true,
+    });
+    expect(es.CompanyEventSchema.safeParse({
+      id: "0b6f7c1e-2a4d-4e8b-9f3a-6c5d4e3b2a10",
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      companyId: "c",
+      type: "ceo.approval_requested",
+      visibility: "PRIVATE",
+      payload: request.payload,
+    }).success).toBe(true);
     await finish();
   });
 

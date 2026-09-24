@@ -52,14 +52,16 @@ interface TaskRecord {
   discussThreadId?: string;
 }
 
-// A diff the worker cannot read (not a repo, no commits, git missing) must
-// never stop the request from reaching the CEO: it simply carries no diff.
+// A diff the worker cannot read (not a repo, no commits, git missing, over
+// maxBuffer) must never stop the request from reaching the CEO. It is sent
+// marked unavailable, so the dashboard never reads it as "no changes"
+// (06-REVIEW WR-06).
 async function readDiffOrNothing(worktreePath: string | undefined): Promise<DiffSummary | undefined> {
   if (!worktreePath) return undefined;
   try {
     return await readDiff(worktreePath);
   } catch {
-    return undefined;
+    return { files: [], unified: "", truncated: false, totalAdded: 0, totalRemoved: 0, unavailable: true };
   }
 }
 

@@ -119,6 +119,39 @@ describe("readDiff", { timeout: 30_000 }, () => {
     expect(diff.truncated).toBe(false);
   });
 
+  // WR-06 (06-REVIEW): a fresh feature branch has no upstream, but a push of
+  // it sends every local commit, so those must be in the diff.
+  it("with no upstream, diffs against the merge-base with origin/HEAD", async () => {
+    const origin = await makeRepo();
+    const parent = await tempDir("git-adapter-diff-clone-");
+    const clone = join(parent, "clone");
+    await execa("git", ["clone", origin, clone]);
+    await identity(clone);
+    await git(clone, "switch", "-c", "feature/x");
+    await writeFile(join(clone, "feature.txt"), "local commit\n");
+    await git(clone, "add", "-A");
+    await git(clone, "commit", "-m", "feature");
+
+    const diff = await readDiff(clone);
+
+    expect(diff.files.map((f) => f.path)).toEqual(["feature.txt"]);
+    expect(diff.unified).toContain("+local commit");
+  });
+
+  it("lists untracked files by path (their content is not in the unified diff)", async () => {
+    const repo = await makeRepo();
+    await writeFile(join(repo, "new.txt"), "brand new\n");
+    await writeFile(join(repo, ".gitignore"), "ignored.txt\n");
+    await writeFile(join(repo, "ignored.txt"), "x\n");
+
+    const diff = await readDiff(repo);
+
+    expect(diff.files).toEqual([
+      { path: ".gitignore", added: 0, removed: 0 },
+      { path: "new.txt", added: 0, removed: 0 },
+    ]);
+  });
+
   it("reports a binary change as added 0, removed 0", async () => {
     const repo = await makeRepo();
     await writeFile(join(repo, "bin.dat"), Buffer.from([0, 1, 2, 3, 0, 255]));
@@ -158,7 +191,8 @@ describe("readDiff", { timeout: 30_000 }, () => {
     const diff = await readDiff(repo);
 
     expect(existsSync(marker)).toBe(false);
-    expect(diff.files).toEqual([{ path: "a.txt", added: 1, removed: 0 }]);
+    // .gitattributes is untracked here, so it is listed too (WR-06).
+    expect(diff.files).toContainEqual({ path: "a.txt", added: 1, removed: 0 });
   });
 
   // CR-02 (06-REVIEW): core.fsmonitor and filter.<name>.clean still run under

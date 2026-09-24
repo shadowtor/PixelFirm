@@ -60,7 +60,9 @@ export function DetailPane({ item, now, questions }: { item: PendingItem; now: n
   }
   sections.push([
     "Changes",
-    request.diff?.files.length ? (
+    request.diff?.unavailable ? (
+      <p className="text-sm text-muted-foreground">The diff could not be read, so this request may change files not shown here.</p>
+    ) : request.diff?.files.length ? (
       <DiffView diff={request.diff} />
     ) : (
       <p className="text-sm text-muted-foreground">No file changes attached to this request.</p>

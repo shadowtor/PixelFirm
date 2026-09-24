@@ -7,6 +7,9 @@ export interface DiffSummary {
   truncated: boolean;
   totalAdded: number;
   totalRemoved: number;
+  // Never set by readDiff: a caller marks a diff it could not read, so the
+  // dashboard does not show that as "no changes" (06-REVIEW WR-06).
+  unavailable?: boolean;
 }
 
 // Pitfall 10: diff.external and .gitattributes textconv drivers run arbitrary
@@ -20,8 +23,10 @@ const SAFE_CONFIG = ["-c", "core.fsmonitor=false"];
  * Read-only, capped diff of a worktree for a CEO decision request (D-09).
  *
  * Base is the merge-base with `@{upstream}` when the branch tracks one (what a
- * push would send, plus uncommitted changes), otherwise HEAD (uncommitted
- * changes only). Untracked files are not part of `git diff` and never appear.
+ * push would send, plus uncommitted changes), else with `origin/HEAD` (a fresh
+ * branch's local commits), else HEAD (uncommitted changes only). Untracked
+ * files are not part of `git diff`: they are listed in `files` by path with
+ * 0 / 0 counts, so the CEO sees they exist, but their content is not shown.
  *
  * `unified` is cut at `maxLines` lines, then at `maxBytes` bytes, always on a
  * line boundary so no UTF-8 sequence is split; `truncated` says whether
@@ -47,6 +52,14 @@ export async function readDiff(
       const [added, removed, ...path] = line.split("\t");
       return { path: path.join("\t"), added: toCount(added), removed: toCount(removed) };
     });
+  const untracked = await execa(
+    "git",
+    [...SAFE_CONFIG, "ls-files", "--others", "--exclude-standard", "-z"],
+    gitExecOptions(worktreePath),
+  );
+  for (const path of untracked.stdout.split("\0")) {
+    if (path.length > 0) allFiles.push({ path, added: 0, removed: 0 });
+  }
 
   const full = await execa("git", [...SAFE_CONFIG, "diff", ...BASE_ARGS, base, "--"], {
     ...gitExecOptions(worktreePath),
@@ -72,17 +85,17 @@ export async function readDiff(
 }
 
 async function diffBase(worktreePath: string): Promise<string> {
-  try {
-    await execa(
-      "git",
-      ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
-      gitExecOptions(worktreePath),
-    );
-  } catch {
-    return "HEAD";
+  // 06-REVIEW WR-06: without an upstream, a push of this branch sends every
+  // commit since it left the default branch, so diff from there.
+  for (const ref of ["@{upstream}", "origin/HEAD"]) {
+    try {
+      const { stdout } = await execa("git", ["merge-base", "HEAD", ref], gitExecOptions(worktreePath));
+      return stdout.trim();
+    } catch {
+      // No such ref (or no common history): try the next base.
+    }
   }
-  const { stdout } = await execa("git", ["merge-base", "HEAD", "@{upstream}"], gitExecOptions(worktreePath));
-  return stdout.trim();
+  return "HEAD";
 }
 
 /** numstat reports "-" for binary files. */
