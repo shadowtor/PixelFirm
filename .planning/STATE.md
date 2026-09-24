@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 06
 current_phase_name: CEO Dashboard & Approval Workflow
 status: executing
-stopped_at: Completed 06-05-PLAN.md
-last_updated: "2026-09-24T05:01:31.540Z"
+stopped_at: Completed 06-06-PLAN.md
+last_updated: "2026-09-24T05:19:16.942Z"
 last_activity: 2026-09-24
 last_activity_desc: Phase 06 execution started
-state_head: 89ac7ffb9061084d6d74a010fc91f35fcc386123
+state_head: d9ab7ff2037227890c1c0c439429f04d03a6015d
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 70
-  completed_plans: 63
+  completed_plans: 64
   percent: 63
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 06 (CEO Dashboard & Approval Workflow) — EXECUTING
-Plan: 8 of 14
+Plan: 9 of 14
 Status: Ready to execute
 Last activity: 2026-09-24 — Phase 06 execution started
 
@@ -124,6 +124,7 @@ Progress: [██████░░░░] 63%
 | Phase 06 P13 | 14 min | 3 tasks | 9 files |
 | Phase 06 P03 | 20min | 3 tasks | 9 files |
 | Phase 06 P05 | 14 min | 3 tasks | 11 files |
+| Phase 06 P06 | 14 min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -265,6 +266,8 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-03: restoreTask is a ClaudeCodeRuntime-only method; it throws only for a live invocation (paused/terminal count as settled) and leaves path validation to the 06-04 worker
 - [Phase 06]: 06-05: one CEO decision per request is enforced by the partial unique index events_ceo_decision_once; the route maps a lost race (zero returned rows) to 409
 - [Phase 06]: 06-05: requireCeo verifies the Cloudflare Access JWT with jose 6.2.10 (header, then CF_Authorization cookie) and fails closed with a uniform 401 when CF_ACCESS_* or CEO_EMAIL is unset
+- [Phase 06]: 06-06: office /ws/browser drops PRIVATE events live and in snapshot (acceptsOffice); /ceo/ws carries ceo.* only, snapshot = foldDecisions of stored ceo.* rows
+- [Phase 06]: 06-06: foldDecisions keeps the newest 50 closed records plus every record of a still-pending thread; expired wins over decided but keeps the decision
 
 ### Pending Todos
 
@@ -295,6 +298,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-24T05:01:31.276Z
-Stopped at: Completed 06-05-PLAN.md
+Last session: 2026-09-24T05:19:16.590Z
+Stopped at: Completed 06-06-PLAN.md
 Resume file: None
