@@ -30,6 +30,7 @@ import type { CompanyEvent } from "event-schema";
 // (assertion-level RED), not as an ESM link failure.
 import * as es from "event-schema";
 import * as claudeAdapter from "./index.js";
+import * as decisionMapping from "./decision-mapping.js";
 import { observeGsdState } from "gsd-adapter";
 import { postEvent } from "./event-emitter.js";
 import { createClaudeCodeRuntime } from "./claude-code-runtime.js";
@@ -989,5 +990,35 @@ describe("parked canUseTool (D-01)", () => {
   it("the package index exports toPermissionResult and CEO_PREFIX", () => {
     expect(typeof claudeAdapter.toPermissionResult).toBe("function");
     expect(claudeAdapter.CEO_PREFIX.reject).toBe("[CEO:REJECT]");
+  });
+});
+
+describe("CEO protocol system prompt (D-05/D-06)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("with awaitDecision, query() gets the claude_code preset with CEO_PROTOCOL_APPEND appended", async () => {
+    (query as unknown as Mock).mockReturnValue(fakeQuery([initMessage("s"), resultMessage("success")]));
+    const runtime = createClaudeCodeRuntime({
+      ...runtimeOptions(),
+      awaitDecision: vi.fn(),
+    } as Parameters<typeof createClaudeCodeRuntime>[0]);
+    await runtime.startTask(startInput);
+    expect((query as unknown as Mock).mock.calls[0][0].options.systemPrompt).toEqual({
+      type: "preset",
+      preset: "claude_code",
+      append: decisionMapping.CEO_PROTOCOL_APPEND,
+    });
+    expect(typeof decisionMapping.CEO_PROTOCOL_APPEND).toBe("string");
+  });
+
+  it("without awaitDecision, no systemPrompt is set (Phase 4 unchanged)", async () => {
+    (query as unknown as Mock).mockReturnValue(fakeQuery([initMessage("s"), resultMessage("success")]));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+    await runtime.startTask(startInput);
+    const options = (query as unknown as Mock).mock.calls[0][0].options;
+    expect(options.systemPrompt).toBeUndefined();
+    expect("systemPrompt" in options).toBe(false);
   });
 });
