@@ -106,16 +106,30 @@ export function actionLabel(action: DecisionAction): string {
   return ACTION_LABELS[action];
 }
 
-// ---- RED stubs (06-09 Task 2) ----
 export type Question = NonNullable<DecisionRequestView["questions"]>[number];
 /** Per question text: the picked option labels, and `other` when "Other" is chosen. */
 export type Selections = Record<string, { labels: string[]; other?: string }>;
 
-export function buildAnswers(_questions: Question[], _selections: Selections): Record<string, string> {
-  return { stub: "" };
+/**
+ * Answers keyed by exact question text, the shape the worker's validateAnswers accepts:
+ * picked labels in option order, then the trimmed Other text, joined with ", ".
+ * Questions with no non-empty answer are left out.
+ */
+export function buildAnswers(questions: Question[], selections: Selections): Record<string, string> {
+  const answers: Record<string, string> = {};
+  for (const q of questions) {
+    const sel = selections[q.question];
+    if (!sel) continue;
+    const parts = q.options.map((o) => o.label).filter((label) => sel.labels.includes(label));
+    const other = sel.other?.trim();
+    if (other) parts.push(other);
+    if (parts.length) answers[q.question] = parts.join(", ");
+  }
+  return answers;
 }
 
-export function allAnswered(_questions: Question[], _selections: Selections): boolean {
-  return true;
+export function allAnswered(questions: Question[], selections: Selections): boolean {
+  const answers = buildAnswers(questions, selections);
+  return questions.every((q) => q.question in answers);
 }
 

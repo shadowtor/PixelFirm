@@ -453,6 +453,20 @@ test("a 600-character single-line tool input never scrolls the page sideways", a
   expect(widths).toEqual({ pre: true, detail: true, page: true, maxHeight: "240px" });
 });
 
+test("at 375px a long file path and tool input stay inside the viewport", async ({ page }) => {
+  const path = `src/${"deeply/nested/".repeat(12)}file.ts`;
+  await showSnapshot(page, [gated(1, { toolInput: JSON.stringify({ command: `echo ${"x".repeat(600)}` }), diff: diffOf([path]) })]);
+  await page.setViewportSize({ width: 375, height: 800 });
+  await queue(page).getByRole("button").first().click(); // < 768px the detail opens on selection
+  await expect(detailOf(page).getByRole("heading", { level: 2 })).toBeVisible();
+  const rights = await detailOf(page).evaluate((el) => {
+    const pre = el.querySelector("pre")!;
+    const file = el.querySelector("[data-slot=collapsible-trigger]")!;
+    return [el, pre, file].map((node) => node.getBoundingClientRect().right <= window.innerWidth);
+  });
+  expect(rights).toEqual([true, true, true]);
+});
+
 // ---- 06-09 Task 2: answering an AskUserQuestion (CEO-02) --------------------------------------
 
 // Longer than the schema's 2000 cap on purpose: snapshots are not re-validated, and the UI must

@@ -14,8 +14,9 @@ import { Status, StatusIndicator, StatusLabel } from "@/components/kibo-ui/statu
 import { fetchMe, type Me } from "./api";
 import { connectCeoFeed, type FeedStatus } from "./ceo-feed";
 import { DetailPane } from "./DetailPane";
+import { QuestionsForm } from "./QuestionsForm";
 import { QueueList } from "./QueueList";
-import { documentTitle, nextSelection } from "./view-model";
+import { documentTitle, nextSelection, type Selections } from "./view-model";
 
 const STATUS_KIND = { Live: "online", Reconnecting: "degraded", Offline: "offline" } as const;
 
@@ -29,6 +30,9 @@ export function CeoApp() {
   const [showDetail, setShowDetail] = useState(false); // < 768px: the queue is the page until an item is picked
   const [announcement, setAnnouncement] = useState("");
   const [now, setNow] = useState(() => Date.now());
+  // AskUserQuestion selections per decisionId, so switching queue items keeps them. 06-10's
+  // "Send answers" reads buildAnswers/allAnswered over the selected item's entry.
+  const [answerDrafts, setAnswerDrafts] = useState<Record<string, Selections>>({});
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30_000);
@@ -158,7 +162,7 @@ export function CeoApp() {
               </EmptyHeader>
             </Empty>
           ) : (
-            <div className="flex min-h-0 flex-1 gap-8">
+            <div className="flex min-h-0 min-w-0 flex-1 gap-8">
               <section
                 aria-label="Pending queue"
                 className={`${showDetail ? "hidden md:flex" : "flex"} w-full shrink-0 flex-col gap-2 overflow-y-auto pb-4 md:w-[300px] lg:w-[360px]`}
@@ -184,7 +188,23 @@ export function CeoApp() {
                 <Button variant="link" className="mb-4 px-0 text-foreground underline md:hidden" onClick={() => setShowDetail(false)}>
                   Back to queue
                 </Button>
-                {selected && <DetailPane key={selected.record.request.decisionId} item={selected} now={now} />}
+                {selected && (
+                  <DetailPane
+                    key={selected.record.request.decisionId}
+                    item={selected}
+                    now={now}
+                    questions={
+                      selected.record.request.kind === "clarifying_question" && selected.record.request.questions?.length ? (
+                        <QuestionsForm
+                          decisionId={selected.record.request.decisionId}
+                          questions={selected.record.request.questions}
+                          selections={answerDrafts[selected.record.request.decisionId] ?? {}}
+                          onChange={(next) => setAnswerDrafts((all) => ({ ...all, [selected.record.request.decisionId]: next }))}
+                        />
+                      ) : undefined
+                    }
+                  />
+                )}
                 {!decisions && (
                   <div className="flex max-w-[880px] flex-col gap-6">
                     <Skeleton className="h-6 w-2/3" />

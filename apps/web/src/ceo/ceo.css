@@ -75,3 +75,10 @@
     animation: none;
   }
 }
+
+/* UI-SPEC accent item 6: the selected Choicebox/checkbox card's border is the accent. The fill
+   stays neutral (shadcn's default amber tint is not one of the six accent uses). */
+.ceo-choice > [data-slot="field-label"]:has([data-state="checked"]) {
+  border-color: var(--primary);
+  background-color: var(--card);
+}
