@@ -2,6 +2,8 @@ process.env.DATABASE_URL = "postgres://postgres:postgres@localhost:5434/pixelfir
 process.env.CREDENTIAL_PEPPER = "test-pepper";
 process.env.BOOTSTRAP_SECRET = "test-bootstrap";
 process.env.BROWSER_ACCESS_TOKEN = "test-browser-access-token";
+process.env.CEO_DEV_AUTH_BYPASS = "1";
+process.env.CEO_ALLOWED_ORIGINS = "http://localhost:5173";
 
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -9,7 +11,10 @@ import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import { WebSocket } from "ws";
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
-import { workers } from "../db/schema.js";
+import { asc, like } from "drizzle-orm";
+import { foldDecisions } from "company-core";
+import { events, workers } from "../db/schema.js";
+import { rowToCompanyEvent } from "../db/event-row.js";
 import type { buildServer as buildServerType } from "../server.js";
 import type { db as dbType } from "../db/client.js";
 import type { issueCredential as issueCredentialType } from "../auth/credentials.js";
@@ -18,6 +23,8 @@ const migrationPaths = [
   "../../drizzle/0000_init.sql",
   "../../drizzle/0001_append_only_trigger.sql",
   "../../drizzle/0002_workers_table.sql",
+  "../../drizzle/0003_no_truncate_trigger.sql",
+  "../../drizzle/0004_ceo_decision_once.sql",
 ].map((p) => fileURLToPath(new URL(p, import.meta.url)));
 
 let buildServer: typeof buildServerType;
@@ -253,6 +260,120 @@ describe("office feed privacy (Pitfall 2, T-06-06-01)", () => {
     const json = JSON.stringify(await nextMessage(result.ws));
     expect(PRIVATE_STRINGS.filter((s) => json.includes(s))).toEqual([]);
     result.ws.close();
+  });
+});
+
+const CEO_ORIGIN = "http://localhost:5173";
+
+/** /ceo/ws upgrade from loopback (the dev bypass applies); resolves open or refused, never throws. */
+function attemptCeo(origin = CEO_ORIGIN): Promise<
+  { opened: true; ws: WebSocket; first: Promise<unknown> } | { opened: false; statusCode: number }
+> {
+  return new Promise((resolve) => {
+    const ws = new WebSocket(`${wsBaseUrl}/ceo/ws`, { origin });
+    // Listen before open: the snapshot can arrive in the same tick.
+    const first = nextMessage(ws);
+    ws.once("open", () => resolve({ opened: true, ws, first }));
+    ws.once("unexpected-response", (_req, res) => {
+      res.resume();
+      resolve({ opened: false, statusCode: res.statusCode ?? 0 });
+    });
+  });
+}
+
+async function ceoRows() {
+  const rows = await db.select().from(events).where(like(events.type, "ceo.%")).orderBy(asc(events.occurredAt));
+  return rows.map(rowToCompanyEvent);
+}
+
+function connectWorker(): Promise<WebSocket> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(`${wsBaseUrl}/ws`, { headers: { authorization: `Bearer ${workerToken}` } });
+    ws.once("open", () => resolve(ws));
+    ws.once("unexpected-response", (_req, res) => reject(new Error(`worker ws refused: ${res.statusCode}`)));
+  });
+}
+
+describe("GET /ceo/ws (CEO-02, T-06-06-03)", () => {
+  it("refuses a foreign Origin with 403", async () => {
+    const result = await attemptCeo("http://evil.test");
+    expect(result.opened ? 101 : result.statusCode).toBe(403);
+  });
+
+  it("first message is the decisions snapshot: foldDecisions of the stored ceo.* rows", async () => {
+    expect((await postEvent(privateApprovalRequest())).status).toBe(202);
+    // Other test files write ceo.* rows concurrently: compare only against a
+    // read that brackets the snapshot with the same row count.
+    for (let attemptNo = 0; ; attemptNo++) {
+      const before = await ceoRows();
+      const result = await attemptCeo();
+      if (!result.opened) throw new Error(`ceo socket refused: ${result.statusCode}`);
+      const snapshot = (await result.first) as { type: string; state: unknown };
+      const after = await ceoRows();
+      result.ws.close();
+      if (before.length !== after.length && attemptNo < 5) continue;
+      expect(snapshot).toEqual({ type: "snapshot", state: foldDecisions(after) });
+      break;
+    }
+  });
+
+  it("relays a new PRIVATE ceo.approval_requested to the CEO socket and not to an office socket", async () => {
+    const ceo = await attemptCeo();
+    if (!ceo.opened) throw new Error("ceo socket refused");
+    await ceo.first;
+    const office = await attempt("test-browser-access-token");
+    if (!office.opened) throw new Error("office socket refused");
+    await nextMessage(office.ws);
+
+    const request = privateApprovalRequest();
+    const ceoNext = nextMessage(ceo.ws);
+    const officeNext = nextMessage(office.ws);
+    expect((await postEvent(request)).status).toBe(202);
+    const received = (await ceoNext) as { type: string; event: { id: string } };
+    expect({ type: received.type, id: received.event.id }).toEqual({ type: "event", id: request.id });
+
+    // The office's next message is the INTERNAL marker posted after, never the request.
+    const marker = {
+      id: randomUUID(),
+      type: "worker.heartbeat",
+      version: 1,
+      occurredAt: new Date().toISOString(),
+      companyId: "company-1",
+      visibility: "INTERNAL",
+      payload: {},
+    };
+    expect((await postEvent(marker)).status).toBe(202);
+    expect(((await officeNext) as { event: { id: string } }).event.id).toBe(marker.id);
+
+    ceo.ws.close();
+    office.ws.close();
+  });
+
+  it("a CEO decision on a pending request reaches the CEO socket as ceo.decision_made", async () => {
+    const worker = await connectWorker();
+    const request = privateApprovalRequest();
+    expect((await postEvent(request)).status).toBe(202);
+    const ceo = await attemptCeo();
+    if (!ceo.opened) throw new Error("ceo socket refused");
+    await ceo.first;
+
+    const ceoNext = nextMessage(ceo.ws);
+    const res = await server.inject({
+      method: "POST",
+      url: `/ceo/api/decisions/${request.payload.decisionId}`,
+      headers: { "content-type": "application/json", origin: CEO_ORIGIN, "x-pixelfirm-csrf": "1" },
+      payload: JSON.stringify({ action: "reject" }),
+    });
+    expect(res.statusCode).toBe(202);
+    const received = (await ceoNext) as { type: string; event: { type: string; payload: { decisionId: string } } };
+    expect({ type: received.type, eventType: received.event.type, decisionId: received.event.payload.decisionId }).toEqual({
+      type: "event",
+      eventType: "ceo.decision_made",
+      decisionId: request.payload.decisionId,
+    });
+
+    ceo.ws.close();
+    worker.close();
   });
 });
 
