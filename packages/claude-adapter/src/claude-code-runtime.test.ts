@@ -1463,6 +1463,24 @@ describe("parked-call lifecycle (D-02, D-03)", () => {
     expect(statuses().at(-1)).toBe("blocked");
   });
 
+  // WR-09 (06-REVIEW): the agent leaves the CEO room only when nothing is parked.
+  it("with two calls parked, 'running' is emitted only when the last one is decided", async () => {
+    const { runtime, ids, decide, park } = await start();
+    const first = park();
+    const second = park();
+    await vi.advanceTimersByTimeAsync(0);
+
+    decide(ids()[0], { action: "approve" });
+    expect((await first).behavior).toBe("allow");
+    expect(statuses()).not.toContain("running");
+    expect(await runtime.getStatus("task-1")).toBe("waiting_for_review");
+
+    decide(ids()[1], { action: "approve" });
+    expect((await second).behavior).toBe("allow");
+    expect(statuses().at(-1)).toBe("running");
+    expect(await runtime.getStatus("task-1")).toBe("running");
+  });
+
   it("the Notification hook posts nothing while a call is parked, and keeps requestReview when nothing is parked", async () => {
     const { options, ids, decide, park } = await start();
     const notify = () =>

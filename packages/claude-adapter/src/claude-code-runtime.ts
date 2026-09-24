@@ -379,9 +379,13 @@ export function createClaudeCodeRuntime(options: {
             // anything from the decision object.
             const result = toPermissionResult(decision, parked);
             if (decision.action === "discuss") record.discussThreadId = threadId;
-            // Pitfall 3: this is what walks the office agent out of the CEO room.
-            record.status = "running";
-            await emitStatus(taskId, "running");
+            // Pitfall 3: this is what walks the office agent out of the CEO room,
+            // so only when this is the last parked call (06-REVIEW WR-09; the
+            // finally decrements parkedCount).
+            if (parkedCount === 1) {
+              record.status = "running";
+              await emitStatus(taskId, "running");
+            }
             await postPrivate(taskId, "ceo.decision_applied", {
               decisionId: parked.decisionId,
               taskId,
