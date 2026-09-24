@@ -34,7 +34,7 @@ export async function registerWsBrowserRoute(fastify: FastifyInstance) {
         // Phase 6: the snapshot drops PRIVATE rows, matching acceptsOffice on
         // the live path (05-09 same-code rule), so decision content never
         // reaches the office in either (Pitfall 2).
-        const rows = await db.select().from(events).where(ne(events.visibility, "PRIVATE")).orderBy(events.occurredAt);
+        const rows = await db.select().from(events).where(ne(events.visibility, "PRIVATE")).orderBy(events.occurredAt, events.id);
         return fold(rows.map(rowToCompanyEvent));
       }),
   );
@@ -54,7 +54,7 @@ export async function registerWsBrowserRoute(fastify: FastifyInstance) {
     },
     (socket) =>
       serveSnapshotThenRelay(fastify, socket, "ceo/ws", acceptsCeo, async () => {
-        const rows = await db.select().from(events).where(like(events.type, "ceo.%")).orderBy(events.occurredAt);
+        const rows = await db.select().from(events).where(like(events.type, "ceo.%")).orderBy(events.occurredAt, events.id);
         return foldDecisions(rows.map(rowToCompanyEvent));
       }),
   );

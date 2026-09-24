@@ -283,7 +283,7 @@ function attemptCeo(origin = CEO_ORIGIN): Promise<
 }
 
 async function ceoRows() {
-  const rows = await db.select().from(events).where(like(events.type, "ceo.%")).orderBy(asc(events.occurredAt));
+  const rows = await db.select().from(events).where(like(events.type, "ceo.%")).orderBy(asc(events.occurredAt), asc(events.id));
   return rows.map(rowToCompanyEvent);
 }
 
