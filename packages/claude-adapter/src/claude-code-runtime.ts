@@ -320,6 +320,13 @@ export function createClaudeCodeRuntime(options: {
             await emitStatus(taskId, "waiting_for_review");
             // D-09: the control plane has no repo access, so the worker ships the diff.
             const diff = await readDiffOrNothing(record.worktreePath);
+            // 06-REVIEW WR-05: park BEFORE posting. The control plane relays the
+            // request to the dashboard before it answers this POST, and the
+            // broker drops a decision for a call it does not know yet.
+            // `unpark` withdraws it again if the request is never accepted.
+            const unpark = new AbortController();
+            const decisionPromise = options.awaitDecision(parked.decisionId, AbortSignal.any([signal, unpark.signal]));
+            decisionPromise.catch(() => {}); // awaited below; only silences an early rejection
             const accepted = await postPrivate(
               taskId,
               "ceo.approval_requested",
@@ -343,6 +350,7 @@ export function createClaudeCodeRuntime(options: {
             // no dashboard row and cannot be decided or expired; parking on it
             // would hang the task with the watchdog suspended. Fail closed.
             if (!accepted) {
+              unpark.abort();
               return { behavior: "deny", message: "The CEO could not be reached; the tool call was not run." };
             }
             // D-02: every way a parked call is lost ends in deny plus an
@@ -350,7 +358,7 @@ export function createClaudeCodeRuntime(options: {
             // postPrivate never throws, so an outage cannot change the deny.
             let decision: CeoDecision;
             try {
-              decision = await options.awaitDecision(parked.decisionId, signal);
+              decision = await decisionPromise;
             } catch {
               await postPrivate(taskId, "ceo.approval_expired", {
                 decisionId: parked.decisionId,

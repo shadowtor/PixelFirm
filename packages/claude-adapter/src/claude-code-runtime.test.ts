@@ -945,7 +945,10 @@ describe("parked canUseTool (D-01)", () => {
     expect(awaitDecision).toHaveBeenCalledTimes(1);
     const [decisionId, passedSignal] = awaitDecision.mock.calls[0] as unknown as [string, AbortSignal];
     expect(decisionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-    expect(passedSignal).toBe(signal);
+    // Follows the SDK signal (WR-05 combines it with its own; the pauseTask
+    // lifecycle test covers the abort reaching the park).
+    expect(passedSignal).toBeInstanceOf(AbortSignal);
+    expect(passedSignal.aborted).toBe(false);
     expect(await runtime.getStatus("task-1")).toBe("waiting_for_review");
 
     const before = posted();
@@ -1058,6 +1061,32 @@ describe("parked canUseTool (D-01)", () => {
         expect(signal.aborted).toBe(true);
       }
       expect(posted().filter((e) => e.type === "ceo.decision_applied")).toHaveLength(0);
+    } finally {
+      (postEvent as unknown as Mock).mockImplementation(async () => true);
+      await finish();
+    }
+  });
+
+  // WR-05 (06-REVIEW): the control plane relays the request to the dashboard
+  // before it answers the POST, so a fast decision can arrive mid-post. Like
+  // the worker broker, this awaitDecision drops a decision nobody awaits yet.
+  it("a decision that arrives while the request is still being posted is applied, not dropped", async () => {
+    const pending = new Map<string, (d: unknown) => void>();
+    const { canUseTool, finish } = await startParked(((id: string) =>
+      new Promise((resolve) => pending.set(id, resolve))) as unknown as () => Promise<unknown>);
+    (postEvent as unknown as Mock).mockImplementation(
+      async (_url: string, _token: string, event: { type: string; payload: { decisionId?: string } }) => {
+        if (event.type === "ceo.approval_requested") pending.get(event.payload.decisionId!)?.({ action: "approve" });
+        return true;
+      },
+    );
+    try {
+      let settled: unknown;
+      void canUseTool("Bash", { command: "npm publish" }, { signal: new AbortController().signal, toolUseID: "t" }).then(
+        (r: unknown) => (settled = r),
+      );
+      await flushMicrotasks();
+      expect(settled).toMatchObject({ behavior: "allow" });
     } finally {
       (postEvent as unknown as Mock).mockImplementation(async () => true);
       await finish();
