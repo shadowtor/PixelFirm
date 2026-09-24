@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 06
 current_phase_name: CEO Dashboard & Approval Workflow
 status: executing
-stopped_at: Completed 06-04-PLAN.md
-last_updated: "2026-09-24T05:41:36.922Z"
+stopped_at: Completed 06-14-PLAN.md
+last_updated: "2026-09-24T06:05:16.288Z"
 last_activity: 2026-09-24
 last_activity_desc: Phase 06 execution started
-state_head: c7759b0a66567ae5cae744b73d500fda55c61cbc
+state_head: 1ce8e5f12a35ca91d0ebee75af82be986c4deab6
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 70
-  completed_plans: 65
+  completed_plans: 66
   percent: 63
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 06 (CEO Dashboard & Approval Workflow) — EXECUTING
-Plan: 10 of 14
+Plan: 11 of 14
 Status: Ready to execute
 Last activity: 2026-09-24 — Phase 06 execution started
 
@@ -126,6 +126,7 @@ Progress: [██████░░░░] 63%
 | Phase 06 P05 | 14 min | 3 tasks | 11 files |
 | Phase 06 P06 | 14 min | 3 tasks | 9 files |
 | Phase 06 P04 | 18 min | 3 tasks | 12 files |
+| Phase 06 P14 | 19 min | 2 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -271,6 +272,8 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-06: foldDecisions keeps the newest 50 closed records plus every record of a still-pending thread; expired wins over decided but keeps the decision
 - [Phase 06]: 06-04: a restarted worker's open CEO requests expire (worker_restarted) and their tasks go blocked, never approved; the blocked event is written only by the hello whose expiry insert won the unique index
 - [Phase 06]: 06-04: CEO resume sends task.resume with stored ids only; the worker resumes only a worktree listed by listWorktrees(repoPath)
+- [Phase 06]: 06-14: /ceo feed shows the load error only if it drops before the first snapshot; retries continue and a later snapshot replaces the error
+- [Phase 06]: 06-14: dashboard agent name is the event sourceAgentId (the private feed carries no display names)
 
 ### Pending Todos
 
@@ -301,6 +304,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-24T05:41:36.447Z
-Stopped at: Completed 06-04-PLAN.md
+Last session: 2026-09-24T06:05:16.047Z
+Stopped at: Completed 06-14-PLAN.md
 Resume file: None
