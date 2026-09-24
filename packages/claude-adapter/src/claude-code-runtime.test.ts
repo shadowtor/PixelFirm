@@ -261,6 +261,72 @@ describe("ClaudeCodeRuntime.pauseTask / resumeTask / sendMessage", () => {
   });
 });
 
+describe("ClaudeCodeRuntime.restoreTask (06-03, D-02)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const restored = {
+    taskId: "task-lost",
+    sessionId: "session-restored",
+    worktreePath: "F:/Sidegigs/syncsmith-wt",
+    agentId: "agent-restored",
+    title: "Lost task",
+  };
+
+  it("re-creates a lost task as blocked, and resumeTask resumes the same session in the same worktree", async () => {
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+
+    runtime.restoreTask(restored);
+    expect(await runtime.getStatus("task-lost")).toBe("blocked");
+
+    (query as unknown as Mock).mockReturnValue(fakeQuery([resultMessage("success")]));
+    await runtime.resumeTask("task-lost");
+
+    const callArgs = (query as unknown as Mock).mock.calls[0][0];
+    expect(callArgs.options.resume).toBe("session-restored");
+    expect(callArgs.options.cwd).toBe("F:/Sidegigs/syncsmith-wt");
+    const statusEvents = (postEvent as unknown as Mock).mock.calls
+      .map((call) => call[2])
+      .filter((e) => e.type === "task.status_changed");
+    expect(statusEvents.length).toBeGreaterThan(0);
+    expect(statusEvents.every((e) => e.sourceAgentId === "agent-restored")).toBe(true);
+    expect(await runtime.getStatus("task-lost")).toBe("completed");
+  });
+
+  it("throws while an invocation for the task is in flight", async () => {
+    const q = pausableQuery(initMessage("session-abc"));
+    (query as unknown as Mock).mockReturnValue(q);
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+    const startPromise = runtime.startTask(startInput);
+    await flushMicrotasks();
+
+    expect(() => runtime.restoreTask({ ...restored, taskId: "task-1" })).toThrow("task is running");
+
+    q.interrupt();
+    await startPromise;
+  });
+
+  it("leaves a known, settled task untouched and does not throw", async () => {
+    (query as unknown as Mock).mockReturnValue(fakeQuery([initMessage("session-orig"), resultMessage("success")]));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+    await runtime.startTask(startInput);
+
+    expect(() => runtime.restoreTask({ ...restored, taskId: "task-1" })).not.toThrow();
+    expect(await runtime.getStatus("task-1")).toBe("completed");
+
+    (query as unknown as Mock).mockReturnValue(fakeQuery([resultMessage("success")]));
+    await runtime.resumeTask("task-1");
+    const callArgs = (query as unknown as Mock).mock.calls[1][0];
+    expect(callArgs.options.resume).toBe("session-orig");
+    expect(callArgs.options.cwd).toBe(startInput.worktreePath);
+  });
+
+  it("the package index exposes createClaudeCodeRuntime whose runtime has restoreTask", () => {
+    expect(typeof createClaudeCodeRuntime(runtimeOptions()).restoreTask).toBe("function");
+  });
+});
+
 describe("ClaudeCodeRuntime.requestReview via canUseTool / Notification hook", () => {
   beforeEach(() => {
     vi.clearAllMocks();
