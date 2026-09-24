@@ -1,5 +1,6 @@
 // Pure display helpers for the /ceo queue and detail heading. No React here.
 import type { DecisionRequestView } from "company-core";
+import type { DecisionAction } from "event-schema";
 
 const MINUTE = 60_000;
 const unit = (u: "minute" | "hour" | "day") => new Intl.NumberFormat("en", { style: "unit", unit: u, unitDisplay: "short" });
@@ -53,26 +54,55 @@ export function detailMeta(request: DecisionRequestView, now: number): string {
     .join(" · ");
 }
 
-// ---- 06-09 detail pane (RED stubs) ----
+// ---- detail pane (06-09) ----
+
 export type SafeLink = { href: string } | { text: string };
+
+/** Only http: and https: become anchors (T-06-09-02); every other string stays text. */
 export function safeLink(raw: string): SafeLink {
-  return { text: raw.slice(0, 0) };
+  let protocol = "";
+  try {
+    protocol = new URL(raw).protocol;
+  } catch {}
+  return protocol === "http:" || protocol === "https:" ? { href: raw } : { text: raw };
 }
 
 export type DiffChunk = { path: string; lines: string[] };
-export function splitDiffByFile(_unified: string): DiffChunk[] {
-  return [{ path: "", lines: [] }];
+
+/** One chunk per `diff --git` header, keyed by its b/ path. Lines before the first header are dropped. */
+export function splitDiffByFile(unified: string): DiffChunk[] {
+  const chunks: DiffChunk[] = [];
+  for (const line of unified.split("\n")) {
+    const header = /^diff --git .* "?b\/(.*?)"?$/.exec(line);
+    if (header) chunks.push({ path: header[1]!, lines: [] });
+    chunks.at(-1)?.lines.push(line);
+  }
+  return chunks;
 }
 
 export type DiffLineKind = "add" | "del" | "hunk" | "file" | "context";
-export function diffLineKind(_line: string): DiffLineKind {
+
+export function diffLineKind(line: string): DiffLineKind {
+  if (line.startsWith("+++") || line.startsWith("---")) return "file";
+  if (line.startsWith("@@")) return "hunk";
+  if (line.startsWith("+")) return "add";
+  if (line.startsWith("-")) return "del";
   return "context";
 }
 
-export function truncationCopy(_t: { lineCap: number; files: number; added: number; removed: number }): string {
-  return "";
+export function truncationCopy(t: { lineCap: number; files: number; added: number; removed: number }): string {
+  return `Diff cut at ${t.lineCap} lines. ${t.files} files changed, ${t.added} additions, ${t.removed} deletions in total. Open the branch for the rest.`;
 }
 
-export function actionLabel(action: string): string {
-  return action;
+const ACTION_LABELS: Record<DecisionAction, string> = {
+  approve: "Approved",
+  reject: "Rejected",
+  request_changes: "Changes requested",
+  more_research: "More research",
+  discuss: "Discuss",
+};
+
+export function actionLabel(action: DecisionAction): string {
+  return ACTION_LABELS[action];
 }
+

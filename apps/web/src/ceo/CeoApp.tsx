@@ -13,8 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Status, StatusIndicator, StatusLabel } from "@/components/kibo-ui/status";
 import { fetchMe, type Me } from "./api";
 import { connectCeoFeed, type FeedStatus } from "./ceo-feed";
+import { DetailPane } from "./DetailPane";
 import { QueueList } from "./QueueList";
-import { detailMeta, documentTitle, nextSelection } from "./view-model";
+import { documentTitle, nextSelection } from "./view-model";
 
 const STATUS_KIND = { Live: "online", Reconnecting: "degraded", Offline: "offline" } as const;
 
@@ -183,14 +184,7 @@ export function CeoApp() {
                 <Button variant="link" className="mb-4 px-0 text-foreground underline md:hidden" onClick={() => setShowDetail(false)}>
                   Back to queue
                 </Button>
-                {selected && (
-                  <div className="flex max-w-[880px] flex-col gap-2">
-                    <h2 className="text-xl leading-tight font-semibold">
-                      {selected.record.request.title ?? selected.record.request.reason}
-                    </h2>
-                    <p className="text-xs text-muted-foreground">{detailMeta(selected.record.request, now)}</p>
-                  </div>
-                )}
+                {selected && <DetailPane key={selected.record.request.decisionId} item={selected} now={now} />}
                 {!decisions && (
                   <div className="flex max-w-[880px] flex-col gap-6">
                     <Skeleton className="h-6 w-2/3" />
