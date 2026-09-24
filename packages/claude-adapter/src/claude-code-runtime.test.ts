@@ -8,13 +8,14 @@ vi.mock("./event-emitter.js", () => ({
       type: string,
       payload: unknown,
       taskId: string,
-      _visibility?: string,
+      visibility?: string,
       sourceAgentId?: string,
     ) => ({
       companyId,
       type,
       payload,
       taskId,
+      ...(visibility !== undefined ? { visibility } : {}),
       ...(sourceAgentId !== undefined ? { sourceAgentId } : {}),
     }),
   ),
@@ -25,6 +26,10 @@ vi.mock("gsd-adapter", () => ({ observeGsdState: vi.fn() }));
 import { query } from "@anthropic-ai/claude-agent-sdk";
 import { reduce, emptyState } from "company-core";
 import type { CompanyEvent } from "event-schema";
+// Namespace imports: a not-yet-existing export fails inside the test body
+// (assertion-level RED), not as an ESM link failure.
+import * as es from "event-schema";
+import * as claudeAdapter from "./index.js";
 import { observeGsdState } from "gsd-adapter";
 import { postEvent } from "./event-emitter.js";
 import { createClaudeCodeRuntime } from "./claude-code-runtime.js";
@@ -808,5 +813,181 @@ describe("ClaudeCodeRuntime superseded invocations (one live query() per task)",
     expect(await runtime.getStatus("task-1")).toBe("running");
     const posted = (postEvent as unknown as Mock).mock.calls.map((call) => call[2].type);
     expect(posted.filter((t) => t === "task.status_changed" || t === "ceo.approval_requested")).toHaveLength(0);
+  });
+});
+
+describe("parked canUseTool (D-01)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  // The decision exactly as the worker broker resolves it: the fields of a
+  // WorkerDownlinkSchema-parsed frame, minus the routing fields, so both
+  // halves of the tracer are tested against the same wire schema.
+  function wireDecision(value: Record<string, unknown>) {
+    const parsed = es.WorkerDownlinkSchema.parse({
+      type: "decision",
+      decisionId: "0b6f7c1e-2a4d-4e8b-9f3a-6c5d4e3b2a10",
+      ...value,
+    }) as Record<string, unknown>;
+    const { type: _type, decisionId: _id, ...decision } = parsed;
+    return decision;
+  }
+
+  // Starts a task on a pausable stream with awaitDecision injected; the
+  // default awaitDecision parks until the test calls decide().
+  async function startParked(decisionOverride?: () => Promise<unknown>) {
+    const q = pausableQuery(initMessage("session-abc"));
+    (query as unknown as Mock).mockReturnValue(q);
+    let decide: (d: unknown) => void = () => {};
+    const awaitDecision = vi.fn(
+      decisionOverride ??
+        (() =>
+          new Promise((resolve) => {
+            decide = resolve;
+          })),
+    );
+    const runtime = createClaudeCodeRuntime({ ...runtimeOptions(), awaitDecision } as Parameters<
+      typeof createClaudeCodeRuntime
+    >[0]);
+    const startPromise = runtime.startTask(startInput);
+    await flushMicrotasks();
+    const options = (query as unknown as Mock).mock.calls[0][0].options;
+    const finish = async () => {
+      q.interrupt();
+      await startPromise;
+    };
+    return { runtime, awaitDecision, options, canUseTool: options.canUseTool, decide: (d: unknown) => decide(d), finish };
+  }
+
+  function posted() {
+    return (postEvent as unknown as Mock).mock.calls.map((call) => call[2]);
+  }
+
+  it("approve: posts waiting_for_review then a PRIVATE ceo.approval_requested, returns the SAME input reference, then running + decision_applied", async () => {
+    const { runtime, awaitDecision, canUseTool, decide, finish } = await startParked();
+    (postEvent as unknown as Mock).mockClear();
+    const input = { command: "npm publish" };
+    const signal = new AbortController().signal;
+
+    const resultPromise = canUseTool("Bash", input, { signal, toolUseID: "tool-1" });
+    await flushMicrotasks();
+
+    expect(awaitDecision).toHaveBeenCalledTimes(1);
+    const [decisionId, passedSignal] = awaitDecision.mock.calls[0] as unknown as [string, AbortSignal];
+    expect(decisionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(passedSignal).toBe(signal);
+    expect(await runtime.getStatus("task-1")).toBe("waiting_for_review");
+
+    const before = posted();
+    expect(before.map((e) => e.type)).toEqual(["task.status_changed", "ceo.approval_requested"]);
+    expect(before[0].payload).toEqual({ taskId: "task-1", status: "waiting_for_review" });
+    expect(before[1].visibility).toBe("PRIVATE");
+    expect(before[1].sourceAgentId).toBe("test-agent-1");
+    expect(before[1].payload).toEqual({
+      taskId: "task-1",
+      reason: "Bash command matched a CEO-gated pattern: publish/deploy",
+      decisionId,
+      threadId: decisionId,
+      kind: "ceo_gated_tool",
+      toolName: "Bash",
+      toolInput: JSON.stringify(input),
+    });
+
+    decide(wireDecision({ action: "approve" }));
+    const result = await resultPromise;
+
+    expect(result.behavior).toBe("allow");
+    expect(result.updatedInput).toBe(input);
+    expect(await runtime.getStatus("task-1")).toBe("running");
+    const after = posted().slice(2);
+    expect(after.map((e) => e.type)).toEqual(["task.status_changed", "ceo.decision_applied"]);
+    expect(after[0].payload).toEqual({ taskId: "task-1", status: "running" });
+    expect(after[1].visibility).toBe("PRIVATE");
+    expect(after[1].payload).toEqual({ decisionId, taskId: "task-1", action: "approve", outcome: "allowed" });
+    await finish();
+  });
+
+  it("approve: a decision carrying extra updatedInput / input fields changes nothing", async () => {
+    const { canUseTool, decide, finish } = await startParked();
+    const input = { command: "npm publish" };
+    const resultPromise = canUseTool("Bash", input, { signal: new AbortController().signal, toolUseID: "tool-1" });
+    await flushMicrotasks();
+    decide({ action: "approve", updatedInput: { command: "rm -rf /" }, input: { command: "rm -rf /" } });
+    const result = await resultPromise;
+    expect(result).toEqual({ behavior: "allow", updatedInput: { command: "npm publish" } });
+    expect(result.updatedInput).toBe(input);
+    await finish();
+  });
+
+  it("reject: returns { behavior: 'deny', message: '[CEO:REJECT]' } and decision_applied outcome denied", async () => {
+    const { canUseTool, decide, finish } = await startParked();
+    const resultPromise = canUseTool(
+      "Bash",
+      { command: "npm publish" },
+      { signal: new AbortController().signal, toolUseID: "t" },
+    );
+    await flushMicrotasks();
+    decide(wireDecision({ action: "reject" }));
+    expect(await resultPromise).toEqual({ behavior: "deny", message: "[CEO:REJECT]" });
+    const applied = posted().filter((e) => e.type === "ceo.decision_applied");
+    expect(applied).toHaveLength(1);
+    expect(applied[0].visibility).toBe("PRIVATE");
+    expect(applied[0].payload.action).toBe("reject");
+    expect(applied[0].payload.outcome).toBe("denied");
+    await finish();
+  });
+
+  it("a tool input over 16000 characters is denied without calling awaitDecision", async () => {
+    const { awaitDecision, canUseTool, finish } = await startParked();
+    (postEvent as unknown as Mock).mockClear();
+    const result = await canUseTool(
+      "Bash",
+      { command: `npm publish ${"x".repeat(16_000)}` },
+      { signal: new AbortController().signal, toolUseID: "t" },
+    );
+    expect(result).toEqual({
+      behavior: "deny",
+      message:
+        "Tool input is too large to show the CEO in full (over 16000 characters); split the operation into smaller steps.",
+    });
+    expect(awaitDecision).not.toHaveBeenCalled();
+    expect(posted().filter((e) => e.type === "ceo.approval_requested")).toHaveLength(0);
+    await finish();
+  });
+
+  it("an awaitDecision that throws returns the no-decision deny", async () => {
+    const { canUseTool, finish } = await startParked(() => Promise.reject(new Error("aborted")));
+    const result = await canUseTool(
+      "Bash",
+      { command: "npm publish" },
+      { signal: new AbortController().signal, toolUseID: "t" },
+    );
+    expect(result).toEqual({ behavior: "deny", message: "No CEO decision was received; the tool call was not run." });
+    await finish();
+  });
+
+  it("AskUserQuestion: copies the parked questions into the PRIVATE request payload", async () => {
+    const { canUseTool, decide, finish } = await startParked();
+    const questions = [
+      { question: "Which?", header: "Pick", multiSelect: false, options: [{ label: "A", description: "a" }] },
+    ];
+    const resultPromise = canUseTool(
+      "AskUserQuestion",
+      { questions },
+      { signal: new AbortController().signal, toolUseID: "t" },
+    );
+    await flushMicrotasks();
+    const request = posted().find((e) => e.type === "ceo.approval_requested");
+    expect(request.payload.kind).toBe("clarifying_question");
+    expect(request.payload.questions).toEqual(questions);
+    decide(wireDecision({ action: "discuss", note: "why?" }));
+    expect((await resultPromise).behavior).toBe("deny");
+    await finish();
+  });
+
+  it("the package index exports toPermissionResult and CEO_PREFIX", () => {
+    expect(typeof claudeAdapter.toPermissionResult).toBe("function");
+    expect(claudeAdapter.CEO_PREFIX.reject).toBe("[CEO:REJECT]");
   });
 });
