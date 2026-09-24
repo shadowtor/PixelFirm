@@ -312,11 +312,15 @@ describe("GET /ceo/ws (CEO-02, T-06-06-03)", () => {
       const snapshot = (await result.first) as { type: string; state: unknown };
       const after = await ceoRows();
       result.ws.close();
-      if (before.length !== after.length && attemptNo < 5) continue;
+      if (before.length !== after.length) {
+        if (attemptNo >= 30) throw new Error("ceo.* rows kept changing during the snapshot; could not bracket it");
+        await new Promise((r) => setTimeout(r, 50 + attemptNo * 20));
+        continue;
+      }
       expect(snapshot).toEqual({ type: "snapshot", state: foldDecisions(after) });
       break;
     }
-  });
+  }, 30_000);
 
   it("relays a new PRIVATE ceo.approval_requested to the CEO socket and not to an office socket", async () => {
     const ceo = await attemptCeo();

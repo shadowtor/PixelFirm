@@ -137,6 +137,9 @@ describe("apps/worker full-pipeline integration", () => {
       expect(hello.data?.type).toBe("hello");
 
       worker.stop();
+      // A post already in flight when stop() ran can still land; let it
+      // arrive before counting, then require silence.
+      await sleep(300);
       const countAfterStop = receivedEvents.length;
       await sleep(1000);
       expect(receivedEvents.length).toBe(countAfterStop);
