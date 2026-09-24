@@ -97,4 +97,10 @@ describe("createDecisionBroker", () => {
   it("exposes a uuid bootId", () => {
     expect(decisions.createDecisionBroker().bootId).toMatch(/^[0-9a-f-]{36}$/);
   });
+
+  it("helloMessage() is a WorkerUplinkSchema hello carrying this broker's bootId", () => {
+    const broker = decisions.createDecisionBroker();
+    const hello = es.WorkerUplinkSchema.parse(broker.helloMessage());
+    expect(hello).toEqual({ type: "hello", bootId: broker.bootId });
+  });
 });

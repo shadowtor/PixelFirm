@@ -5,7 +5,7 @@ import { execa } from "execa";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CompanyEventSchema } from "event-schema";
+import { CompanyEventSchema, WorkerUplinkSchema } from "event-schema";
 import { startWorker } from "./index.js";
 
 function sleep(ms: number): Promise<void> {
@@ -37,6 +37,7 @@ describe("apps/worker full-pipeline integration", () => {
   let port: number;
   let repoPath: string;
   let receivedEvents: unknown[];
+  let wsFrames: string[];
 
   beforeAll(async () => {
     receivedEvents = [];
@@ -62,6 +63,9 @@ describe("apps/worker full-pipeline integration", () => {
     });
 
     wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+    wss.on("connection", (socket) => {
+      socket.on("message", (data) => wsFrames.push(data.toString()));
+    });
 
     await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", () => resolve()));
     const address = httpServer.address();
@@ -75,6 +79,7 @@ describe("apps/worker full-pipeline integration", () => {
 
   beforeEach(async () => {
     receivedEvents = [];
+    wsFrames = [];
     repoPath = await makeFixtureRepo();
     process.env.CONTROL_PLANE_URL = `http://127.0.0.1:${port}`;
     process.env.WORKER_TOKEN = "worker-1.integrationsecret";
@@ -124,6 +129,12 @@ describe("apps/worker full-pipeline integration", () => {
         "sessionId",
         "worktreePath",
       ]);
+
+      // 06-04: the first frame on the worker's WebSocket is its hello.
+      expect(wsFrames.length).toBeGreaterThan(0);
+      const hello = WorkerUplinkSchema.safeParse(JSON.parse(wsFrames[0]!));
+      expect(hello.success).toBe(true);
+      expect(hello.data?.type).toBe("hello");
 
       worker.stop();
       const countAfterStop = receivedEvents.length;
