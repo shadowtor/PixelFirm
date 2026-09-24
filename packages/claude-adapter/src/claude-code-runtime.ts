@@ -212,6 +212,13 @@ export function createClaudeCodeRuntime(options: {
     record.controller = controller;
     record.inFlight = true;
 
+    // Per invocation, so a superseded invocation's parked calls can never
+    // suspend its successor's watchdog. The watchdog is created after query()
+    // but canUseTool only runs once the stream iterates, hence the forward
+    // declaration.
+    let parkedCount = 0;
+    let watchdog: ReturnType<typeof createWatchdog> | undefined;
+
     const stream = query({
       prompt,
       options: {
@@ -261,40 +268,61 @@ export function createClaudeCodeRuntime(options: {
             };
           }
           const parked: ParkedCall = { decisionId: randomUUID(), toolName, input, kind: cls.kind };
-          record.status = "waiting_for_review";
-          await emitStatus(taskId, "waiting_for_review");
-          await postPrivate(taskId, "ceo.approval_requested", {
-            taskId,
-            reason: cls.reason,
-            decisionId: parked.decisionId,
-            threadId: parked.decisionId,
-            kind: cls.kind,
-            toolName,
-            toolInput,
-            ...(toolName === "AskUserQuestion" ? { questions: input.questions } : {}),
-          });
-          let decision: CeoDecision;
+          // D-03: while anything is parked the watchdog and the Notification
+          // hook stand down; the finally restarts the watchdog from zero.
+          parkedCount++;
           try {
-            decision = await options.awaitDecision(parked.decisionId, signal);
-          } catch {
-            return { behavior: "deny", message: "No CEO decision was received; the tool call was not run." };
+            record.status = "waiting_for_review";
+            await emitStatus(taskId, "waiting_for_review");
+            await postPrivate(taskId, "ceo.approval_requested", {
+              taskId,
+              reason: cls.reason,
+              decisionId: parked.decisionId,
+              threadId: parked.decisionId,
+              kind: cls.kind,
+              toolName,
+              toolInput,
+              ...(toolName === "AskUserQuestion" ? { questions: input.questions } : {}),
+            });
+            // D-02: every way a parked call is lost ends in deny plus an
+            // expiry record, never in ceo.decision_applied or "running".
+            // postPrivate never throws, so an outage cannot change the deny.
+            let decision: CeoDecision;
+            try {
+              decision = await options.awaitDecision(parked.decisionId, signal);
+            } catch {
+              await postPrivate(taskId, "ceo.approval_expired", {
+                decisionId: parked.decisionId,
+                taskId,
+                reason: signal.aborted ? "aborted" : "superseded",
+              });
+              return { behavior: "deny", message: "No CEO decision was applied; the tool call was not run." };
+            }
+            if (!isCurrent()) {
+              await postPrivate(taskId, "ceo.approval_expired", {
+                decisionId: parked.decisionId,
+                taskId,
+                reason: "superseded",
+              });
+              return { behavior: "deny", message: `Invocation superseded for task ${taskId} — tool call refused.` };
+            }
+            // Pure mapping: approve returns parked.input by reference, never
+            // anything from the decision object.
+            const result = toPermissionResult(decision, parked);
+            // Pitfall 3: this is what walks the office agent out of the CEO room.
+            record.status = "running";
+            await emitStatus(taskId, "running");
+            await postPrivate(taskId, "ceo.decision_applied", {
+              decisionId: parked.decisionId,
+              taskId,
+              action: decision.action,
+              outcome: result.behavior === "allow" ? "allowed" : "denied",
+            });
+            return result;
+          } finally {
+            parkedCount--;
+            if (isCurrent()) watchdog?.reset();
           }
-          if (!isCurrent()) {
-            return { behavior: "deny", message: `Invocation superseded for task ${taskId} — tool call refused.` };
-          }
-          // Pure mapping: approve returns parked.input by reference, never
-          // anything from the decision object.
-          const result = toPermissionResult(decision, parked);
-          // Pitfall 3: this is what walks the office agent out of the CEO room.
-          record.status = "running";
-          await emitStatus(taskId, "running");
-          await postPrivate(taskId, "ceo.decision_applied", {
-            decisionId: parked.decisionId,
-            taskId,
-            action: decision.action,
-            outcome: result.behavior === "allow" ? "allowed" : "denied",
-          });
-          return result;
         },
         // D-08 signal #2: independent secondary signal — fires ~6s after an
         // unanswered canUseTool wait, per 04-RESEARCH.md Pattern 4 (2). Rarely
@@ -332,6 +360,7 @@ export function createClaudeCodeRuntime(options: {
               hooks: [
                 async (hookInput) => {
                   if (!isCurrent()) return {}; // superseded (TaskRecord.currentRun)
+                  if (parkedCount > 0) return {}; // D-03: already requested by the parked call
                   await requestReview(
                     taskId,
                     `permission_prompt: ${(hookInput as { message?: string }).message ?? "unanswered ~6s"}`,
@@ -351,8 +380,9 @@ export function createClaudeCodeRuntime(options: {
     // transition only if the timer expires with zero resets since the last
     // one — mirrors the same graceful-then-hard-kill mechanism cancelTask
     // uses, just with a different terminal status (blocked, not cancelled).
-    const watchdog = createWatchdog(DEFAULT_WATCHDOG_TIMEOUT_MS, () => {
+    watchdog = createWatchdog(DEFAULT_WATCHDOG_TIMEOUT_MS, () => {
       void (async () => {
+        if (parkedCount > 0) return; // D-03: a parked call is CEO think-time, not a hang
         if (!isCurrent()) return; // superseded (TaskRecord.currentRun)
         const exitedCleanly = await attemptGracefulStop(record);
         if (!exitedCleanly) controller.abort();
