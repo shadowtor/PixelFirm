@@ -26,6 +26,7 @@ const migrationPaths = [
   "../../drizzle/0002_workers_table.sql",
   "../../drizzle/0003_no_truncate_trigger.sql",
   "../../drizzle/0004_ceo_decision_once.sql",
+  "../../drizzle/0005_ceo_request_once.sql",
 ].map((p) => fileURLToPath(new URL(p, import.meta.url)));
 
 const WORKER_ID = "ceo-decisions-test-worker";
@@ -674,6 +675,22 @@ describe("T-06-05-04 worker ownership of ceo.decision_applied / ceo.approval_exp
     expect((await postEvent(appliedEvent(decisionId), workerBToken)).statusCode).toBe(202);
     expect((await postEvent(appliedEvent(decisionId), workerBToken)).statusCode).toBe(202);
     expect(await rowsOfType(decisionId, "ceo.decision_applied")).toHaveLength(1);
+  });
+
+  // WR-13 (06-REVIEW): a decisionId names one request; a second worker cannot
+  // reuse it to redirect where the CEO's decision goes.
+  it("a second ceo.approval_requested reusing a decisionId is a quiet duplicate; the first request keeps it", async () => {
+    const first = approvalRequest();
+    expect((await postEvent(first, workerBToken)).statusCode).toBe(202);
+    const decisionId = first.payload.decisionId;
+
+    const reuse = approvalRequest({ decisionId });
+    expect((await postEvent(reuse)).statusCode).toBe(202);
+
+    const rows = await rowsOfType(decisionId, "ceo.approval_requested");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.id).toBe(first.id);
+    expect((rows[0]!.payload as { workerId: string }).workerId).toBe(WORKER_B_ID);
   });
 
   it("refuses applied for an unknown decisionId with 403", async () => {

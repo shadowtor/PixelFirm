@@ -72,6 +72,9 @@ export async function registerCeoRoute(fastify: FastifyInstance) {
         .where(
           and(eq(events.type, "ceo.approval_requested"), sql`${events.payload}->>'decisionId' = ${decisionId}`),
         )
+        // events_ceo_request_once (0005) allows one row; the order keeps the
+        // pick deterministic (the first request) for rows stored before it.
+        .orderBy(events.receivedAt)
         .limit(1);
       if (!requestRow) return reply.code(404).send({ error: "unknown decision" });
 

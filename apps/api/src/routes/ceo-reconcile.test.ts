@@ -26,6 +26,7 @@ const migrationPaths = [
   "../../drizzle/0002_workers_table.sql",
   "../../drizzle/0003_no_truncate_trigger.sql",
   "../../drizzle/0004_ceo_decision_once.sql",
+  "../../drizzle/0005_ceo_request_once.sql",
 ].map((p) => fileURLToPath(new URL(p, import.meta.url)));
 
 const WORKER_ID = "ceo-reconcile-test-worker";
