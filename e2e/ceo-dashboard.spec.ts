@@ -198,3 +198,103 @@ test("loading the office route requests nothing under /src/ceo/ (D-08)", async (
   await expect(page.getByRole("heading", { name: "CEO desk" })).toBeVisible();
   expect(paths.some((p) => p.startsWith("/src/ceo/"))).toBe(true);
 });
+
+// ---- Task 2: the live pending queue (CEO-02) --------------------------------------------------
+
+const ACCENT = "rgb(255, 183, 3)";
+
+test("three pending decisions list oldest first with kind labels, Round 2 chip, selection and title count", async ({ page }) => {
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  await fakeFeed(page, (ws) => ws.send(snapshot(threeEvents())));
+  await page.goto(`${BASE}/ceo`);
+
+  const items = queue(page).getByRole("button");
+  await expect(items).toHaveCount(3);
+  await expect(items.nth(0)).toContainText("Force-push the rebased branch?");
+  await expect(items.nth(1)).toContainText("Which colour for the CTA?");
+  await expect(items.nth(2)).toContainText("Pick a pricing tier, round two");
+
+  await expect(items.nth(0).getByText("Gated action · force-push", { exact: true })).toBeVisible();
+  await expect(items.nth(1).getByText("Question", { exact: true })).toBeVisible();
+  await expect(items.nth(2).getByText("Round 2", { exact: true })).toBeVisible();
+  await expect(items.nth(0).getByText("Round", { exact: false })).toHaveCount(0);
+
+  // Waited time turns accent only after 10 minutes.
+  await expect(items.nth(0).getByText("30 min", { exact: true })).toHaveCSS("color", ACCENT);
+  await expect(items.nth(2).getByText("5 min", { exact: true })).not.toHaveCSS("color", ACCENT);
+
+  await expect(items.nth(0)).toHaveAttribute("aria-current", "true");
+  await expect(queue(page).locator('[aria-current="true"]')).toHaveCount(1);
+  await expect(page.getByTestId("pending-badge")).toHaveText("3");
+  await expect(page.getByRole("tab", { name: "Pending (3)" })).toBeVisible();
+  expect(await page.evaluate(() => document.title)).toBe("(3) CEO desk · PixelFirm");
+
+  const detail = page.getByRole("region", { name: "Decision detail" });
+  await expect(detail.getByRole("heading", { level: 2 })).toHaveText("Force-push the rebased branch?");
+  await expect(detail.getByText("ada · Task 1 · landing-page · waiting 30 min · #00000000", { exact: true })).toBeVisible();
+});
+
+test("a live arrival appends, is announced, and never steals the selection", async ({ page }) => {
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  const feed = await fakeFeed(page, (ws) => ws.send(snapshot(threeEvents())));
+  await page.goto(`${BASE}/ceo`);
+  const items = queue(page).getByRole("button");
+  await expect(items).toHaveCount(3);
+
+  feed.ws().send(
+    eventFrame(
+      requested(3, { agent: "dee", title: "Rotate the API key?", reason: "MCP tool: mcp__coolify__deploy", kind: "ceo_gated_tool", at: minutesAgo(0) }),
+    ),
+  );
+
+  await expect(items).toHaveCount(4);
+  await expect(items.nth(3)).toContainText("Rotate the API key?");
+  await expect(items.nth(3).getByText("Gated action · mcp__coolify__deploy", { exact: true })).toBeVisible();
+  await expect(page.locator('[aria-live="polite"]')).toHaveText("New decision from dee: Rotate the API key?");
+  await expect(items.nth(0)).toHaveAttribute("aria-current", "true");
+  await expect(items.nth(3)).not.toHaveAttribute("aria-current", "true");
+  await expect(page.getByTestId("pending-badge")).toHaveText("4");
+});
+
+test("when the selected decision is decided elsewhere, the next item is selected", async ({ page }) => {
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  const feed = await fakeFeed(page, (ws) => ws.send(snapshot(threeEvents())));
+  await page.goto(`${BASE}/ceo`);
+  const items = queue(page).getByRole("button");
+  await expect(items).toHaveCount(3);
+
+  // Select the middle one, then decide it elsewhere: the next (third) item takes over.
+  await items.nth(1).click();
+  await expect(items.nth(1)).toHaveAttribute("aria-current", "true");
+  feed.ws().send(eventFrame(decided(2, "approve", minutesAgo(0))));
+
+  await expect(items).toHaveCount(2);
+  await expect(items.nth(1)).toContainText("Pick a pricing tier, round two");
+  await expect(items.nth(1)).toHaveAttribute("aria-current", "true");
+  await expect(page.getByRole("region", { name: "Decision detail" }).getByRole("heading", { level: 2 })).toHaveText(
+    "Pick a pricing tier, round two",
+  );
+});
+
+test("the queue column scrolls on its own while the header and tabs stay put", async ({ page }) => {
+  const many = Array.from({ length: 30 }, (_, i) =>
+    requested(100 + i, { agent: `agent-${i}`, title: `Decision ${i}`, reason: "q", kind: "clarifying_question", at: minutesAgo(60 - i) }),
+  );
+  await fakeMe(page, { email: EMAIL, devBypass: false });
+  await fakeFeed(page, (ws) => ws.send(snapshot(many)));
+  await page.goto(`${BASE}/ceo`);
+  await expect(queue(page).getByRole("button")).toHaveCount(30);
+
+  const metrics = await queue(page).evaluate((el) => ({
+    overflowY: getComputedStyle(el).overflowY,
+    scrollable: el.scrollHeight > el.clientHeight,
+  }));
+  expect(metrics).toEqual({ overflowY: "auto", scrollable: true });
+
+  await queue(page).evaluate((el) => el.scrollTo(0, el.scrollHeight));
+  await expect(queue(page).getByRole("button").last()).toBeInViewport();
+  expect(await page.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
+  await expect(page.getByRole("banner")).toBeInViewport();
+  await expect(page.getByTestId("pending-badge")).toBeInViewport();
+  await expect(page.getByRole("tab", { name: "Pending (30)" })).toBeInViewport();
+});
