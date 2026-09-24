@@ -204,7 +204,9 @@ afterAll(async () => {
 
 describe("POST /events ceo.* rules", () => {
   it("stamps ceo.approval_requested payload.workerId from the credential, never the body, and relays the stamped event", async () => {
-    const browser = new WebSocket(`${wsBaseUrl}/ws/browser?token=test-browser-access-token`);
+    // 06-06: PRIVATE events no longer reach the office /ws/browser feed; the
+    // stamped request is observed on the CEO feed instead.
+    const browser = new WebSocket(`${wsBaseUrl}/ceo/ws`, { origin: "http://localhost:5173" });
     await nextMessage(browser); // snapshot
 
     const event = approvalRequest();
