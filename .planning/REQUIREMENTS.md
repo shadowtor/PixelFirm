@@ -36,8 +36,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **CEO-01**: A CEO office exists; agents requiring human input walk there and enter a visible waiting state
 - [ ] **CEO-02**: A CEO dashboard lists pending decisions with title, context, the requesting agent's recommendation, and relevant links/diffs
-- [ ] **CEO-03**: The CEO can Approve, Reject, Discuss, Request Changes, or Request More Research on each pending decision
-- [ ] **CEO-04**: No CEO-gated operation (deploy, destructive op, production change, major dependency change, security/pricing/architecture/legal decision) is ever auto-approved because an agent requested it
+- [x] **CEO-03**: The CEO can Approve, Reject, Discuss, Request Changes, or Request More Research on each pending decision
+- [x] **CEO-04**: No CEO-gated operation (deploy, destructive op, production change, major dependency change, security/pricing/architecture/legal decision) is ever auto-approved because an agent requested it
 - [ ] **CEO-05**: Every CEO approval/rejection is recorded in an audit log
 
 ### Handoffs
@@ -138,8 +138,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HANDOFF-02 | Phase 5 | Complete |
 | CEO-01 | Phase 6 | Pending |
 | CEO-02 | Phase 6 | Pending |
-| CEO-03 | Phase 6 | Pending |
-| CEO-04 | Phase 6 | Pending |
+| CEO-03 | Phase 6 | Complete |
+| CEO-04 | Phase 6 | Complete |
 | CEO-05 | Phase 6 | Pending |
 | SAFE-01 | Phase 7 | Pending |
 | SAFE-02 | Phase 7 | Pending |

@@ -346,7 +346,7 @@ Plans:
   3. The CEO can Approve, Reject, Discuss, Request Changes, or Request More Research on any pending decision, and the choice actually controls the AgentRuntime, not just the on-screen animation.
   4. No CEO-gated operation (deploy, destructive op, production change, major dependency change, security/pricing/architecture/legal decision) is ever auto-approved because an agent requested it, and every approval/rejection is recorded in an audit log.
 
-**Plans:** 3/14 plans executed
+**Plans:** 4/14 plans executed
 
 Plans:
 
@@ -358,7 +358,7 @@ Plans:
 
 **Wave 2** *(blocked on 06-01)*
 
-- [ ] 06-02-PLAN.md — Runtime CEO-04 hardening: gate-list + production-change decision, PreToolUse "ask" backstop, env strip, watchdog suspension, abort/superseded expiry *(not autonomous — opens with a `checkpoint:decision` on the gate list)*
+- [x] 06-02-PLAN.md — Runtime CEO-04 hardening: gate-list + production-change decision, PreToolUse "ask" backstop, env strip, watchdog suspension, abort/superseded expiry *(not autonomous — opens with a `checkpoint:decision` on the gate list)*
 - [ ] 06-13-PLAN.md — Control-plane half: worker-socket registry, workerId stamping, dev-bypass + CSRF decision route with per-action rules
 
 **Wave 3**
@@ -431,6 +431,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 | 3. Worker, Git Adapter & GSD Adapter | 4/4 | Complete    | 2026-09-20 |
 | 4. AgentRuntime & ClaudeCodeRuntime | 4/4 | Complete    | 2026-09-21 |
 | 5. Pixel Office Renderer | 41/41 | Complete    | 2026-09-23 |
-| 6. CEO Dashboard & Approval Workflow | 3/14 | In Progress|  |
+| 6. CEO Dashboard & Approval Workflow | 4/14 | In Progress|  |
 | 7. Stream-Safe Visibility & Overlay Route | 0/TBD | Not started | - |
 | 8. Twitch EventSub Integration | 0/TBD | Not started | - |
