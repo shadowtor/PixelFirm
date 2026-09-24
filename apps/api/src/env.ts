@@ -32,6 +32,23 @@ const EnvSchema = z
           .map((o) => o.trim())
           .filter(Boolean),
       ),
+    // Phase 6 (D-11): Cloudflare Access settings for /ceo/api. All optional;
+    // if any is missing, every non-dev CEO request is 401 (fail closed).
+    // The team domain, e.g. https://<team>.cloudflareaccess.com: the JWT
+    // issuer and the base of the /cdn-cgi/access/certs JWKS.
+    CF_ACCESS_TEAM_DOMAIN: z
+      .string()
+      .url()
+      .optional()
+      .transform((v) => v?.replace(/\/+$/, "")),
+    // The Access application's AUD tag: the JWT audience.
+    CF_ACCESS_AUD: z.string().min(1).optional(),
+    // The one identity allowed to decide; compared lowercased to the JWT email.
+    CEO_EMAIL: z
+      .string()
+      .email()
+      .optional()
+      .transform((v) => v?.toLowerCase()),
     // Phase 6: only read for the CEO_DEV_AUTH_BYPASS production guard.
     NODE_ENV: z.string().optional(),
   })
