@@ -196,6 +196,10 @@ export function noLongerPendingCopy(record: DecisionRecord, now: number): string
 
 export type HistoryTone = "success" | "destructive" | "neutral" | "expired";
 
-export function historyBadge(_record: DecisionRecord): { label: string; tone: HistoryTone } {
-  return { label: "", tone: "neutral" };
+/** Expired wins: a decision that reached an expired request never reached the worker. */
+export function historyBadge(record: DecisionRecord): { label: string; tone: HistoryTone } {
+  if (record.status === "expired" || !record.decision) return { label: "Expired", tone: "expired" };
+  const { action } = record.decision;
+  const tone = action === "approve" ? "success" : action === "reject" ? "destructive" : "neutral";
+  return { label: actionLabel(action), tone };
 }

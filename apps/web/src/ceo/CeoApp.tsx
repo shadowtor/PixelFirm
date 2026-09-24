@@ -17,6 +17,7 @@ import { ActionBar } from "./ActionBar";
 import { fetchMe, postDecision, type DecisionBody, type Me } from "./api";
 import { connectCeoFeed, type FeedStatus } from "./ceo-feed";
 import { DetailPane } from "./DetailPane";
+import { HistoryTable } from "./HistoryTable";
 import { QuestionsForm } from "./QuestionsForm";
 import { QueueList } from "./QueueList";
 import { allAnswered, buildAnswers, documentTitle, nextSelection, noLongerPendingCopy, successToast, type Selections } from "./view-model";
@@ -226,6 +227,7 @@ export function CeoApp() {
       <Tabs defaultValue="pending" className="flex min-h-0 flex-1 flex-col px-4 pt-4">
         <TabsList>
           <TabsTrigger value="pending">Pending ({count})</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
         <TabsContent value="pending" className="flex min-h-0 flex-1">
           {!decisions && feedFailed ? (
@@ -278,6 +280,9 @@ export function CeoApp() {
               </section>
             </div>
           )}
+        </TabsContent>
+        <TabsContent value="history" className="min-h-0 flex-1 overflow-y-auto pb-6">
+          {!decisions && feedFailed ? <LoadError reason="the live feed disconnected" onRetry={retry} /> : <HistoryTable state={decisions} now={now} />}
         </TabsContent>
       </Tabs>
       <div aria-live="polite" className="sr-only">
