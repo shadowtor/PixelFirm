@@ -25,6 +25,9 @@ export interface StartTaskInput {
   // downstream event this runtime emits for the task threads through this
   // value (task.status_changed's sourceAgentId, requestHandoff's fromAgentId).
   agentId: string;
+  // Phase 6 addition (CEO-02): optional, so existing callers are unchanged.
+  // Shown to the CEO with every decision request the task raises.
+  title?: string;
 }
 
 export interface AgentRuntime {

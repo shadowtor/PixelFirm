@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { query, type Query } from "@anthropic-ai/claude-agent-sdk";
+import { readDiff, type DiffSummary } from "git-adapter";
 import { observeGsdState } from "gsd-adapter";
 import type { AgentRuntime, AgentTaskStatus, StartTaskInput } from "orchestration-adapter";
 import { CEO_PROTOCOL_APPEND, type CeoDecision, type ParkedCall, toPermissionResult } from "./decision-mapping.js";
+import { buildDecisionRequest } from "./decision-request.js";
 import { buildEnvelope, postEvent } from "./event-emitter.js";
 import { classifySignal } from "./signal-detection.js";
 import { createWatchdog, DEFAULT_WATCHDOG_TIMEOUT_MS } from "./watchdog.js";
@@ -42,6 +44,23 @@ interface TaskRecord {
   // stream — only the last claimer may start a query() (05-VERIFICATION.md
   // gap 2 / review CR-01).
   currentRun?: object;
+  // StartTaskInput.title, carried on every CEO request as taskTitle (06-03).
+  title?: string;
+  // D-06: set when a "discuss" decision is applied; the task's next parked
+  // request reuses it as its threadId (and clears it) so the dashboard groups
+  // the rounds of one conversation.
+  discussThreadId?: string;
+}
+
+// A diff the worker cannot read (not a repo, no commits, git missing) must
+// never stop the request from reaching the CEO: it simply carries no diff.
+async function readDiffOrNothing(worktreePath: string | undefined): Promise<DiffSummary | undefined> {
+  if (!worktreePath) return undefined;
+  try {
+    return await readDiff(worktreePath);
+  } catch {
+    return undefined;
+  }
 }
 
 // The runtime refuses to park a tool call whose JSON input the CEO could not
@@ -106,6 +125,9 @@ export function createClaudeCodeRuntime(options: {
   // every classified call; the worker's broker resolves it from the
   // control-plane WebSocket. Absent: the Phase 4 detect-and-deny path.
   awaitDecision?: (decisionId: string, signal: AbortSignal) => Promise<CeoDecision>;
+  // D-02: this worker process's boot id (a UUID), stamped on every CEO request
+  // so a decision arriving after a restart can be told apart.
+  workerBootId?: string;
 }): AgentRuntime {
   const tasks = new Map<string, TaskRecord>();
 
@@ -218,6 +240,9 @@ export function createClaudeCodeRuntime(options: {
     // declaration.
     let parkedCount = 0;
     let watchdog: ReturnType<typeof createWatchdog> | undefined;
+    // CEO-02 context: the text blocks of this invocation's latest assistant
+    // message, shown to the CEO with any request it parks.
+    let lastAssistantText: string | undefined;
 
     const stream = query({
       prompt,
@@ -271,19 +296,33 @@ export function createClaudeCodeRuntime(options: {
           // D-03: while anything is parked the watchdog and the Notification
           // hook stand down; the finally restarts the watchdog from zero.
           parkedCount++;
+          // D-06: a request right after a Discuss decision continues its thread.
+          const threadId = record.discussThreadId ?? parked.decisionId;
+          record.discussThreadId = undefined;
           try {
             record.status = "waiting_for_review";
             await emitStatus(taskId, "waiting_for_review");
-            await postPrivate(taskId, "ceo.approval_requested", {
+            // D-09: the control plane has no repo access, so the worker ships the diff.
+            const diff = await readDiffOrNothing(record.worktreePath);
+            await postPrivate(
               taskId,
-              reason: cls.reason,
-              decisionId: parked.decisionId,
-              threadId: parked.decisionId,
-              kind: cls.kind,
-              toolName,
-              toolInput,
-              ...(toolName === "AskUserQuestion" ? { questions: input.questions } : {}),
-            });
+              "ceo.approval_requested",
+              buildDecisionRequest({
+                taskId,
+                reason: cls.reason,
+                decisionId: parked.decisionId,
+                threadId,
+                kind: cls.kind,
+                toolName,
+                input,
+                lastAssistantText,
+                diff,
+                sessionId: record.sessionId,
+                worktreePath: record.worktreePath,
+                workerBootId: options.workerBootId,
+                taskTitle: record.title,
+              }),
+            );
             // D-02: every way a parked call is lost ends in deny plus an
             // expiry record, never in ceo.decision_applied or "running".
             // postPrivate never throws, so an outage cannot change the deny.
@@ -309,6 +348,7 @@ export function createClaudeCodeRuntime(options: {
             // Pure mapping: approve returns parked.input by reference, never
             // anything from the decision object.
             const result = toPermissionResult(decision, parked);
+            if (decision.action === "discuss") record.discussThreadId = threadId;
             // Pitfall 3: this is what walks the office agent out of the CEO room.
             record.status = "running";
             await emitStatus(taskId, "running");
@@ -467,6 +507,11 @@ export function createClaudeCodeRuntime(options: {
             // actively in-flight (pauseTask/sendMessage's "mid-stream"
             // precondition) — an in-memory transition only, no event.
             record.status = "running";
+          } else if (message.type === "assistant") {
+            const text = message.message.content
+              .flatMap((block) => (block.type === "text" ? [block.text] : []))
+              .join("\n");
+            if (text.trim()) lastAssistantText = text;
           } else if (message.type === "result") {
             // startTask/resumeTask/sendMessage must never report success on
             // an error result — only the "success" subtype completes; every
@@ -520,7 +565,12 @@ export function createClaudeCodeRuntime(options: {
 
   return {
     async startTask(input: StartTaskInput): Promise<void> {
-      tasks.set(input.taskId, { status: "starting", worktreePath: input.worktreePath, agentId: input.agentId });
+      tasks.set(input.taskId, {
+        status: "starting",
+        worktreePath: input.worktreePath,
+        agentId: input.agentId,
+        title: input.title,
+      });
       // Fire the "starting" event before the query() loop begins, not after.
       await emitStatus(input.taskId, "starting");
       await runQuery(input.taskId, input.prompt);
