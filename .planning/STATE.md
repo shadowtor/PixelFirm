@@ -3,16 +3,16 @@ gsd_state_version: "1.0"
 current_phase: 06
 current_phase_name: CEO Dashboard & Approval Workflow
 status: executing
-stopped_at: Completed 06-09-PLAN.md
-last_updated: "2026-09-24T06:32:57.069Z"
+stopped_at: Completed 06-10-PLAN.md
+last_updated: "2026-09-24T07:12:46.970Z"
 last_activity: 2026-09-24
 last_activity_desc: Phase 06 execution started
-state_head: 24fa38dc439ccbf45323d490cad159f3e8a04b4d
+state_head: d1a6a2bb457f621fef49aba2e0bfc2b63c9b8327
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 70
-  completed_plans: 67
+  completed_plans: 68
   percent: 63
 ---
 
@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-09-23)
 ## Current Position
 
 Phase: 06 (CEO Dashboard & Approval Workflow) — EXECUTING
-Plan: 12 of 14
+Plan: 13 of 14
 Status: Ready to execute
 Last activity: 2026-09-24 — Phase 06 execution started
 
@@ -128,6 +128,7 @@ Progress: [██████░░░░] 63%
 | Phase 06 P04 | 18 min | 3 tasks | 12 files |
 | Phase 06 P14 | 19 min | 2 tasks | 9 files |
 | Phase 06 P09 | 22min | 2 tasks | 8 files |
+| Phase 06 P10 | 32min | 2 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -277,6 +278,8 @@ Recent decisions affecting current work:
 - [Phase 06]: 06-14: dashboard agent name is the event sourceAgentId (the private feed carries no display names)
 - [Phase 06]: 06-09: safeLink allows only http/https anchors (raw string as href); every other scheme renders as mono text
 - [Phase 06]: 06-09: AskUserQuestion selections live in CeoApp answerDrafts keyed by decisionId; buildAnswers joins labels in option order then trimmed Other with ', ' to match validateAnswers
+- [Phase 06]: 06-10: a decision decided elsewhere or expired while open is held with the no-longer-pending alert until the CEO moves on; only this page's own decisions auto-select the next item
+- [Phase 06]: 06-10: postDecision/postResume return the server error string as reason; a 409 before the live event shows 'another session just now' until decision_made fills in the decider
 
 ### Pending Todos
 
@@ -307,6 +310,6 @@ Items acknowledged and deferred at milestone close, most recent first:
 
 ## Session Continuity
 
-Last session: 2026-09-24T06:32:56.788Z
-Stopped at: Completed 06-09-PLAN.md
+Last session: 2026-09-24T07:12:46.656Z
+Stopped at: Completed 06-10-PLAN.md
 Resume file: None
