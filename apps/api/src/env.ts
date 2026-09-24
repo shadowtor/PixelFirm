@@ -20,6 +20,18 @@ const EnvSchema = z
       .enum(["0", "1"])
       .default("0")
       .transform((v) => v === "1"),
+    // Phase 6 (D-12): comma-separated exact Origins allowed to POST /ceo/api
+    // (apps/api/src/auth/csrf.ts). The empty default refuses every browser
+    // POST, so a missing value fails closed.
+    CEO_ALLOWED_ORIGINS: z
+      .string()
+      .default("")
+      .transform((v) =>
+        v
+          .split(",")
+          .map((o) => o.trim())
+          .filter(Boolean),
+      ),
     // Phase 6: only read for the CEO_DEV_AUTH_BYPASS production guard.
     NODE_ENV: z.string().optional(),
   })
