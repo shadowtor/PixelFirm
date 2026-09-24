@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { and, eq, sql } from "drizzle-orm";
 import { CompanyEventSchema } from "event-schema";
 import { db } from "../db/client.js";
 import { events } from "../db/schema.js";
@@ -60,6 +61,23 @@ export async function registerEventsRoute(fastify: FastifyInstance) {
           ? { ...parsed.data, payload: { ...parsed.data.payload, workerId: request.workerId } }
           : parsed.data;
 
+      // T-06-05-04: a worker reports only on decisions routed to it.
+      if (event.type === "ceo.decision_applied" || event.type === "ceo.approval_expired") {
+        const [owner] = await db
+          .select({ payload: events.payload })
+          .from(events)
+          .where(
+            and(
+              eq(events.type, "ceo.approval_requested"),
+              sql`${events.payload}->>'decisionId' = ${event.payload.decisionId}`,
+            ),
+          )
+          .limit(1);
+        if ((owner?.payload as { workerId?: string } | undefined)?.workerId !== request.workerId) {
+          return reply.code(403).send({ error: "decision not owned by this worker" });
+        }
+      }
+
       const inserted = await db
         .insert(events)
         .values({
@@ -76,16 +94,19 @@ export async function registerEventsRoute(fastify: FastifyInstance) {
           visibility: event.visibility,
           payload: event.payload,
         })
-        .onConflictDoNothing({ target: events.id }) // D-04 dedup
+        // D-04 dedup. Bare, not keyed on id: a retried ceo.decision_applied /
+        // ceo.approval_expired hits events_ceo_decision_once (0004) instead,
+        // and must be a quiet duplicate, not a 23505 500.
+        .onConflictDoNothing()
         .returning({ id: events.id });
 
       if (inserted.length === 0) {
-        // Conflict branch fired: this event.id already existed. Never log
-        // event.payload here (T-02-03 — payload may carry secrets/PII from
-        // future producers).
+        // Conflict branch fired: this event (by id, or by decision) already
+        // existed. Never log event.payload here (T-02-03 — payload may carry
+        // secrets/PII from future producers).
         fastify.log.warn(
           { eventId: event.id, eventType: event.type },
-          "duplicate event id ignored (onConflictDoNothing)",
+          "duplicate event ignored (onConflictDoNothing)",
         );
       } else {
         if (event.type === "worker.heartbeat") {

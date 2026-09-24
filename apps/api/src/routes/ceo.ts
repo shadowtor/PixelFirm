@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { CompanyEventSchema, DecisionActionSchema } from "event-schema";
 import { db } from "../db/client.js";
@@ -68,6 +68,22 @@ export async function registerCeoRoute(fastify: FastifyInstance) {
         return reply.code(400).send({ error: "answers required" });
       }
 
+      // CEO-05: one decision per request. Fast path for the common repeat; the
+      // unique index below is what actually serializes concurrent POSTs.
+      const settled = await db
+        .select({ type: events.type })
+        .from(events)
+        .where(
+          and(
+            inArray(events.type, ["ceo.approval_expired", "ceo.decision_made"]),
+            sql`${events.payload}->>'decisionId' = ${decisionId}`,
+          ),
+        );
+      if (settled.some((r) => r.type === "ceo.approval_expired")) {
+        return reply.code(409).send({ error: "expired" });
+      }
+      if (settled.length > 0) return reply.code(409).send({ error: "already decided" });
+
       // Stamped server-side by /events from the posting worker's credential.
       const workerId = requestPayload.workerId;
       // Offline: append nothing, so the parked call keeps waiting.
@@ -95,16 +111,22 @@ export async function registerCeoRoute(fastify: FastifyInstance) {
         },
       });
 
-      await db.insert(events).values({
-        id: event.id,
-        type: event.type,
-        version: event.version,
-        occurredAt: new Date(event.occurredAt),
-        companyId: event.companyId,
-        taskId: event.taskId,
-        visibility: event.visibility,
-        payload: event.payload,
-      });
+      const inserted = await db
+        .insert(events)
+        .values({
+          id: event.id,
+          type: event.type,
+          version: event.version,
+          occurredAt: new Date(event.occurredAt),
+          companyId: event.companyId,
+          taskId: event.taskId,
+          visibility: event.visibility,
+          payload: event.payload,
+        })
+        // events_ceo_decision_once (0004): a concurrent decision won the race.
+        .onConflictDoNothing()
+        .returning({ id: events.id });
+      if (inserted.length === 0) return reply.code(409).send({ error: "already decided" });
 
       // ponytail: a socket closing between the check above and this send leaves
       // the decision recorded but undelivered; the hello reconcile (RESEARCH
