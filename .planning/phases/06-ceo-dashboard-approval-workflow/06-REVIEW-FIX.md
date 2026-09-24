@@ -1,13 +1,15 @@
 ---
 phase: 06-ceo-dashboard-approval-workflow
-fixed_at: 2026-09-24T23:59:00Z
+fixed_at: 2026-09-25T00:00:00Z
 review_path: .planning/phases/06-ceo-dashboard-approval-workflow/06-REVIEW.md
-iteration: 1
-findings_in_scope: 18
-fixed: 17
-skipped: 1
-status: partial
+iteration: 2
+findings_in_scope: 19
+fixed: 19
+skipped: 0
+status: all_fixed
 ---
+
+> **Iteration 2 (2026-09-25):** the user answered the four open decisions. WR-11 and IN-01 are now fixed, WR-03 was refined, and WR-01 was confirmed with no code change. See "Iteration 2 — user decisions" at the end. The iteration-1 sections below are left as written.
 
 # Phase 6: Code Review Fix Report
 
@@ -143,7 +145,7 @@ Near misses stay ungated: `rm -r`, `rm -f`, `git clean -n`, `git log --grep merg
 **Commit:** e231fc1
 **Applied fix:** `describe("readDiff", { timeout: 30_000 }, ...)`. The whole git-adapter suite now passes in the full parallel `pnpm -r test` run (18/18).
 
-## Skipped Issues
+## Skipped Issues (iteration 1; WR-11 was fixed in iteration 2)
 
 ### WR-11: After a restart, the env task re-runs from scratch alongside the CEO's resume in the same worktree
 
@@ -175,8 +177,99 @@ All gates ran in the **main checkout** (`workflow.use_worktrees: false`, branch 
 - **Test database change:** the RED run of the WR-13 test stored one duplicate `ceo.approval_requested` in the local test database (`localhost:5434/pixelfirm_test`), and that duplicate blocked the new unique index. I deleted that one row, disabling the `events_append_only` trigger around the delete in a single transaction. No other database was touched.
 - I did not push, deploy or commit this report.
 
+## Iteration 2 — user decisions
+
+The user answered in chat on 2026-09-25. Each change was test-first: I ran the new tests, saw them fail, then applied the fix. There is one commit per finding.
+
+### WR-01: "Keep gated" (no code change)
+
+`DROP SCHEMA`, `TRUNCATE` and `git clean -f` stay gated, as committed in 27442bb. The user confirmed they belong to the signed-off "destructive filesystem/DB/git" category.
+
+### WR-03: "Allow bare reads"
+
+**Files modified:** `packages/claude-adapter/src/signal-detection.ts`, `signal-detection.test.ts`
+**Commit:** ca0a2a7
+**Status:** fixed: requires human verification (classifier logic)
+**Applied fix:** A `git config` call is now a read only in these forms:
+- scope/display options (`--global`, `--system`, `--local`, `--worktree`, `--show-origin`, `--show-scope`, `--name-only`, `--null`/`-z`, `--includes`, `--file`/`-f <path>`, `--type <t>`), then either an explicit read op (`--get*`, `--list`, `-l`, `get`, `list`) or one bare key that ends the command;
+- the command may end with a newline, `;`, `|`, `&` or `)`.
+
+Everything else is gated:
+- a key plus a value
+- `--add`, `--unset*`, `--replace-all`, `--rename-section`, `--remove-section`, `--edit`/`-e`, `set`, `unset`
+- a key that is quoted or contains `$`, a backtick or parentheses
+- a redirect after the key
+- any `git config` under `-c` or `--config-env`, read or not. This check is case-sensitive so that `git -C <dir> config <key>` stays a read.
+
+**Iteration-1 hole, also fixed here:** the old rule accepted a read op anywhere in the command. Git accepts options after arguments, and I confirmed on git 2.55 that these commands write:
+- `git config core.pager x --list` wrote `core.pager=x`;
+- `git config core.fsmonitor list` wrote the value `list`.
+
+Both were ungated before. Read ops must now come first, after the options. One side effect: rarer read forms such as `git config --default x --get k` now park. That errs closed.
+
+### WR-11: option (a) "Local started-task record"
+
+**Files modified:** `apps/worker/src/env.ts`, `env.test.ts`, `index.ts`, `index.test.ts` (new), `started-tasks.ts` (new), `started-tasks.test.ts` (new), `scripts/verify-ceo-approval-live.mjs`
+**Commit:** f339085
+**Status:** fixed: requires human verification (restart behaviour)
+**Applied fix:**
+- **Task id is required:** `WORKER_TASK_PROMPT` now requires `WORKER_TASK_ID`, and the generated-uuid fallback is gone.
+- **The record:** `claimTaskStart` keeps `started-tasks.json`, a JSON list of task ids, in `WORKER_STATE_DIR`. The default is `~/.pixelfirm/worker`. `loadEnv` rejects a state dir inside the worker repo.
+- **Atomic write:** the record is written to a temp file and renamed into place. This happens before `startTask`, so a crash between the two loses the start instead of risking a second one.
+- **Unreadable record:** a record that is not a list of strings throws. That fails the boot before any timer starts.
+- **On restart:** a task id already in the record is not started again. The worker logs that it should be resumed from /ceo.
+- **Test:** the new `index.test.ts` boots the worker twice with the same state dir and asserts that `startTask` ran once. I confirmed it fails against the old `index.ts`.
+- **Live script:** it already set a unique `WORKER_TASK_ID` for each run. It now also passes a per-run temp `WORKER_STATE_DIR`, which is removed in `finally`, so it never writes to `~/.pixelfirm`. I did not run the live script. I only checked it with `node --check`.
+- **Known limits:**
+  - There is no lock between two worker processes that share a state dir.
+  - The record only grows, by one id per operator launch.
+  - The agent runs as the same OS user, so it could still write to `~/.pixelfirm` through an absolute path. The record is outside the worktree, but that does not make it tamper-proof.
+
+### IN-01: "Gate them"
+
+**Files modified:** `packages/claude-adapter/src/signal-detection.ts`, `signal-detection.test.ts`
+**Commit:** 45f00d4
+**Applied fix:**
+- **The three tools:** `mcp__coolify__service`, `mcp__coolify__application` and `mcp__coolify__env_vars` are gated on every action except `list`, `get` and `list_containers`. A missing or unknown action is gated too.
+- **How I got the action lists:** from the installed `@masonator/coolify-mcp` 3.5.1 schema.
+  - `application`'s enum has no read action at all, so every call parks.
+  - `service` parks everything except `list_containers`, including `start_application` and `update`.
+  - `env_vars` parks everything except `list`.
+- **Any MCP tool:** the review's generic rule was also added. An MCP tool is gated when its string `action` contains a destructive word. This catches `mcp__coolify__control` `stop`/`restart` and `mcp__coolify__database` `delete`.
+- **Reason text:** `MCP tool: <name> (action: <action>)`.
+
+**Not gated. Say if you want these too:**
+- `mcp__coolify__control` with `action: "start"`;
+- `mcp__coolify__bulk_env_update`, a separate tool whose name has no destructive word;
+- the `create`/`update` actions of other coolify tools such as `database`, `storages` and `scheduled_tasks`.
+
+They stay in the signed-off "innocuously named MCP tool" residual. The header comment now says so.
+
+### Iteration 2 verification
+
+All gates ran in the **main checkout** (`workflow.use_worktrees: false`, branch `main`), with local Postgres on port 5434.
+
+- `pnpm -r --if-present typecheck`: **pass**. All six packages are clean.
+- `pnpm -r --no-bail --if-present test`: I ran it **twice** and both runs passed with identical counts:
+
+| Package | Result |
+|---|---|
+| event-schema | 53/53 |
+| gsd-adapter | 19/19 |
+| company-core | 60/60 |
+| pixel-office | 231/231 |
+| web | 62/62 |
+| api | 126/126 |
+| git-adapter | 18/18 |
+| claude-adapter | 170 passed, 3 skipped (the live-claude integration tests) |
+| worker | 46/46 |
+
+  The iteration-1 `ws-browser` snapshot flake did not recur. It was addressed separately in 210f9ce and ab07acf.
+- `~/.pixelfirm` does not exist after both runs, so no test wrote to the default state dir.
+- I did not push, deploy, run the live script or commit this report.
+
 ---
 
-_Fixed: 2026-09-24_
+_Fixed: 2026-09-24 (iteration 1), 2026-09-25 (iteration 2)_
 _Fixer: Claude (gsd-code-fixer)_
-_Iteration: 1_
+_Iteration: 2_
