@@ -31,7 +31,7 @@ export function QueueList({
               <span className="flex flex-wrap items-center gap-1 text-xs leading-snug text-muted-foreground">
                 <span>{request.agentId ?? "agent"}</span>
                 <span aria-hidden="true">·</span>
-                <Badge variant="outline">{kindLabel(request.kind, request.reason)}</Badge>
+                <KindBadge label={kindLabel(request.kind, request.reason)} />
                 <span aria-hidden="true">·</span>
                 <span className={isLongWait(request.requestedAt, now) ? "text-primary" : undefined}>
                   {waitedLabel(request.requestedAt, now)}
@@ -48,5 +48,22 @@ export function QueueList({
         );
       })}
     </ul>
+  );
+}
+
+// The gated pattern name renders in mono (UI-SPEC "Kind badge").
+function KindBadge({ label }: { label: string }) {
+  const at = label.indexOf(" · ");
+  return (
+    <Badge variant="outline">
+      {at < 0 ? (
+        label
+      ) : (
+        <>
+          {label.slice(0, at + 3)}
+          <span className="font-mono">{label.slice(at + 3)}</span>
+        </>
+      )}
+    </Badge>
   );
 }
