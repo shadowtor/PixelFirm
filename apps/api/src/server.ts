@@ -7,6 +7,7 @@ import { registerEventsRoute } from "./routes/events.js";
 import { registerWsRoute } from "./routes/ws.js";
 import { registerWsBrowserRoute } from "./routes/ws-browser.js";
 import { registerAdminWorkersRoute } from "./routes/admin-workers.js";
+import { registerCeoRoute } from "./routes/ceo.js";
 
 // SEC-04 CSRF posture (RESEARCH.md Pattern 5): this API is authenticated only
 // via required custom headers (X-Bootstrap-Secret, Authorization: Bearer),
@@ -35,6 +36,7 @@ export function buildServer() {
   fastify.register(fastifyWebsocket);
   fastify.register(registerWsRoute);
   fastify.register(registerWsBrowserRoute);
+  fastify.register(registerCeoRoute);
   fastify.register(registerAdminWorkersRoute);
 
   return fastify;
