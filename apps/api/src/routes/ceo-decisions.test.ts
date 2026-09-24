@@ -25,9 +25,11 @@ const migrationPaths = [
   "../../drizzle/0001_append_only_trigger.sql",
   "../../drizzle/0002_workers_table.sql",
   "../../drizzle/0003_no_truncate_trigger.sql",
+  "../../drizzle/0004_ceo_decision_once.sql",
 ].map((p) => fileURLToPath(new URL(p, import.meta.url)));
 
 const WORKER_ID = "ceo-decisions-test-worker";
+const WORKER_B_ID = "ceo-decisions-test-worker-b";
 
 let buildServer: typeof buildServerType;
 let db: typeof dbType;
@@ -38,6 +40,7 @@ let envMod: Record<string, unknown>;
 let wsBaseUrl: string;
 let server: Awaited<ReturnType<typeof buildServerType>>;
 let workerToken: string;
+let workerBToken: string;
 
 async function applyIdempotently(client: Client, sql: string) {
   try {
@@ -92,11 +95,11 @@ function approvalRequest(opts: { decisionId?: string; taskId?: string; visibilit
   };
 }
 
-function postEvent(body: unknown) {
+function postEvent(body: unknown, token = workerToken) {
   return server.inject({
     method: "POST",
     url: "/events",
-    headers: { authorization: `Bearer ${workerToken}` },
+    headers: { authorization: `Bearer ${token}` },
     payload: body as object,
   });
 }
@@ -177,12 +180,15 @@ beforeAll(async () => {
   wc = (await import("../ws/worker-connections.js")) as Record<string, unknown>;
   envMod = (await import("../env.js")) as Record<string, unknown>;
 
-  const issued = issueCredential(WORKER_ID);
-  workerToken = issued.token;
-  await db
-    .insert(workers)
-    .values({ id: WORKER_ID, secretHash: issued.secretHash })
-    .onConflictDoUpdate({ target: workers.id, set: { secretHash: issued.secretHash, revokedAt: null } });
+  for (const id of [WORKER_ID, WORKER_B_ID]) {
+    const issued = issueCredential(id);
+    if (id === WORKER_ID) workerToken = issued.token;
+    else workerBToken = issued.token;
+    await db
+      .insert(workers)
+      .values({ id, secretHash: issued.secretHash })
+      .onConflictDoUpdate({ target: workers.id, set: { secretHash: issued.secretHash, revokedAt: null } });
+  }
 
   server = buildServer();
   await server.listen({ port: 0, host: "127.0.0.1" });
@@ -249,6 +255,9 @@ describe("POST /events ceo.* rules", () => {
   });
 
   it("accepts and stores a PRIVATE ceo.decision_applied and a PRIVATE ceo.approval_expired", async () => {
+    const request = approvalRequest();
+    expect((await postEvent(request)).statusCode).toBe(202);
+    const decisionId = request.payload.decisionId;
     const applied = {
       id: randomUUID(),
       type: "ceo.decision_applied",
@@ -256,7 +265,7 @@ describe("POST /events ceo.* rules", () => {
       occurredAt: new Date().toISOString(),
       companyId: "company-1",
       visibility: "PRIVATE",
-      payload: { decisionId: randomUUID(), taskId: "t", action: "approve", outcome: "allowed" },
+      payload: { decisionId, taskId: "t", action: "approve", outcome: "allowed" },
     };
     const expired = {
       id: randomUUID(),
@@ -265,7 +274,7 @@ describe("POST /events ceo.* rules", () => {
       occurredAt: new Date().toISOString(),
       companyId: "company-1",
       visibility: "PRIVATE",
-      payload: { decisionId: randomUUID(), taskId: "t", reason: "aborted" },
+      payload: { decisionId, taskId: "t", reason: "aborted" },
     };
     expect((await postEvent(applied)).statusCode).toBe(202);
     expect((await postEvent(expired)).statusCode).toBe(202);
@@ -559,5 +568,119 @@ describe("D-07 per-action note rules and question answers", () => {
     const [row] = await decisionRows(decisionId);
     expect(row.payload).toEqual({ decisionId, taskId, action: "approve", decidedBy: DEV_CEO });
     expect(Object.keys(row.payload as object)).not.toContain("answers");
+  });
+});
+
+function appliedEvent(decisionId: string, taskId = "t") {
+  return {
+    id: randomUUID(),
+    type: "ceo.decision_applied",
+    version: 1,
+    occurredAt: new Date().toISOString(),
+    companyId: "company-1",
+    taskId,
+    visibility: "PRIVATE",
+    payload: { decisionId, taskId, action: "approve", outcome: "allowed" },
+  };
+}
+
+function expiredEvent(decisionId: string, taskId = "t") {
+  return {
+    id: randomUUID(),
+    type: "ceo.approval_expired",
+    version: 1,
+    occurredAt: new Date().toISOString(),
+    companyId: "company-1",
+    taskId,
+    visibility: "PRIVATE",
+    payload: { decisionId, taskId, reason: "aborted" },
+  };
+}
+
+async function rowsOfType(decisionId: string, type: string) {
+  return db
+    .select()
+    .from(events)
+    .where(and(eq(events.type, type), sql`${events.payload}->>'decisionId' = ${decisionId}`));
+}
+
+const tick = () => new Promise((r) => setTimeout(r, 5));
+
+describe("CEO-05 one decision per request (events_ceo_decision_once)", () => {
+  it("a repeat decision gets 409 already decided and appends nothing", async () => {
+    const { decisionId } = await openRequest();
+    expect((await postDecision(decisionId, { action: "approve" })).statusCode).toBe(202);
+    const again = await postDecision(decisionId, { action: "reject" });
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toEqual({ error: "already decided" });
+    expect(await decisionRows(decisionId)).toHaveLength(1);
+  });
+
+  it("two concurrent decisions produce exactly one 202 and one 409, one row and one worker frame", async () => {
+    const { ws, decisionId } = await openRequest();
+    const frames: unknown[] = [];
+    const onMessage = (data: unknown) => {
+      const msg = JSON.parse(String(data));
+      if (msg.decisionId === decisionId) frames.push(msg);
+    };
+    ws.on("message", onMessage);
+    const results = await Promise.all([
+      postDecision(decisionId, { action: "approve" }),
+      postDecision(decisionId, { action: "reject" }),
+    ]);
+    await new Promise((r) => setTimeout(r, 200));
+    ws.off("message", onMessage);
+    expect(results.map((r) => r.statusCode).sort()).toEqual([202, 409]);
+    expect(await decisionRows(decisionId)).toHaveLength(1);
+    expect(frames).toHaveLength(1);
+  });
+
+  it("a decision on an expired request gets 409 expired and appends nothing", async () => {
+    const { decisionId, taskId } = await openRequest();
+    expect((await postEvent(expiredEvent(decisionId, taskId))).statusCode).toBe(202);
+    const res = await postDecision(decisionId, { action: "approve" });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: "expired" });
+    expect(await decisionRows(decisionId)).toHaveLength(0);
+  });
+
+  it("the audit chain for one decisionId reads requested -> decision_made -> decision_applied in occurred_at order", async () => {
+    const { decisionId, taskId } = await openRequest();
+    await tick();
+    expect((await postDecision(decisionId, { action: "approve" })).statusCode).toBe(202);
+    await tick();
+    expect((await postEvent(appliedEvent(decisionId, taskId))).statusCode).toBe(202);
+    const rows = await db
+      .select({ type: events.type })
+      .from(events)
+      .where(sql`${events.payload}->>'decisionId' = ${decisionId}`)
+      .orderBy(events.occurredAt);
+    expect(rows.map((r) => r.type)).toEqual(["ceo.approval_requested", "ceo.decision_made", "ceo.decision_applied"]);
+  });
+});
+
+describe("T-06-05-04 worker ownership of ceo.decision_applied / ceo.approval_expired", () => {
+  it("refuses another worker's applied and expired with 403; the owner's retried duplicate is a quiet 202", async () => {
+    const request = approvalRequest();
+    expect((await postEvent(request, workerBToken)).statusCode).toBe(202);
+    const decisionId = request.payload.decisionId;
+
+    for (const ev of [appliedEvent(decisionId), expiredEvent(decisionId)]) {
+      const res = await postEvent(ev);
+      expect(res.statusCode).toBe(403);
+      expect(res.json()).toEqual({ error: "decision not owned by this worker" });
+      expect(await rowsById(ev.id)).toHaveLength(0);
+    }
+
+    expect((await postEvent(appliedEvent(decisionId), workerBToken)).statusCode).toBe(202);
+    expect((await postEvent(appliedEvent(decisionId), workerBToken)).statusCode).toBe(202);
+    expect(await rowsOfType(decisionId, "ceo.decision_applied")).toHaveLength(1);
+  });
+
+  it("refuses applied for an unknown decisionId with 403", async () => {
+    const ev = appliedEvent(randomUUID());
+    const res = await postEvent(ev);
+    expect(res.statusCode).toBe(403);
+    expect(await rowsById(ev.id)).toHaveLength(0);
   });
 });
