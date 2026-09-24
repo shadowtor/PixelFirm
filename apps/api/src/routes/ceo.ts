@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { CompanyEventSchema, DecisionActionSchema } from "event-schema";
 import { db } from "../db/client.js";
@@ -29,8 +29,16 @@ export const DecisionBodySchema = z
   });
 
 const ParamsSchema = z.object({ decisionId: z.string().uuid() });
+const TaskParamsSchema = z.object({ taskId: z.string().min(1).max(200) });
 
-type RequestPayload = { taskId: string; workerId?: string; kind?: string };
+type RequestPayload = {
+  taskId: string;
+  decisionId?: string;
+  workerId?: string;
+  kind?: string;
+  sessionId?: string;
+  worktreePath?: string;
+};
 
 export async function registerCeoRoute(fastify: FastifyInstance) {
   // Who the dashboard is signed in as (header, dev-bypass banner), and a way
@@ -150,6 +158,94 @@ export async function registerCeoRoute(fastify: FastifyInstance) {
       broadcastToBrowsers({ type: "event", event });
 
       return reply.code(202).send({ accepted: true, decisionId });
+    },
+  );
+  // D-02: the CEO resumes a task that a worker restart blocked. The message
+  // carries only identifiers stored with the request, never a prompt (SEC-03),
+  // and the worker still checks the worktree against its own repo.
+  fastify.post(
+    "/ceo/api/tasks/:taskId/resume",
+    {
+      preValidation: [requireCsrf, requireCeo],
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const params = TaskParamsSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ error: "invalid taskId" });
+      const { taskId } = params.data;
+
+      const [latest] = await db
+        .select()
+        .from(events)
+        .where(
+          and(
+            eq(events.type, "ceo.approval_requested"),
+            sql`${events.payload}->>'taskId' = ${taskId}`,
+            sql`${events.payload}->>'decisionId' IS NOT NULL`,
+          ),
+        )
+        .orderBy(desc(events.occurredAt))
+        .limit(1);
+      if (!latest) return reply.code(404).send({ error: "unknown task" });
+      const stored = latest.payload as RequestPayload;
+
+      const [expiry] = await db
+        .select({ occurredAt: events.occurredAt })
+        .from(events)
+        .where(
+          and(
+            eq(events.type, "ceo.approval_expired"),
+            sql`${events.payload}->>'decisionId' = ${stored.decisionId}`,
+          ),
+        )
+        .limit(1);
+      if (!expiry) return reply.code(409).send({ error: "not blocked" });
+
+      // ponytail: two concurrent resumes can both pass this read; the worker's
+      // restoreTask refuses a running task, so the second one does nothing.
+      const [resumed] = await db
+        .select({ id: events.id })
+        .from(events)
+        .where(
+          and(
+            eq(events.type, "ceo.task_resume_requested"),
+            sql`${events.payload}->>'taskId' = ${taskId}`,
+            gt(events.occurredAt, expiry.occurredAt),
+          ),
+        )
+        .limit(1);
+      if (resumed) return reply.code(409).send({ error: "already resumed" });
+
+      const { sessionId, worktreePath, workerId } = stored;
+      const agentId = latest.sourceAgentId;
+      if (!sessionId || !worktreePath || !agentId) return reply.code(409).send({ error: "not resumable" });
+      if (!workerId || !isWorkerConnected(workerId)) return reply.code(503).send({ error: "worker offline" });
+
+      const event = CompanyEventSchema.parse({
+        id: randomUUID(),
+        type: "ceo.task_resume_requested",
+        version: 1,
+        occurredAt: new Date().toISOString(),
+        companyId: latest.companyId,
+        taskId,
+        visibility: "PRIVATE",
+        payload: { taskId, decidedBy: request.ceoEmail },
+      });
+      await db.insert(events).values({
+        id: event.id,
+        type: event.type,
+        version: event.version,
+        occurredAt: new Date(event.occurredAt),
+        companyId: event.companyId,
+        taskId: event.taskId,
+        visibility: event.visibility,
+        payload: event.payload,
+      });
+
+      sendToWorker(workerId, { type: "task.resume", taskId, sessionId, worktreePath, agentId });
+      broadcastToBrowsers({ type: "event", event });
+
+      return reply.code(202).send({ accepted: true, taskId });
     },
   );
 }

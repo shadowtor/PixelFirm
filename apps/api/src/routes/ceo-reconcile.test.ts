@@ -343,9 +343,15 @@ describe("hello reconcile (D-02, 06-04)", () => {
 });
 
 function postResume(taskId: string, opts: { omit?: string[] } = {}) {
-  const headers: Record<string, string> = { origin: ORIGIN, "x-pixelfirm-csrf": "1" };
+  // requireCsrf wants the full D-12 set, including a JSON content-type.
+  const headers: Record<string, string> = { "content-type": "application/json", origin: ORIGIN, "x-pixelfirm-csrf": "1" };
   for (const key of opts.omit ?? []) delete headers[key];
-  return server.inject({ method: "POST", url: `/ceo/api/tasks/${encodeURIComponent(taskId)}/resume`, headers });
+  return server.inject({
+    method: "POST",
+    url: `/ceo/api/tasks/${encodeURIComponent(taskId)}/resume`,
+    headers,
+    payload: "{}",
+  });
 }
 
 function resumeRows(taskId: string) {

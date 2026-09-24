@@ -1,7 +1,8 @@
 import { pathToFileURL } from "node:url";
 import { join } from "node:path";
 import { createClaudeCodeRuntime } from "claude-adapter";
-import { createDecisionBroker } from "./decisions.js";
+import { listWorktrees } from "git-adapter";
+import { createDecisionBroker, handleResume } from "./decisions.js";
 import { loadEnv } from "./env.js";
 import { startHeartbeat, startReconnectingConnection } from "./ws-client.js";
 import { startPollLoop } from "./poll-loop.js";
@@ -24,6 +25,11 @@ export async function startWorker(): Promise<{ stop(): void }> {
     token: env.token,
     awaitDecision: broker.awaitDecision,
     workerBootId: broker.bootId,
+  });
+
+  // D-02: a CEO resume runs only inside a worktree of this worker's own repo.
+  broker.onResume((msg) => {
+    void handleResume(msg, { repoPath: env.repoPath, listWorktrees, runtime, log: (m) => console.error(m) });
   });
 
   const connection = startReconnectingConnection(env.controlPlaneUrl, env.token, (ws) => {
