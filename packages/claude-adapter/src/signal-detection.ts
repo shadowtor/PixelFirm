@@ -54,7 +54,17 @@ const DESTRUCTIVE_MCP_NAME = /deploy|delete|destroy|drop|remove|restart|stop|pub
 
 // `git` plus any global options (-C <dir>, -c <k=v>, --no-pager, ...) up to
 // the subcommand (06-REVIEW WR-01: `git -C dir reset --hard` spelling).
-const GIT = String.raw`\bgit(?:\s+-[Cc]\s+\S+|\s+--[\w-]+(?:=\S+)?)*\s+`;
+const GIT_OPTS = String.raw`(?:\s+-[Cc]\s+\S+|\s+--[\w-]+(?:=\S+)?)*`;
+const GIT = String.raw`\bgit${GIT_OPTS}\s+`;
+
+// 06-REVIEW WR-03 (iteration 2, user decision "Allow bare reads"): the only
+// `git config` forms that are reads. Scope/display options, then either an
+// explicit read op or one bare key that ends the command. Position matters:
+// git accepts options after arguments, so `git config k v --list` writes k=v.
+const GIT_CONFIG_READ_OPTS = String.raw`(?:\s+(?:--(?:global|system|local|worktree|show-origin|show-scope|name-only|null|includes|no-includes)|-z|(?:--file|-f|--type)[=\s]\S+))*`;
+const GIT_CONFIG_READ =
+  GIT_CONFIG_READ_OPTS +
+  String.raw`\s+(?:(?:--get[\w-]*|--list|-l|get|list)(?=\s|$|[|;&)])|[\w-]+\.[^\s'"|;&<>=$\x60()]+[ \t]*(?=$|[\n|;&)]))`;
 
 // Tested against the command with backslashes normalised to "/". Order only
 // decides which name a command reports; force-push stays first.
@@ -90,11 +100,17 @@ const CEO_GATED_BASH_PATTERNS: { name: string; pattern: RegExp }[] = [
     pattern:
       /\b(npm|pnpm|yarn|bun)\b[^|;&]*\s(add|remove|rm|uninstall|update|upgrade)\b|\b(npm|pnpm|bun)\s+(install|i)\s+(?:-\S+\s+)*[^\s-]|\bpip3?\s+install\b/i,
   },
-  // 06-REVIEW WR-03: the shell spelling of a .git/config write. Anything but
-  // an explicit read (--get*, --list, -l, get, list) counts as a write.
+  // 06-REVIEW WR-03: the shell spelling of a .git/config write. Anything that
+  // is not a GIT_CONFIG_READ counts as a write (fails closed).
   {
     name: "git config write",
-    pattern: new RegExp(String.raw`${GIT}config\b(?![^|;&]*\s(?:--get[\w-]*|--list|-l|get|list)(?=\s|$))`, "i"),
+    pattern: new RegExp(String.raw`${GIT}config\b(?!${GIT_CONFIG_READ})`, "i"),
+  },
+  // ...and any `git config` run under -c / --config-env, read or not. Case-
+  // sensitive on purpose: the "i" flag would make it catch the harmless -C <dir>.
+  {
+    name: "git config write",
+    pattern: new RegExp(String.raw`\b[Gg][Ii][Tt]${GIT_OPTS}\s+(?:-c\s+\S+|--config-env=\S+)${GIT_OPTS}\s+config\b`),
   },
   // 06-REVIEW WR-02: DEPLOY_HOOK_URL's rule for a fetch from the shell (a URL
   // containing "deploy" already matches publish/deploy above).

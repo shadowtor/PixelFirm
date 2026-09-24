@@ -167,6 +167,50 @@ describe("classifySignal — CEO-04 gate-paths production-change set", () => {
     expect(classifySignal("Bash", { command: "git config get user.email" })).toBeNull();
   });
 
+  // 06-REVIEW WR-03, iteration 2 (user decision "Allow bare reads"): a single
+  // key with no value is a read. Everything else stays gated, failing closed.
+  it.each([
+    "git config user.name",
+    "git config remote.origin.url",
+    "git config --global user.email",
+    "git -C ../repo config branch.feature/x.remote",
+    "git config user.name || echo none",
+    "git config user.name\ngit status",
+    "git config --file .gitmodules submodule.lib.url",
+    "git config --show-origin --list",
+  ])("a git config read is not gated: %s", (command) => {
+    expect(classifySignal("Bash", { command })).toBeNull();
+  });
+
+  it.each([
+    "git config user.name bob",
+    "git config --global core.hooksPath hooks",
+    "git config --add remote.origin.fetch x",
+    "git config --unset user.name",
+    "git config --unset-all user.name",
+    "git config --replace-all user.name bob",
+    "git config --rename-section a b",
+    "git config --remove-section a",
+    "git config --edit",
+    "git config -e",
+    "git config unset user.name",
+    "git config --file .git/config core.fsmonitor ./x.sh",
+    // A value that happens to spell a read op is still a write (git accepts
+    // options after the arguments, so `k v --list` writes k=v).
+    "git config core.fsmonitor list",
+    "git config core.fsmonitor get",
+    "git config core.pager x --list",
+    // -c / --config-env tricks and anything that cannot be read as one key.
+    "git -c core.fsmonitor=./x.sh config user.name",
+    "git -c core.fsmonitor=./x.sh config --get user.name",
+    "git --config-env=core.fsmonitor=HOOK config user.name",
+    'git config "user.name"',
+    "git config user.$(touch x)",
+    "git config user.name > out.txt",
+  ])("a git config write or unclassifiable form is gated: %s", (command) => {
+    expect(classifySignal("Bash", { command })?.reason).toBe("Bash command matched a CEO-gated pattern: git config write");
+  });
+
   it("ordinary file changes are not gated", () => {
     expect(classifySignal("Write", { file_path: "/repo/src/app.ts" })).toBeNull();
     expect(classifySignal("Edit", { file_path: "/repo/docs/env.md" })).toBeNull();
