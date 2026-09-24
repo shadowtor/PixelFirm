@@ -79,6 +79,10 @@ const CEO_GATED_BASH_PATTERNS: { name: string; pattern: RegExp }[] = [
 ];
 
 const FILE_TOOLS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
+// CR-01 (06-REVIEW): every built-in tool that runs a shell command. PowerShell
+// replaces Bash on Windows hosts without Git Bash (or via
+// CLAUDE_CODE_USE_POWERSHELL_TOOL); Monitor's `command` is a shell script.
+const SHELL_TOOLS = new Set(["Bash", "PowerShell", "Monitor"]);
 
 export function classifySignal(toolName: string, input: unknown): ClassifiedSignal | null {
   const fields = (input ?? {}) as { command?: unknown; file_path?: unknown; notebook_path?: unknown; url?: unknown };
@@ -87,11 +91,11 @@ export function classifySignal(toolName: string, input: unknown): ClassifiedSign
     return { kind: "clarifying_question", reason: "Claude asked a clarifying question via AskUserQuestion" };
   }
 
-  if (toolName === "Bash") {
+  if (SHELL_TOOLS.has(toolName)) {
     if (typeof fields.command !== "string") return null;
     const command = fields.command.replaceAll("\\", "/");
     const hit = CEO_GATED_BASH_PATTERNS.find(({ pattern }) => pattern.test(command));
-    return hit ? { kind: "ceo_gated_tool", reason: `Bash command matched a CEO-gated pattern: ${hit.name}` } : null;
+    return hit ? { kind: "ceo_gated_tool", reason: `${toolName} command matched a CEO-gated pattern: ${hit.name}` } : null;
   }
 
   if (FILE_TOOLS.has(toolName)) {

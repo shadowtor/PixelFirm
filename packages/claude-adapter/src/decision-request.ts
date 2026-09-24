@@ -100,7 +100,8 @@ function ellipsize(text: string, max: number): string {
 
 function titleOf(toolName: string, input: Record<string, unknown>, questions?: AskQuestion[]): string {
   if (questions?.[0]) return ellipsize(questions[0].question.trim(), 300);
-  if (toolName === "Bash" && typeof input.command === "string") return ellipsize(`Bash: ${input.command}`, 300);
+  // Any shell tool (Bash, PowerShell, Monitor): the command is the title.
+  if (typeof input.command === "string") return ellipsize(`${toolName}: ${input.command}`, 300);
   const target = [input.file_path, input.notebook_path, input.url].find((v) => typeof v === "string");
   return ellipsize(target ? `${toolName}: ${target}` : toolName, 300);
 }

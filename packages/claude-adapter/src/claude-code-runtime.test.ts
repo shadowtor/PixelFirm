@@ -1292,6 +1292,13 @@ describe("PreToolUse ask backstop and subprocess env (06-02 Task 2, CEO-04)", ()
     expect(result).toEqual(ASK);
   });
 
+  it("RemoteTrigger, which runs an agent outside this gate, is disallowed (CR-01)", async () => {
+    (query as unknown as Mock).mockReturnValue(fakeQuery([initMessage("s"), resultMessage("success")]));
+    const runtime = createClaudeCodeRuntime(runtimeOptions());
+    await runtime.startTask(startInput);
+    expect((query as unknown as Mock).mock.calls[0][0].options.disallowedTools).toContain("RemoteTrigger");
+  });
+
   it("query() options.env carries none of the eight stripped keys, and still carries PATH", async () => {
     for (const key of STRIPPED) vi.stubEnv(key, "leak");
     (query as unknown as Mock).mockReturnValue(fakeQuery([initMessage("s"), resultMessage("success")]));

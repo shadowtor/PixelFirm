@@ -261,6 +261,9 @@ export function createClaudeCodeRuntime(options: {
       options: {
         cwd: record.worktreePath,
         permissionMode: "default",
+        // CR-01 (06-REVIEW): RemoteTrigger runs a remote agent whose tool calls
+        // never reach this canUseTool, so nothing it does could be CEO-gated.
+        disallowedTools: ["RemoteTrigger"],
         resume: resumeSessionId,
         abortController: controller,
         // CR-01: the SDK's own env option REPLACES (not merges with)

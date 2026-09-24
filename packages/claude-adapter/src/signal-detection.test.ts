@@ -36,6 +36,19 @@ describe("classifySignal — CEO-04 narrow command/MCP set", () => {
     expect(classifySignal("Bash", { command: "git push origin feature/x" })).toBeNull();
   });
 
+  // CR-01 (06-REVIEW): every tool that runs a shell command is classified, not only Bash.
+  it("PowerShell and Monitor commands are classified like Bash", () => {
+    expect(gated("PowerShell", { command: "git push origin main" })).toBe("ceo_gated_tool");
+    expect(gated("Monitor", { command: "git push origin HEAD:main", description: "x", timeout_ms: 1000 })).toBe(
+      "ceo_gated_tool",
+    );
+    expect(classifySignal("PowerShell", { command: "git push origin main" })?.reason).toBe(
+      "PowerShell command matched a CEO-gated pattern: push to main/master",
+    );
+    expect(classifySignal("PowerShell", { command: "Get-ChildItem" })).toBeNull();
+    expect(classifySignal("Monitor", { ws: { url: "wss://example.com" }, description: "x", timeout_ms: 1 })).toBeNull();
+  });
+
   it("merge, rebase and reset --hard are gated; git status is not", () => {
     expect(classifySignal("Bash", { command: "git reset --hard HEAD~1" })?.reason).toBe(
       "Bash command matched a CEO-gated pattern: merge/rebase/reset --hard",
