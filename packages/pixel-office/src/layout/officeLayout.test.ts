@@ -168,3 +168,13 @@ describe("CEO room layout (06-07, CEO-01)", () => {
     expect(displayScaleFor(1280, 720)).toBe(3);
   });
 });
+
+describe("handoff interaction slots stay out of the CEO room (06-07)", () => {
+  it("never offers a slot across the partition wall, so a sender never waits on a queue slot", () => {
+    for (const home of [...SEATS, ...STANDING_SPOTS]) {
+      for (const s of officeLayout.interactionSlotsFor(home)) {
+        expect(s.col, `slot (${s.col},${s.row}) of home (${home.col},${home.row})`).toBeLessThan(DOOR.col);
+      }
+    }
+  });
+});

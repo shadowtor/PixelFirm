@@ -120,7 +120,7 @@ export function App() {
   return (
     <>
       {/* 05-31 (G-05-P6): full-viewport surround in the office's own border
-          colour, so a viewport that is not an exact multiple of 320x176 shows
+          colour, so a viewport that is not an exact multiple of 384x208 shows
           a WALL_COLOR strip continuous with the office border rather than
           black. margin:auto centres the canvas when it fits; overflow:auto
           scrolls instead of clipping below MIN_DISPLAY_SCALE. */}

@@ -12,8 +12,10 @@
 
 // ── Grid & Layout ────────────────────────────────────────────
 export const TILE_SIZE = 16;
-export const DEFAULT_COLS = 20;
-export const DEFAULT_ROWS = 11;
+/** 24x13 since 06-07 (D-10): the office grew right and down only, for the CEO
+ *  room, so no Phase 5 coordinate moved. 384x208 at scale 5 is 1920x1040. */
+export const DEFAULT_COLS = 24;
+export const DEFAULT_ROWS = 13;
 
 // ── Character Animation ─────────────────────────────────────
 export const WALK_SPEED_PX_PER_SEC = 48;

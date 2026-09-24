@@ -11,7 +11,7 @@ import { DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE, WALL_COLOR } from "./constants.j
 // with the office's own border colour, which must be that one value, not a copy.
 export { DEFAULT_COLS, DEFAULT_ROWS, TILE_SIZE, WALL_COLOR };
 
-// 05-21 (G-05-1a): the 320x176 office is never shown at native size — its
+// 05-21 (G-05-1a): the office (384x208 since 06-07) is never shown at native size — its
 // 11x13 glyphs are unreadable there. Minimum integer presentation scale.
 export const MIN_DISPLAY_SCALE = 3;
 

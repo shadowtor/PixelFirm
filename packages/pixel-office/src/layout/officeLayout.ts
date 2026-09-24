@@ -80,6 +80,33 @@ export const SEATS = toTiles(layout.seats);
 /** Overflow standing spots, on the seat rows in the right strip. */
 export const STANDING_SPOTS = toTiles(layout.standing);
 
+/**
+ * The CEO room's waiting slots (06-07, CEO-01, D-10), front of the line first.
+ * "Waiting-chair slots" is only the data's name: queued agents stand on them.
+ * A slot on a wall, on blocking furniture or on a home throws at load.
+ */
+export const CEO_QUEUE_SLOTS: ReadonlyArray<{ col: number; row: number }> = (() => {
+  const raw = (layout as { ceoQueue?: unknown }).ceoQueue;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error(`office-layout.json: ceoQueue must be a non-empty array of [col, row] slots`);
+  }
+  const list = toTiles(raw as number[][]);
+  for (const { col, row } of list) {
+    const where = `office-layout.json: ceoQueue slot (${col},${row})`;
+    if (OFFICE_TILE_MAP[row]?.[col] !== TileType.FLOOR_1) throw new Error(`${where} is not a floor tile (wall or off the map)`);
+    if (blocked.has(`${col},${row}`)) throw new Error(`${where} is on blocking furniture`);
+    if ([...SEATS, ...STANDING_SPOTS].some((h) => h.col === col && h.row === row)) {
+      throw new Error(`${where} is a home (seat or standing spot)`);
+    }
+  }
+  return list;
+})();
+
+/** True when (col, row) is one of the CEO room's waiting slots. */
+export function isCeoQueueTile(col: number, row: number): boolean {
+  return CEO_QUEUE_SLOTS.some((s) => s.col === col && s.row === row);
+}
+
 interface InteractionData {
   row: number;
   colOffsets: number[];
@@ -137,12 +164,17 @@ export function interactionSlotsFor(home: { col: number; row: number }): Readonl
   const row = INTERACTION.row;
   const isHome = (col: number, r: number): boolean =>
     SEATS.some((h) => h.col === col && h.row === r) || STANDING_SPOTS.some((h) => h.col === col && h.row === r);
+  // 06-07: the aisle between the home's column and the slot must be open floor,
+  // so no slot lies across the CEO room's partition wall (or on a queue slot).
+  const openAisle = (col: number): boolean => {
+    for (let c = Math.min(col, home.col); c <= Math.max(col, home.col); c++) {
+      if (OFFICE_TILE_MAP[row]?.[c] !== TileType.FLOOR_1) return false;
+    }
+    return true;
+  };
   return INTERACTION.colOffsets
     .map((d) => ({ col: home.col + d, row }))
-    .filter(
-      (s) =>
-        OFFICE_TILE_MAP[s.row]?.[s.col] === TileType.FLOOR_1 && !blocked.has(`${s.col},${s.row}`) && !isHome(s.col, s.row),
-    );
+    .filter((s) => openAisle(s.col) && !blocked.has(`${s.col},${s.row}`) && !isHome(s.col, s.row));
 }
 
 /** True when the character stands on its own seat and that tile is a SEATS entry. */

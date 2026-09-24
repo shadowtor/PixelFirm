@@ -31,9 +31,9 @@
 // choreography -> painted canvas.
 //
 // Truths: (0) the office is presented at an integer scale >= MIN_DISPLAY_SCALE,
-// never native (05-21, G-05-1a), at three viewports — 800x480 (below the
-// 960x528 canvas floor, so the canvas overflows and scrolls under the pinned
-// footer), 1920x1080 and 1280x720 — with the attribution footer carrying its
+// never native (05-21, G-05-1a), at four viewports — 800x480 (below the
+// 1152x624 canvas floor, so the canvas overflows and scrolls under the pinned
+// footer), 1920x1080, 1920x1040 and 1280x720 — with the attribution footer carrying its
 // own WALL_COLOR backdrop at every one of them, so its contrast never depends
 // on what is behind it (05-36, WR-02); (1) a live agent paints a sprite; (2) a live blocked status paints
 // its glyph; (3) a handoff pair paints the task icon, then clears it; (4) the
@@ -832,8 +832,11 @@ async function main() {
     // and every later truth sees the viewport it always has.
     const OBS_SIZES = [
       { w: 800, h: 480, obsScale: 3, fits: false },
-      { w: 1920, h: 1080, obsScale: 6, fits: true },
-      { w: 1280, h: 720, obsScale: 4, fits: true },
+      // 06-07 (D-10): 384x208 map — 1920x1040 is the exact 5x fit, 1920x1080
+      // keeps 5x with 20px strips, 1280x720 drops to 3x.
+      { w: 1920, h: 1080, obsScale: 5, fits: true },
+      { w: 1920, h: 1040, obsScale: 5, fits: true },
+      { w: 1280, h: 720, obsScale: 3, fits: true },
     ];
     const truth0 = [];
     for (const { w, h, obsScale, fits } of OBS_SIZES) {

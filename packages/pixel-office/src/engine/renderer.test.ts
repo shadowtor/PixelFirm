@@ -465,10 +465,13 @@ const spansX = (b: Box, x: number): boolean => b.x <= x && x <= b.x + b.w;
 /** Sprite box renderScene paints a character into (offset 0, zoom 1). */
 const spriteRect = (ch: Character): Box => ({ x: Math.round(ch.x - SPRITE_W / 2), y: ownerDrawY(ch), w: SPRITE_W, h: SPRITE_H });
 const TILE = 16;
-const FLOOR_LEFT = 16;
-const FLOOR_RIGHT = 304;
-const FLOOR_TOP = 16;
-const FLOOR_BOTTOM = 160;
+// The map's interior inside the one-tile wall border, re-derived from the grid
+// (06-07: 368x192 on the 24x13 map, was 304x160 on 20x11) — the same bound the
+// renderer itself clamps a bubble into.
+const FLOOR_LEFT = TILE;
+const FLOOR_RIGHT = (DEFAULT_COLS - 1) * TILE_SIZE;
+const FLOOR_TOP = TILE;
+const FLOOR_BOTTOM = (DEFAULT_ROWS - 1) * TILE_SIZE;
 /** Every furniture piece's rect in unzoomed map px (offset 0, zoom 1). */
 const furnitureRects = (): Box[] =>
   FURNITURE.map((f) => ({ x: f.x, y: f.y, w: f.sprite[0].length, h: f.sprite.length }));
@@ -1090,10 +1093,11 @@ describe("furnished office (G-05-1e)", () => {
   });
 
   it("wall decor is behind characters", () => {
-    const chars = [createCharacter("x", 4, 1), createCharacter("y", 12, 1, 60)];
-    const charSet = new Set([...charKeys(chars[0]), ...charKeys(chars[1])]);
+    // 06-07: a third painting hangs in the CEO room at (21, 0).
+    const chars = [createCharacter("x", 4, 1), createCharacter("y", 12, 1, 60), createCharacter("z", 21, 1, 120)];
+    const charSet = new Set(chars.flatMap((ch) => [...charKeys(ch)]));
     const paintings = FURNITURE.filter((f) => f.sprite === office.painting.data);
-    expect(paintings).toHaveLength(2);
+    expect(paintings).toHaveLength(3);
     const paintKeys = new Set(paintings.flatMap((p) => [...cellKeys(p.sprite, p.x, p.y)]));
     const { ctx, ops } = mockCtx();
     renderScene(ctx, chars, 0, 0, 1, FURNITURE);
