@@ -94,6 +94,8 @@ const MAP_W = Number(readConst("DEFAULT_COLS", "(\\d+)")) * TILE_SIZE;
 const MAP_H = Number(readConst("DEFAULT_ROWS", "(\\d+)")) * TILE_SIZE;
 /** The CEO room: cols 20-22, rows 1-11 (office-layout.json), in unzoomed map px. */
 const CEO_ROOM = { x: 20 * TILE_SIZE, y: 1 * TILE_SIZE, w: 3 * TILE_SIZE, h: 11 * TILE_SIZE };
+/** Longest walk into the room: a path no longer than the map's width plus height, plus 2 s slack. */
+const WALK_DEADLINE_MS = Math.ceil(((MAP_W + MAP_H) / Number(readConst("WALK_SPEED_PX_PER_SEC", "(\\d+)"))) * 1000) + 2000;
 
 function collectColors(v, set = new Set()) {
   if (typeof v === "string") {
@@ -341,9 +343,18 @@ async function main() {
     await detail.locator("pre").filter({ hasText: APPROVED_FILE }).first().waitFor({ timeout: 10_000 });
     const holdStart = Date.now();
     log(`decision 2 (approved probe) is on /ceo — holding ${HOLD_MS / 1000}s`);
-    await sleep(1500);
     shots.push(await shot(ceo, "ceo-pending-queue.png"));
-    shots.push(await shot(office, "office-ceo-room-hold.png"));
+    // The agent walks from its desk to the queue when the request lands (run 1 caught it mid-walk
+    // at 1.7 s), so the room is sampled from its arrival on, never before.
+    let arrivalMs = null;
+    while (Date.now() - holdStart < WALK_DEADLINE_MS) {
+      if ((await ceoRoomSpritePixels(office)) > 0) {
+        arrivalMs = Date.now() - holdStart;
+        break;
+      }
+      await sleep(250);
+    }
+    log(`agent in the CEO room ${arrivalMs === null ? `NOT within ${WALK_DEADLINE_MS}ms` : `after ${arrivalMs}ms`}`);
     const holdSamples = [];
     while (Date.now() - holdStart < HOLD_MS) {
       const rows = await taskEvents();
@@ -353,6 +364,8 @@ async function main() {
         roomPx: await ceoRoomSpritePixels(office),
         approvedFileExists: existsSync(approvedPath),
       });
+      // Arrival is the first pixel over the doorway; one sample later the agent stands at its slot.
+      if (holdSamples.length === 2) shots.push(await shot(office, "office-ceo-room-hold.png"));
       await sleep(Math.min(5000, Math.max(0, HOLD_MS - (Date.now() - holdStart))));
     }
     const holdMs = Date.now() - holdStart;
@@ -445,9 +458,11 @@ async function main() {
     check("A2: the session continued after the held decision", approvedContent === "hello" && byRole.rejected.length === 1, {
       finalStatus,
     });
-    check("CEO-01: the requesting agent is in the CEO room while its decision is pending", holdSamples.every((s) => s.roomPx > 0), {
-      minRoomPx: Math.min(...holdSamples.map((s) => s.roomPx)),
-    });
+    check(
+      "CEO-01: the requesting agent is in the CEO room while its decision is pending",
+      arrivalMs !== null && holdSamples.every((s) => s.roomPx > 0),
+      { arrivalMs, walkDeadlineMs: WALK_DEADLINE_MS, minRoomPx: Math.min(...holdSamples.map((s) => s.roomPx)) },
+    );
     check("CEO-01: the CEO room is empty after the last decision", roomAfter === 0, {
       roomPx: roomAfter,
       msAfterLastDecision: Date.now() - lastDecisionAt,
@@ -483,6 +498,7 @@ async function main() {
       workerId,
       finalStatus,
       holdMs,
+      arrivalMs,
       holdSamples,
       approvedContent,
       rejectedFileExists: existsSync(rejectedPath),
