@@ -1,0 +1,78 @@
+name: build-deploy
+
+# Build images in GitHub Actions, push to GHCR (public repo, public images).
+# Coolify only pulls. Set repo vars COOLIFY_UUID_{TEST,MAIN}_{API,WEB} to also trigger a deploy;
+# unset = image push only. Rollback: run manually with a `sha` input.
+on:
+  push:
+    branches: [test, main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Already-built commit to redeploy (rollback). Empty = the dispatched ref.
+        required: false
+        default: ""
+
+concurrency:
+  group: build-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pixelfirm_test
+        ports:
+          - 5434:5432   # the API tests hardcode localhost:5434
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-retries 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4   # version from package.json "packageManager"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r --if-present typecheck
+      - run: pnpm -r test
+
+  api:
+    needs: [verify]
+    if: ${{ !cancelled() && !failure() }}
+    permissions:
+      contents: read
+      packages: write
+    uses: shadowtor/ci-workflows/.github/workflows/image-deploy.yml@v1
+    with:
+      image: ghcr.io/shadowtor/pixelfirm-api
+      context: .
+      dockerfile: apps/api/Dockerfile
+      environment: ${{ github.ref_name == 'main' && 'production' || 'test' }}
+      coolify-app-uuid: ${{ github.ref_name == 'main' && vars.COOLIFY_UUID_MAIN_API || vars.COOLIFY_UUID_TEST_API }}
+      sha: ${{ inputs.sha }}
+    secrets: inherit
+
+  web:
+    needs: [verify]
+    if: ${{ !cancelled() && !failure() }}
+    permissions:
+      contents: read
+      packages: write
+    uses: shadowtor/ci-workflows/.github/workflows/image-deploy.yml@v1
+    with:
+      image: ghcr.io/shadowtor/pixelfirm-web
+      context: .
+      dockerfile: apps/web/Dockerfile
+      environment: ${{ github.ref_name == 'main' && 'production' || 'test' }}
+      coolify-app-uuid: ${{ github.ref_name == 'main' && vars.COOLIFY_UUID_MAIN_WEB || vars.COOLIFY_UUID_TEST_WEB }}
+      sha: ${{ inputs.sha }}
+    secrets: inherit
